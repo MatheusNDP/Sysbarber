@@ -1,0 +1,31 @@
+# Finais de linha
+#
+# O repositório guarda sempre LF; cada sistema recebe o formato nativo ao
+# clonar. Sem isto, o mesmo arquivo aparece como totalmente alterado quando
+# editado em sistemas diferentes.
+* text=auto eol=lf
+
+# Arquivos binários — nunca podem sofrer conversão, sob risco de corromper.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.jar   binary
+*.keystore binary
+*.jks   binary
+*.apk   binary
+*.aab   binary
+*.db    binary
+
+# Scripts do Windows exigem CRLF para executar corretamente.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# O wrapper do Gradle exige LF mesmo no Windows.
+gradlew text eol=lf
