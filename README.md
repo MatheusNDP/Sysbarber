@@ -1,146 +1,168 @@
 # SysBarber — Sistema de Gestão de Barbearia
 
-Aplicativo mobile em **Flutter / Dart** para TCC em Engenharia de Software.
+Trabalho de Conclusão de Curso — Engenharia de Software.
+Aplicativo mobile em **Flutter/Dart** com banco **SQLite local** (sem Firebase) e
+autenticação própria com hash **SHA-256**.
 
 ---
 
-## 🚀 INSTRUÇÕES RÁPIDAS (3 PASSOS)
+## Como rodar
 
-### Pré-requisito
-Ter o **Flutter SDK** instalado.
-👉 https://docs.flutter.dev/get-started/install
+Pré-requisitos: Flutter 3.x, Android SDK e um emulador Android.
 
-Para verificar se está instalado, abra o **CMD** ou **PowerShell** e digite:
-```
-flutter --version
-```
-
----
-
-### PASSO 1 — Extrair o ZIP
-Extraia o conteúdo do ZIP em uma pasta de sua escolha (ex: `C:\TCC\sysbarber`).
-
-### PASSO 2 — Rodar o script de configuração
-No terminal, dentro da pasta do projeto, rode os comandos:
 ```bash
 flutter pub get
+```
+
+```bash
 flutter run
 ```
 
-### PASSO 3 — Abrir no Android Studio
-1. Abra o **Android Studio**
-2. Clique em **Open** e selecione a pasta `sysbarber`
-3. Aguarde a indexação terminar
-4. Selecione seu emulador na barra superior
-5. Clique no botão **Run ▶** (verde)
+> **Importante:** o projeto deve ficar em um caminho **sem acentos**
+> (ex.: `C:\TCC\sysbarber`). Caminhos como "Área de Trabalho" quebram o
+> build do Gradle no Windows.
 
-🎉 **Pronto! O app vai rodar.**
+### Contas do seed
 
----
+| Perfil | E-mail | Senha | Acesso |
+|---|---|---|---|
+| Administrador | `admin@sysbarber.com` | `admin1234` | app + área administrativa |
+| Barbeiros | `carlos.eduardo@sysbarber.com` (e demais) | `barbeiro123` | painel administrativo |
 
-## 🎬 Roteiro de Demonstração para a Banca
+Contas criadas pelo formulário de cadastro nascem **sempre como cliente
+comum** e não enxergam a área administrativa.
 
-1. App abre na **Tela Inicial** (logo BarberApp dourado)
-2. Clique em **ENTRAR** — credenciais já preenchidas
-3. Veja a **Home** com o próximo agendamento
-4. **Ver Serviços** → "Corte + Barba" → **Agendar**
-5. Selecione um barbeiro → **CONTINUAR**
-6. Escolha data e horário → **CONFIRMAR**
-7. Revise os dados → **CONFIRMAR AGENDAMENTO**
-8. Escolha Pix → **CONFIRMAR PAGAMENTO**
-9. Veja a confirmação com pontos de fidelidade
-10. Mostre **Meus Agendamentos**, **Fidelidade** e **Administração**
+### Funciona 100% offline
+
+O app não faz nenhuma requisição de rede. O banco é local (SQLite) e as fontes
+**Playfair Display** e **DM Sans** estão embarcadas no APK
+(`assets/fonts/`, declaradas em `pubspec.yaml`), e não baixadas em tempo de
+execução. A identidade visual fica idêntica com ou sem internet — importante
+para a apresentação.
 
 ---
 
-## 📁 Estrutura do Projeto
-
-```
-sysbarber/
-├── README.md
-├── pubspec.yaml                ← Dependências
-└── lib/
-    ├── main.dart               ← Entrada do app
-    ├── theme/app_theme.dart    ← Cores e estilos
-    ├── models/models.dart      ← Entidades do banco
-    ├── services/mock_data.dart ← Dados mockados
-    ├── widgets/                ← Componentes reutilizáveis
-    └── screens/                ← 13 telas do sistema
-```
-
----
-
-## 📱 Telas Implementadas
-
-| # | Tela                        | Funcionalidade                              |
-|---|-----------------------------|---------------------------------------------|
-| 1 | Splash / Tela Inicial       | Logo + botões Entrar/Criar Conta           |
-| 2 | Login                       | E-mail e senha (pré-preenchido)            |
-| 3 | Cadastro                    | Registro de novo cliente                    |
-| 4 | Home                        | Saudação + próximo agendamento + atalhos   |
-| 5 | Serviços                    | Lista com preço, duração, botão Agendar    |
-| 6 | Seleção de Barbeiro         | Avatar, especialidade, avaliação           |
-| 7 | Seleção de Horário          | Calendário + chips de horário              |
-| 8 | Confirmação de Agendamento  | Resumo completo                             |
-| 9 | Meus Agendamentos           | Abas Próximos/Histórico + cancelar         |
-|10 | Pagamento                   | Pix/Cartão/Dinheiro                         |
-|11 | Fidelidade                  | Pontos + barra de progresso + histórico    |
-|12 | Área Administrativa         | Painel admin com estatísticas              |
-| + | Perfil                      | Tela extra de perfil do usuário            |
-
----
-
-## 🛠️ Tecnologias
-
-- **Flutter** 3.x
-- **Dart** 3.x
-- **google_fonts** (Playfair Display + DM Sans)
-- **intl** (formatação de datas)
-
----
-
-## 💾 Sobre os Dados
-
-O sistema usa **dados mockados em memória** (`lib/services/mock_data.dart`) para garantir que o app rode em qualquer ambiente, sem precisar configurar Firebase ou banco de dados.
-
-Os dados incluem:
-- 1 cliente (João da Silva)
-- 5 serviços (Corte, Barba, Combo, Hidratação, Coloração)
-- 3 barbeiros (Carlos, Rafael, Marcos)
-- 3 agendamentos de exemplo
-- 320 pontos de fidelidade
-
----
-
-
----
-
-## 🧪 Testes Automatizados
-
-O projeto inclui testes unitários e de integração para validação de software.
+## Testes
 
 ```bash
-# Rodar todos os testes
 flutter test
-
-# Só testes unitários
-flutter test test/
-
-# Só testes de integração
-flutter test integration_test/
 ```
 
-Veja detalhes em `DOCUMENTACAO_TECNICA.md`.
+São **63 testes** no total:
+
+| Suíte | Testes | Conteúdo |
+|---|---|---|
+| `test/unit_test.dart` | 12 | Hash SHA-256, serialização das entidades, enums |
+| `test/validators_test.dart` | 20 | Validação de cadastro, barbeiro e cartão (Luhn) |
+| `test/formatters_test.dart` | 9 | Máscaras de telefone, moeda e cartão |
+| `integration_test/database_integration_test.dart` | 22 | CRUD, JOIN, agenda, pagamentos, fidelidade e relatórios |
+
+Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
+cada caso roda isolado, sem tocar no banco real do aparelho.
+
+O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
+`test/database_integration_test.dart` apenas reexporta a suíte de integração —
+assim um único `flutter test` roda os 37 testes. Para rodar a suíte de
+integração em um dispositivo:
+
+```bash
+flutter test integration_test -d emulator-5554
+```
+
+Verificação estática:
+
+```bash
+flutter analyze
+```
 
 ---
 
-## 🗄️ Banco de Dados
+## Arquitetura
 
-O app usa **SQLite** (via `sqflite`) com 7 tabelas: cliente, barbeiro, servico, agendamento, pagamento, fidelidade e historico_ponto. O banco é criado automaticamente na primeira execução, com dados iniciais (3 barbeiros, 5 serviços e 1 cliente demo).
+Arquitetura em camadas, com as telas isoladas do acesso a dados:
 
-**Conta demo:** `demo@sysbarber.com` / `demo1234`
+```
+lib/
+├── main.dart                    # Inicializa DB, restaura sessão, define rotas
+├── theme/app_theme.dart         # Cores, tipografia e tema global
+├── models/models.dart           # 7 entidades + 2 enums (toMap/fromMap)
+├── services/
+│   ├── database_service.dart    # Singleton de acesso ao SQLite (CRUD)
+│   ├── auth_service.dart        # Login, cadastro, logout, sessão
+│   ├── validators.dart          # Regras de validação (puras, testáveis)
+│   └── booking_flow.dart        # Estado temporário do agendamento
+├── widgets/common_widgets.dart  # Componentes reutilizáveis
+└── screens/                     # 13 telas (uma por arquivo)
+```
 
-## 👨‍💻 Autor
+**Padrões aplicados**
 
-**Matheus Nunes de Paula**
-TCC — Engenharia de Software — 2026
+- **Singleton** — `DatabaseService.instance` e `AuthService.instance` garantem
+  uma única conexão e uma única sessão em todo o app.
+- **Separação de responsabilidades** — nenhuma tela executa SQL; tudo passa
+  pela camada de serviços.
+- **Serialização toMap/fromMap** — converte entidades ↔ linhas do SQLite.
+- **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
+  banco real por um em memória, e `criarSchema()` é reaproveitado pelos testes.
+
+---
+
+## Banco de dados
+
+7 tabelas relacionais criadas automaticamente na primeira execução
+(`sysbarber.db`, no diretório de documentos do app), já populadas com
+3 barbeiros, 5 serviços e o cliente demo.
+
+```
+cliente ──┬──< agendamento >──── barbeiro
+          │         │
+          │         └──< pagamento
+          │         └──── servico
+          ├──── fidelidade
+          └──< historico_ponto
+```
+
+---
+
+## Regras de negócio
+
+1. Um cliente pode ter vários agendamentos.
+2. Um horário já agendado para um barbeiro fica indisponível naquela data —
+   **cancelar o agendamento libera o horário de volta**.
+3. Todo pagamento é vinculado a um agendamento.
+4. Após o pagamento, o cliente ganha pontos equivalentes ao valor pago
+   (arredondado).
+5. Meta de fidelidade: 500 pontos = 1 serviço gratuito.
+6. O administrador pode cadastrar, editar e excluir serviços.
+7. Senhas nunca são armazenadas em texto puro — sempre hash SHA-256 com salt.
+8. E-mail é único no sistema.
+
+---
+
+## Telas
+
+| Rota | Tela |
+|---|---|
+| `/` | Splash — entra direto se houver sessão salva |
+| `/login` | Login |
+| `/cadastro` | Criar conta (já entra logado) |
+| `/home` | Início — próximo horário, pontos, acesso rápido |
+| `/servicos` | Catálogo de serviços |
+| `/barbeiro` | Escolha do profissional |
+| `/horario` | Escolha de data e horário disponível |
+| `/confirmacao` | Revisão do agendamento |
+| `/agendamentos` | Meus agendamentos (Próximos / Histórico) |
+| `/pagamento` | Pagamento (Pix / Cartão / Dinheiro) |
+| `/fidelidade` | Pontos e histórico |
+| `/admin` | Painel administrativo + CRUD de serviços |
+| `/perfil` | Dados do usuário e logout |
+
+---
+
+## Fluxo principal
+
+```
+Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
+                                     │             │
+                            grava agendamento   credita pontos
+```

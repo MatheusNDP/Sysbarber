@@ -1,92 +1,75 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/models/models.dart';
+import 'package:sysbarber/services/database_service.dart';
 
-/// ============================================================
-/// TESTES UNITÁRIOS
-/// Testam funções/unidades isoladas, sem dependências externas
-/// como banco de dados ou rede.
-/// ============================================================
+/// Testes unitários das regras puras: hash de senha e serialização das
+/// entidades. Nenhum deles toca no banco de dados.
 void main() {
-  group('Hash de Senha (segurança)', () {
-    test('deve gerar hash diferente da senha original', () {
+  group('Hash de senha (SHA-256)', () {
+    test('o hash é diferente da senha original', () {
       const senha = 'minhaSenha123';
       final hash = DatabaseService.hashSenha(senha);
-
       expect(hash, isNot(equals(senha)));
-      expect(hash.isNotEmpty, true);
+      expect(hash.contains(senha), isFalse);
     });
 
-    test('mesma senha deve gerar sempre o mesmo hash (determinístico)', () {
-      const senha = 'demo1234';
-      final hash1 = DatabaseService.hashSenha(senha);
-      final hash2 = DatabaseService.hashSenha(senha);
-
-      expect(hash1, equals(hash2));
+    test('a mesma senha gera sempre o mesmo hash (determinístico)', () {
+      final a = DatabaseService.hashSenha('demo1234');
+      final b = DatabaseService.hashSenha('demo1234');
+      expect(a, equals(b));
     });
 
-    test('senhas diferentes devem gerar hashes diferentes', () {
-      final hashA = DatabaseService.hashSenha('senhaA');
-      final hashB = DatabaseService.hashSenha('senhaB');
-
-      expect(hashA, isNot(equals(hashB)));
+    test('senhas diferentes geram hashes diferentes', () {
+      final a = DatabaseService.hashSenha('demo1234');
+      final b = DatabaseService.hashSenha('demo12345');
+      expect(a, isNot(equals(b)));
     });
 
-    test('hash SHA-256 deve ter 64 caracteres hexadecimais', () {
-      final hash = DatabaseService.hashSenha('qualquercoisa');
-      expect(hash.length, equals(64));
-      expect(RegExp(r'^[a-f0-9]+$').hasMatch(hash), true);
+    test('o hash tem 64 caracteres hexadecimais', () {
+      final hash = DatabaseService.hashSenha('qualquer');
+      expect(hash.length, 64);
+      expect(RegExp(r'^[0-9a-f]{64}$').hasMatch(hash), isTrue);
     });
   });
 
-  group('Entidade Cliente (serialização)', () {
-    test('toMap deve converter cliente em mapa corretamente', () {
-      final cliente = Cliente(
-        id: 1,
-        nome: 'João Teste',
-        email: 'joao@teste.com',
-        telefone: '(67) 99999-9999',
-        senhaHash: 'hash123',
-        criadoEm: DateTime(2026, 1, 1),
-      );
+  group('Entidade Cliente', () {
+    const cliente = Cliente(
+      id: 1,
+      nome: 'João da Silva',
+      email: 'joao@teste.com',
+      telefone: '(67) 99999-1111',
+      senhaHash: 'hash_qualquer',
+      criadoEm: '2026-08-10T10:00:00.000',
+    );
 
-      final map = cliente.toMap();
-
-      expect(map['id'], 1);
-      expect(map['nome'], 'João Teste');
-      expect(map['email'], 'joao@teste.com');
-      expect(map['telefone'], '(67) 99999-9999');
-      expect(map['senha_hash'], 'hash123');
+    test('toMap() converte para as colunas do banco', () {
+      final mapa = cliente.toMap();
+      expect(mapa['id'], 1);
+      expect(mapa['nome'], 'João da Silva');
+      expect(mapa['email'], 'joao@teste.com');
+      expect(mapa['telefone'], '(67) 99999-1111');
+      expect(mapa['senha_hash'], 'hash_qualquer');
+      expect(mapa['criado_em'], '2026-08-10T10:00:00.000');
     });
 
-    test('fromMap deve reconstruir cliente a partir do mapa', () {
-      final map = {
-        'id': 5,
-        'nome': 'Maria',
-        'email': 'maria@teste.com',
-        'telefone': '(67) 98888-8888',
-        'senha_hash': 'abc',
-        'criado_em': '2026-01-15T10:30:00.000',
-      };
-
-      final cliente = Cliente.fromMap(map);
-
-      expect(cliente.id, 5);
-      expect(cliente.nome, 'Maria');
-      expect(cliente.email, 'maria@teste.com');
-      expect(cliente.criadoEm.year, 2026);
-      expect(cliente.criadoEm.month, 1);
-      expect(cliente.criadoEm.day, 15);
+    test('fromMap() reconstrói o objeto corretamente', () {
+      final reconstruido = Cliente.fromMap(cliente.toMap());
+      expect(reconstruido.id, cliente.id);
+      expect(reconstruido.nome, cliente.nome);
+      expect(reconstruido.email, cliente.email);
+      expect(reconstruido.telefone, cliente.telefone);
+      expect(reconstruido.senhaHash, cliente.senhaHash);
+      expect(reconstruido.criadoEm, cliente.criadoEm);
     });
   });
 
-  group('Entidade Servico (serialização)', () {
-    test('toMap e fromMap devem ser consistentes (ida e volta)', () {
-      final original = Servico(
+  group('Entidade Servico', () {
+    test('toMap() → fromMap() preserva todos os dados', () {
+      const original = Servico(
         id: 3,
         nome: 'Corte + Barba',
         descricao: 'Combo completo',
-        preco: 55.0,
+        preco: 55.00,
         duracaoMinutos: 50,
         icone: '💈',
       );
@@ -95,6 +78,7 @@ void main() {
 
       expect(reconstruido.id, original.id);
       expect(reconstruido.nome, original.nome);
+      expect(reconstruido.descricao, original.descricao);
       expect(reconstruido.preco, original.preco);
       expect(reconstruido.duracaoMinutos, original.duracaoMinutos);
       expect(reconstruido.icone, original.icone);
@@ -102,51 +86,57 @@ void main() {
   });
 
   group('Enum StatusAgendamento', () {
-    test('deve converter status para valor de banco e voltar', () {
+    test('dbValue e fromDb são simétricos para todos os valores', () {
       for (final status in StatusAgendamento.values) {
-        final dbValue = status.dbValue;
-        final reconstruido = StatusAgendamentoX.fromDb(dbValue);
-        expect(reconstruido, equals(status));
+        expect(StatusAgendamentoX.fromDb(status.dbValue), status);
       }
+      expect(StatusAgendamento.confirmado.dbValue, 'confirmado');
+      expect(StatusAgendamento.cancelado.dbValue, 'cancelado');
+      expect(StatusAgendamento.finalizado.dbValue, 'finalizado');
     });
 
-    test('deve ter labels corretos em português', () {
+    test('os labels estão em português', () {
       expect(StatusAgendamento.confirmado.label, 'Confirmado');
       expect(StatusAgendamento.cancelado.label, 'Cancelado');
       expect(StatusAgendamento.finalizado.label, 'Finalizado');
     });
 
-    test('valor desconhecido deve retornar confirmado como padrão', () {
-      final status = StatusAgendamentoX.fromDb('valor_invalido');
-      expect(status, StatusAgendamento.confirmado);
+    test('um valor desconhecido cai em confirmado', () {
+      expect(StatusAgendamentoX.fromDb('valor_invalido'),
+          StatusAgendamento.confirmado);
+      expect(StatusAgendamentoX.fromDb(''), StatusAgendamento.confirmado);
     });
   });
 
   group('Enum MetodoPagamento', () {
-    test('deve ter labels corretos', () {
+    test('os labels estão corretos', () {
       expect(MetodoPagamento.pix.label, 'Pix');
       expect(MetodoPagamento.cartao.label, 'Cartão');
       expect(MetodoPagamento.dinheiro.label, 'Dinheiro');
     });
   });
 
-  group('Entidade Agendamento (serialização)', () {
-    test('toMap deve incluir todas as chaves estrangeiras', () {
-      final ag = Agendamento(
-        id: 1,
-        idCliente: 10,
-        idBarbeiro: 20,
-        idServico: 30,
-        dataHora: DateTime(2026, 5, 27, 10, 0),
+  group('Entidade Agendamento', () {
+    test('toMap() inclui todas as chaves estrangeiras', () {
+      const agendamento = Agendamento(
+        id: 7,
+        idCliente: 1,
+        idBarbeiro: 2,
+        idServico: 3,
+        dataHora: '2026-08-11T09:00:00.000',
         status: StatusAgendamento.confirmado,
       );
 
-      final map = ag.toMap();
+      final mapa = agendamento.toMap();
 
-      expect(map['id_cliente'], 10);
-      expect(map['id_barbeiro'], 20);
-      expect(map['id_servico'], 30);
-      expect(map['status'], 'confirmado');
+      expect(mapa.containsKey('id_cliente'), isTrue);
+      expect(mapa.containsKey('id_barbeiro'), isTrue);
+      expect(mapa.containsKey('id_servico'), isTrue);
+      expect(mapa['id_cliente'], 1);
+      expect(mapa['id_barbeiro'], 2);
+      expect(mapa['id_servico'], 3);
+      expect(mapa['data_hora'], '2026-08-11T09:00:00.000');
+      expect(mapa['status'], 'confirmado');
     });
   });
 }

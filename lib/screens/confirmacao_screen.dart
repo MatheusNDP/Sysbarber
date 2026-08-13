@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../theme/app_theme.dart';
-import '../widgets/common_widgets.dart';
-import '../services/database_service.dart';
+
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/booking_flow.dart';
-import '../models/models.dart';
+import '../services/database_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common_widgets.dart';
 
+/// Revisão final antes de gravar o agendamento (`/confirmacao`).
 class ConfirmacaoScreen extends StatefulWidget {
   const ConfirmacaoScreen({super.key});
 
@@ -15,168 +16,209 @@ class ConfirmacaoScreen extends StatefulWidget {
 }
 
 class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
-  bool _processando = false;
+  bool _salvando = false;
 
   Future<void> _confirmar() async {
+    final usuario = AuthService.instance.usuarioAtual;
     final servico = BookingFlow.servicoSelecionado;
-    final barb = BookingFlow.barbeiroSelecionado;
-    final data = BookingFlow.dataSelecionada;
-    final hora = BookingFlow.horarioSelecionado;
-    final cliente = AuthService.instance.usuarioAtual;
+    final barbeiro = BookingFlow.barbeiroSelecionado;
+    final dataHora = BookingFlow.dataHoraCompleta;
 
-    if (servico == null ||
-        barb == null ||
-        data == null ||
-        hora == null ||
-        cliente == null) return;
+    if (usuario?.id == null ||
+        servico?.id == null ||
+        barbeiro?.id == null ||
+        dataHora == null) {
+      mostrarErro(context, 'Dados do agendamento incompletos');
+      return;
+    }
 
-    setState(() => _processando = true);
+    setState(() => _salvando = true);
 
-    final partes = hora.split(':');
-    final dataHora = DateTime(
-      data.year,
-      data.month,
-      data.day,
-      int.parse(partes[0]),
-      int.parse(partes[1]),
-    );
+    try {
+      // Reconfere a disponibilidade: outro cliente pode ter pego o horário
+      // enquanto esta tela estava aberta.
+      final livres = await DatabaseService.instance.horariosDisponiveis(
+        barbeiro!.id!,
+        dataHora,
+      );
+      final hora = formatarHora(dataHora);
+      if (!livres.contains(hora)) {
+        if (!mounted) return;
+        setState(() => _salvando = false);
+        mostrarErro(context, 'O horário $hora acabou de ser ocupado');
+        return;
+      }
 
-    final id = await DatabaseService.instance.criarAgendamento(Agendamento(
-      idCliente: cliente.id!,
-      idBarbeiro: barb.id!,
-      idServico: servico.id!,
-      dataHora: dataHora,
-    ));
+      final id = await DatabaseService.instance.criarAgendamento(
+        Agendamento(
+          idCliente: usuario!.id!,
+          idBarbeiro: barbeiro.id!,
+          idServico: servico!.id!,
+          dataHora: dataHora.toIso8601String(),
+          status: StatusAgendamento.confirmado,
+        ),
+      );
 
-    BookingFlow.agendamentoCriadoId = id;
-    if (!mounted) return;
-    Navigator.pushNamed(context, '/pagamento');
+      if (!mounted) return;
+      setState(() => _salvando = false);
+
+      BookingFlow.agendamentoCriadoId = id;
+      Navigator.of(context).pushNamed('/pagamento');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _salvando = false);
+      mostrarErro(context, 'Não foi possível criar o agendamento: $e');
+    }
+  }
+
+  void _cancelar() {
+    BookingFlow.limpar();
+    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
 
   @override
   Widget build(BuildContext context) {
     final servico = BookingFlow.servicoSelecionado;
-    final barb = BookingFlow.barbeiroSelecionado;
-    final data = BookingFlow.dataSelecionada;
-    final hora = BookingFlow.horarioSelecionado;
-
-    if (servico == null || barb == null || data == null || hora == null) {
-      return const Scaffold(
-        body: Center(child: Text('Dados incompletos')),
-      );
-    }
+    final barbeiro = BookingFlow.barbeiroSelecionado;
+    final dataHora = BookingFlow.dataHoraCompleta;
 
     return Scaffold(
-      appBar: const BarberAppBar(title: 'CONFIRMAR AGENDAMENTO'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.gold.withOpacity(0.15),
-                          border: Border.all(
-                              color: AppColors.gold.withOpacity(0.4),
-                              width: 2),
-                        ),
-                        child: const Icon(Icons.assignment_outlined,
-                            color: AppColors.gold, size: 28),
-                      ),
+      appBar: const BarberAppBar(titulo: 'CONFIRMAÇÃO'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              children: [
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      border: Border.all(color: AppColors.gold, width: 1.5),
                     ),
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Text(
-                        'Revise seu agendamento',
-                        style: GoogleFonts.dmSans(
-                          color: AppColors.text,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    child: const Icon(
+                      Icons.check,
+                      color: AppColors.gold,
+                      size: 34,
                     ),
-                    const SizedBox(height: 4),
-                    Center(
-                      child: Text(
-                        'Confirme os dados antes de finalizar',
-                        style: AppTheme.subtitle(size: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _resumoCard(Icons.content_cut, 'SERVIÇO', servico.nome),
-                    const SizedBox(height: 8),
-                    _resumoCard(Icons.person_outline, 'BARBEIRO', barb.nome),
-                    const SizedBox(height: 8),
-                    _resumoCard(
-                      Icons.calendar_month,
-                      'DATA',
-                      '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}',
-                    ),
-                    const SizedBox(height: 8),
-                    _resumoCard(Icons.access_time, 'HORÁRIO', hora),
-                    const SizedBox(height: 8),
-                    _resumoCard(
-                      Icons.attach_money,
-                      'VALOR TOTAL',
-                      'R\$ ${servico.preco.toStringAsFixed(2).replaceAll('.', ',')}',
-                    ),
-                    const SizedBox(height: 18),
-                    GoldButton(
-                      label: _processando
-                          ? 'PROCESSANDO...'
-                          : 'CONFIRMAR AGENDAMENTO',
-                      onPressed: _processando ? null : _confirmar,
-                    ),
-                    const SizedBox(height: 6),
-                    GoldOutlineButton(
-                      label: 'CANCELAR',
-                      onPressed: _processando
-                          ? null
-                          : () {
-                              BookingFlow.limpar();
-                              Navigator.popUntil(
-                                  context, (r) => r.settings.name == '/home');
-                            },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 18),
+                Text(
+                  'Revise seu agendamento',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.serif(size: 22),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Confira os dados antes de confirmar',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.sans(size: 13, color: AppColors.muted),
+                ),
+                const SizedBox(height: 28),
+                _linhaResumo(
+                  'Serviço',
+                  servico?.nome ?? '-',
+                  detalhe: servico?.descricao,
+                  icone: servico?.icone,
+                ),
+                const SizedBox(height: 12),
+                _linhaResumo(
+                  'Barbeiro',
+                  barbeiro?.nome ?? '-',
+                  detalhe: barbeiro?.especialidade,
+                ),
+                const SizedBox(height: 12),
+                _linhaResumo(
+                  'Data',
+                  dataHora == null ? '-' : formatarDataExtenso(dataHora),
+                ),
+                const SizedBox(height: 12),
+                _linhaResumo(
+                  'Horário',
+                  dataHora == null ? '-' : formatarHora(dataHora),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.card2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.gold, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const SectionLabel('Valor total'),
+                      Text(
+                        formatarReal(servico?.preco ?? 0),
+                        style: AppTheme.serif(size: 26, color: AppColors.gold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              children: [
+                GoldButton(
+                  texto: _salvando
+                      ? 'CONFIRMANDO...'
+                      : 'CONFIRMAR AGENDAMENTO',
+                  onPressed: _salvando ? null : _confirmar,
+                ),
+                const SizedBox(height: 10),
+                GoldOutlineButton(
+                  texto: 'CANCELAR',
+                  onPressed: _salvando ? null : _cancelar,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _resumoCard(IconData icone, String label, String valor) {
+  Widget _linhaResumo(
+    String rotulo,
+    String valor, {
+    String? detalhe,
+    String? icone,
+  }) {
     return GoldCard(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icone, color: AppColors.gold, size: 22),
-          const SizedBox(width: 14),
+          if (icone != null) ...[
+            Text(icone, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: AppTheme.goldLabel()),
-                const SizedBox(height: 2),
+                SectionLabel(rotulo),
+                const SizedBox(height: 6),
                 Text(
                   valor,
-                  style: GoogleFonts.dmSans(
-                    color: AppColors.text,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTheme.sans(size: 15, weight: FontWeight.w700),
                 ),
+                if (detalhe != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    detalhe,
+                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  ),
+                ],
               ],
             ),
           ),

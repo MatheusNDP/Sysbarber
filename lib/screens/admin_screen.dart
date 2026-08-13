@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../models/models.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/database_service.dart';
-import '../models/models.dart';
+import 'admin_barbeiros_screen.dart';
+import 'admin_clientes_screen.dart';
+import 'admin_relatorios_screen.dart';
+import 'admin_servicos_screen.dart';
 
+/// Painel administrativo (`/admin`) com estatísticas vindas do banco.
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
 
@@ -13,10 +18,10 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  int _agendamentos = 0;
-  int _clientes = 0;
-  int _barbeiros = 0;
-  int _servicos = 0;
+  final _db = DatabaseService.instance;
+
+  ResumoDia? _resumo;
+  bool _carregando = true;
 
   @override
   void initState() {
@@ -25,454 +30,248 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _carregar() async {
-    final ags = await DatabaseService.instance.contarAgendamentos();
-    final cls = await DatabaseService.instance.contarClientes();
-    final brs = (await DatabaseService.instance.listarBarbeiros()).length;
-    final svs = (await DatabaseService.instance.listarServicos()).length;
-    if (!mounted) return;
-    setState(() {
-      _agendamentos = ags;
-      _clientes = cls;
-      _barbeiros = brs;
-      _servicos = svs;
-    });
+    try {
+      final resumo = await _db.resumoDoDia();
+      if (!mounted) return;
+      setState(() {
+        _resumo = resumo;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _carregando = false);
+      mostrarErro(context, 'Erro ao carregar estatísticas: $e');
+    }
+  }
+
+  Future<void> _abrir(Widget tela) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => tela));
+    if (mounted) _carregar();
   }
 
   @override
   Widget build(BuildContext context) {
+    final resumo = _resumo;
+
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: AppColors.gold),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: const BarberAppBar(titulo: 'ADMINISTRAÇÃO'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: _carregando || resumo == null
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : RefreshIndicator(
+                    color: AppColors.gold,
+                    backgroundColor: AppColors.card,
+                    onRefresh: _carregar,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 24,
+                      ),
                       children: [
-                        Text('MODO ADMINISTRADOR',
-                            style: AppTheme.goldLabel()),
-                        const SizedBox(height: 2),
+                        const SectionLabel('Modo administrador'),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Painel de Controle',
+                                style: AppTheme.serif(size: 24),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _seloHoje(),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
                         Text(
-                          'Painel de Controle',
-                          style: GoogleFonts.playfairDisplay(
-                            color: AppColors.text,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                          'Movimento de ${formatarDataExtenso(DateTime.now())}',
+                          style: AppTheme.sans(
+                            size: 12,
+                            color: AppColors.muted,
                           ),
+                        ),
+                        const SizedBox(height: 20),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          // 1.5 estourava por ~4px com a fonte serifada.
+                          childAspectRatio: 1.25,
+                          children: [
+                            _estatistica(
+                              '📋',
+                              resumo.agendamentosHoje,
+                              'Agendamentos',
+                              resumo.agendamentosTotal,
+                              'no total',
+                            ),
+                            _estatistica(
+                              '✂️',
+                              resumo.barbeirosHoje,
+                              'Barbeiros',
+                              resumo.barbeirosTotal,
+                              'na equipe',
+                            ),
+                            _estatistica(
+                              '👥',
+                              resumo.clientesHoje,
+                              'Clientes',
+                              resumo.clientesTotal,
+                              'cadastrados',
+                            ),
+                            _estatistica(
+                              '💈',
+                              resumo.servicosHoje,
+                              'Serviços',
+                              resumo.servicosTotal,
+                              'no catálogo',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 28),
+                        const SectionLabel('Gerenciamento'),
+                        const SizedBox(height: 12),
+                        _itemGerenciar(
+                          '💈',
+                          'Gerenciar Serviços',
+                          'Cadastrar, editar e excluir serviços',
+                          () => _abrir(const AdminServicosScreen()),
+                        ),
+                        _itemGerenciar(
+                          '✂️',
+                          'Gerenciar Barbeiros',
+                          'Equipe, acesso e salários',
+                          () => _abrir(const AdminBarbeirosScreen()),
+                        ),
+                        _itemGerenciar(
+                          '👥',
+                          'Gerenciar Clientes',
+                          'Cadastros, agendamentos e pontos',
+                          () => _abrir(const AdminClientesScreen()),
+                        ),
+                        _itemGerenciar(
+                          '📊',
+                          'Relatórios',
+                          'Faturamento e indicadores',
+                          () => _abrir(const AdminRelatoriosScreen()),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.settings, color: AppColors.gold, size: 28),
-                ],
-              ),
-            ),
-            const GoldDivider(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-              child: Row(
-                children: [
-                  Expanded(child: _stat('$_agendamentos', 'Agendamentos')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _stat('$_barbeiros', 'Barbeiros')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _stat('$_clientes', 'Clientes')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _stat('$_servicos', 'Serviços')),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionLabel('Gerenciamento'),
-                    _adminItem(Icons.content_cut, 'Gerenciar Serviços',
-                        '$_servicos serviços cadastrados', () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const _GerenciarServicos()));
-                      _carregar();
-                    }),
-                    _adminItem(Icons.person_outline, 'Gerenciar Barbeiros',
-                        '$_barbeiros profissionais ativos', () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const _ListaBarbeiros()));
-                    }),
-                    _adminItem(Icons.people_outline, 'Gerenciar Clientes',
-                        '$_clientes clientes cadastrados', () {
-                      _showSnack('Funcionalidade em desenvolvimento');
-                    }),
-                    _adminItem(Icons.bar_chart, 'Relatórios',
-                        'Faturamento e agendamentos', () {
-                      _showSnack('Relatórios em desenvolvimento');
-                    }),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _stat(String numero, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Text(numero,
-              style: GoogleFonts.playfairDisplay(
-                color: AppColors.gold,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              )),
-          const SizedBox(height: 2),
-          Text(label,
-              style: GoogleFonts.dmSans(
-                color: AppColors.muted,
-                fontSize: 9,
-              )),
+          ),
         ],
       ),
     );
   }
 
-  Widget _adminItem(IconData icone, String titulo, String subtitulo,
-      VoidCallback onTap) {
+  /// Pílula "HOJE" ao lado do título do painel.
+  Widget _seloHoje() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.gold),
+      ),
+      child: Text(
+        'HOJE',
+        style: AppTheme.sans(
+          size: 11,
+          weight: FontWeight.w700,
+          color: AppColors.gold,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  /// Card com o número do dia em destaque e o total geral como referência.
+  Widget _estatistica(
+    String icone,
+    int hoje,
+    String rotulo,
+    int total,
+    String legendaTotal,
+  ) {
+    return GoldCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icone, style: const TextStyle(fontSize: 18)),
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$hoje',
+              maxLines: 1,
+              style: AppTheme.serif(size: 25, color: AppColors.gold),
+            ),
+          ),
+          Text(
+            rotulo,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTheme.sans(size: 11, weight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$total $legendaTotal',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTheme.sans(size: 10, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _itemGerenciar(
+    String icone,
+    String titulo,
+    String descricao,
+    VoidCallback onTap,
+  ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: GoldCard(
         onTap: onTap,
         child: Row(
           children: [
-            Icon(icone, color: AppColors.gold, size: 26),
+            Text(icone, style: const TextStyle(fontSize: 22)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(titulo,
-                      style: GoogleFonts.dmSans(
-                        color: AppColors.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      )),
-                  const SizedBox(height: 2),
-                  Text(subtitulo, style: AppTheme.subtitle(size: 12)),
+                  Text(
+                    titulo,
+                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    descricao,
+                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right,
-                color: AppColors.gold.withOpacity(0.6), size: 22),
+            const Icon(Icons.chevron_right, color: AppColors.gold),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.gold,
-        content: Text(message, style: const TextStyle(color: Colors.black)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-}
-
-// ─── Sub-tela: Gerenciar Serviços (CRUD funcional) ───────────────────
-class _GerenciarServicos extends StatefulWidget {
-  const _GerenciarServicos();
-
-  @override
-  State<_GerenciarServicos> createState() => _GerenciarServicosState();
-}
-
-class _GerenciarServicosState extends State<_GerenciarServicos> {
-  List<Servico>? _servicos;
-
-  @override
-  void initState() {
-    super.initState();
-    _carregar();
-  }
-
-  Future<void> _carregar() async {
-    final l = await DatabaseService.instance.listarServicos();
-    if (!mounted) return;
-    setState(() => _servicos = l);
-  }
-
-  Future<void> _excluir(Servico s) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border)),
-        title: Text('Excluir serviço?',
-            style: GoogleFonts.playfairDisplay(
-                color: AppColors.gold, fontSize: 18)),
-        content: Text('Deseja excluir "${s.nome}"?',
-            style: GoogleFonts.dmSans(color: AppColors.text)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancelar',
-                  style: GoogleFonts.dmSans(color: AppColors.muted))),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Excluir',
-                  style: GoogleFonts.dmSans(
-                      color: AppColors.red, fontWeight: FontWeight.w700))),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await DatabaseService.instance.excluirServico(s.id!);
-    _carregar();
-  }
-
-  Future<void> _editarOuNovo([Servico? s]) async {
-    final result = await showDialog<Servico>(
-      context: context,
-      builder: (_) => _ServicoFormDialog(servico: s),
-    );
-    if (result == null) return;
-    if (s == null) {
-      await DatabaseService.instance.cadastrarServico(result);
-    } else {
-      await DatabaseService.instance.atualizarServico(result);
-    }
-    _carregar();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('GERENCIAR SERVIÇOS'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: AppColors.gold),
-            onPressed: () => _editarOuNovo(),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: _servicos == null
-            ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-            : ListView.separated(
-                padding: const EdgeInsets.all(20),
-                itemCount: _servicos!.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final s = _servicos![i];
-                  return GoldCard(
-                    onTap: () => _editarOuNovo(s),
-                    child: Row(
-                      children: [
-                        Text(s.icone, style: const TextStyle(fontSize: 26)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(s.nome,
-                                  style: GoogleFonts.dmSans(
-                                      color: AppColors.text,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
-                              Text(
-                                'R\$ ${s.preco.toStringAsFixed(2).replaceAll('.', ',')} · ${s.duracaoMinutos}min',
-                                style: AppTheme.subtitle(size: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: AppColors.red, size: 22),
-                          onPressed: () => _excluir(s),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      ),
-    );
-  }
-}
-
-class _ServicoFormDialog extends StatefulWidget {
-  final Servico? servico;
-  const _ServicoFormDialog({this.servico});
-
-  @override
-  State<_ServicoFormDialog> createState() => _ServicoFormDialogState();
-}
-
-class _ServicoFormDialogState extends State<_ServicoFormDialog> {
-  late TextEditingController _nome;
-  late TextEditingController _desc;
-  late TextEditingController _preco;
-  late TextEditingController _dur;
-  late TextEditingController _icone;
-
-  @override
-  void initState() {
-    super.initState();
-    final s = widget.servico;
-    _nome = TextEditingController(text: s?.nome ?? '');
-    _desc = TextEditingController(text: s?.descricao ?? '');
-    _preco = TextEditingController(text: s?.preco.toString() ?? '');
-    _dur = TextEditingController(text: s?.duracaoMinutos.toString() ?? '');
-    _icone = TextEditingController(text: s?.icone ?? '💈');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.card,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.gold)),
-      title: Text(widget.servico == null ? 'Novo Serviço' : 'Editar Serviço',
-          style: GoogleFonts.playfairDisplay(
-              color: AppColors.gold, fontSize: 18)),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-                controller: _nome,
-                decoration: const InputDecoration(labelText: 'Nome')),
-            const SizedBox(height: 10),
-            TextField(
-                controller: _desc,
-                decoration: const InputDecoration(labelText: 'Descrição')),
-            const SizedBox(height: 10),
-            TextField(
-                controller: _preco,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Preço (R\$)')),
-            const SizedBox(height: 10),
-            TextField(
-                controller: _dur,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Duração (minutos)')),
-            const SizedBox(height: 10),
-            TextField(
-                controller: _icone,
-                decoration: const InputDecoration(labelText: 'Ícone (emoji)')),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar',
-                style: GoogleFonts.dmSans(color: AppColors.muted))),
-        TextButton(
-          onPressed: () {
-            final s = Servico(
-              id: widget.servico?.id,
-              nome: _nome.text.trim(),
-              descricao: _desc.text.trim(),
-              preco: double.tryParse(_preco.text.replaceAll(',', '.')) ?? 0,
-              duracaoMinutos: int.tryParse(_dur.text) ?? 30,
-              icone: _icone.text.isEmpty ? '💈' : _icone.text,
-            );
-            Navigator.pop(context, s);
-          },
-          child: Text('Salvar',
-              style: GoogleFonts.dmSans(
-                  color: AppColors.gold, fontWeight: FontWeight.w700)),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Sub-tela: Lista de Barbeiros (consulta) ─────────────────────────
-class _ListaBarbeiros extends StatelessWidget {
-  const _ListaBarbeiros();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('GERENCIAR BARBEIROS')),
-      body: SafeArea(
-        child: FutureBuilder<List<Barbeiro>>(
-          future: DatabaseService.instance.listarBarbeiros(),
-          builder: (_, snap) {
-            if (!snap.hasData) {
-              return const Center(
-                  child: CircularProgressIndicator(color: AppColors.gold));
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: snap.data!.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) {
-                final b = snap.data![i];
-                return GoldCard(
-                  child: Row(
-                    children: [
-                      GoldAvatar(text: b.iniciais, size: 44),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(b.nome,
-                                style: GoogleFonts.dmSans(
-                                    color: AppColors.text,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14)),
-                            Text(b.especialidade,
-                                style: AppTheme.subtitle(size: 12)),
-                            Row(
-                              children: [
-                                const Icon(Icons.star,
-                                    color: AppColors.gold, size: 12),
-                                const SizedBox(width: 3),
-                                Text('${b.avaliacao} (${b.avaliacoes})',
-                                    style: AppTheme.subtitle(size: 11)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
         ),
       ),
     );

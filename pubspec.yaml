@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  google_fonts: ^6.1.0
   intl: ^0.19.0
   sqflite: ^2.3.0
   sqflite_common_ffi: ^2.3.0
@@ -18,6 +17,7 @@ dependencies:
   path_provider: ^2.1.1
   shared_preferences: ^2.2.2
   crypto: ^3.0.3
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -28,3 +28,19 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Fontes embarcadas no APK: o app não depende de internet para exibir a
+  # identidade visual (importante para a apresentação offline).
+  fonts:
+    - family: Playfair Display
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Bold.ttf
+          weight: 700

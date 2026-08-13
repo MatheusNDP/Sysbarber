@@ -1,64 +1,106 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+/// Paleta oficial do SysBarber: tema escuro premium, preto e dourado.
 class AppColors {
-  static const Color black = Color(0xFF0A0A0A);
-  static const Color background = Color(0xFF0A0A0A);
+  static const Color background = Color(0xFF0A0A0A); // preto
   static const Color dark = Color(0xFF141414);
   static const Color card = Color(0xFF1C1C1C);
   static const Color card2 = Color(0xFF242424);
-  static const Color gold = Color(0xFFC9A84C);
+  static const Color gold = Color(0xFFC9A84C); // dourado principal
   static const Color goldLight = Color(0xFFE8C96A);
-  static const Color goldDim = Color(0x26C9A84C);
   static const Color border = Color(0x33C9A84C);
-  static const Color text = Color(0xFFF0ECE0);
+  static const Color text = Color(0xFFF0ECE0); // off-white
   static const Color muted = Color(0xFF888888);
-  static const Color textMuted = Color(0xFF888888);
   static const Color red = Color(0xFFE05252);
   static const Color green = Color(0xFF52C878);
 }
 
+/// Tipografia e tema global do aplicativo.
+///
+/// As duas famílias são **embarcadas no APK** (declaradas em `pubspec.yaml`),
+/// e não baixadas em tempo de execução: o app mantém a identidade visual mesmo
+/// sem conexão com a internet.
 class AppTheme {
-  static ThemeData get darkTheme {
-    final base = ThemeData.dark();
+  /// Família serifada — títulos, logo e números de destaque.
+  static const String fonteSerif = 'Playfair Display';
+
+  /// Família de interface — corpo do aplicativo.
+  static const String fonteSans = 'DM Sans';
+
+  /// Fonte serifada usada em títulos, logo e números de destaque.
+  static TextStyle serif({
+    double size = 20,
+    FontWeight weight = FontWeight.w700,
+    Color color = AppColors.text,
+    double? letterSpacing,
+    double? height,
+  }) {
+    return TextStyle(
+      fontFamily: fonteSerif,
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+    );
+  }
+
+  /// Fonte de interface usada no corpo do aplicativo.
+  static TextStyle sans({
+    double size = 14,
+    FontWeight weight = FontWeight.w400,
+    Color color = AppColors.text,
+    double? letterSpacing,
+    double? height,
+  }) {
+    return TextStyle(
+      fontFamily: fonteSans,
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+    );
+  }
+
+  static ThemeData get tema {
+    final base = ThemeData.dark(useMaterial3: true);
     return base.copyWith(
-      brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.background,
-      primaryColor: AppColors.gold,
-      colorScheme: const ColorScheme.dark(
+      canvasColor: AppColors.background,
+      colorScheme: base.colorScheme.copyWith(
         primary: AppColors.gold,
         secondary: AppColors.goldLight,
         surface: AppColors.card,
-        background: AppColors.background,
         error: AppColors.red,
         onPrimary: Colors.black,
-        onSecondary: Colors.black,
         onSurface: AppColors.text,
-        onBackground: AppColors.text,
-        onError: Colors.white,
       ),
-      textTheme: GoogleFonts.dmSansTextTheme(base.textTheme).apply(
+      textTheme: base.textTheme.apply(
+        fontFamily: fonteSans,
         bodyColor: AppColors.text,
         displayColor: AppColors.text,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gold),
-        titleTextStyle: GoogleFonts.playfairDisplay(
-          color: AppColors.gold,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5,
-        ),
+        centerTitle: true,
+        iconTheme: IconThemeData(color: AppColors.gold),
+      ),
+      dialogTheme: const DialogThemeData(backgroundColor: AppColors.card),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.gold,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.card,
-        hintStyle: const TextStyle(color: AppColors.muted),
-        labelStyle: const TextStyle(color: AppColors.gold),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        labelStyle: AppTheme.sans(size: 13, color: AppColors.muted),
+        hintStyle: AppTheme.sans(size: 13, color: AppColors.muted),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.border),
@@ -71,25 +113,11 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.red),
+        ),
       ),
     );
   }
-
-  static TextStyle goldLabel({double size = 11}) => GoogleFonts.dmSans(
-        color: AppColors.gold,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
-      );
-
-  static TextStyle title({double size = 22}) => GoogleFonts.playfairDisplay(
-        color: AppColors.text,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-      );
-
-  static TextStyle subtitle({double size = 13}) => GoogleFonts.dmSans(
-        color: AppColors.muted,
-        fontSize: size,
-      );
 }

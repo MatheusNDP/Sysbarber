@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../models/models.dart';
+import '../services/booking_flow.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/database_service.dart';
-import '../services/booking_flow.dart';
-import '../models/models.dart';
 
+/// Catálogo de serviços (`/servicos`). Todos os dados vêm do banco.
 class ServicosScreen extends StatefulWidget {
   const ServicosScreen({super.key});
 
@@ -14,7 +15,8 @@ class ServicosScreen extends StatefulWidget {
 }
 
 class _ServicosScreenState extends State<ServicosScreen> {
-  List<Servico>? _servicos;
+  List<Servico> _servicos = [];
+  bool _carregando = true;
 
   @override
   void initState() {
@@ -23,112 +25,99 @@ class _ServicosScreenState extends State<ServicosScreen> {
   }
 
   Future<void> _carregar() async {
-    final lista = await DatabaseService.instance.listarServicos();
+    final servicos = await DatabaseService.instance.listarServicos();
     if (!mounted) return;
-    setState(() => _servicos = lista);
+    setState(() {
+      _servicos = servicos;
+      _carregando = false;
+    });
+  }
+
+  void _agendar(Servico servico) {
+    BookingFlow.servicoSelecionado = servico;
+    Navigator.of(context).pushNamed('/barbeiro');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(title: 'SERVIÇOS'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            Expanded(
-              child: _servicos == null
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.gold))
-                  : _servicos!.isEmpty
-                      ? Center(
-                          child: Text('Nenhum serviço cadastrado',
-                              style: AppTheme.subtitle()))
-                      : ListView.separated(
-                          padding:
-                              const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                          itemCount: _servicos!.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
-                          itemBuilder: (_, i) =>
-                              _ServicoCard(servico: _servicos![i]),
-                        ),
-            ),
-          ],
-        ),
+      appBar: const BarberAppBar(titulo: 'SERVIÇOS'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: _carregando
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : _servicos.isEmpty
+                ? const EstadoVazio(
+                    icone: '💈',
+                    titulo: 'Nenhum serviço cadastrado',
+                    descricao:
+                        'Cadastre serviços na área administrativa para '
+                        'que apareçam aqui.',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 20,
+                    ),
+                    itemCount: _servicos.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => _cardServico(_servicos[i]),
+                  ),
+          ),
+        ],
       ),
     );
   }
-}
 
-class _ServicoCard extends StatelessWidget {
-  final Servico servico;
-  const _ServicoCard({required this.servico});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _cardServico(Servico s) {
     return GoldCard(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(servico.icone, style: const TextStyle(fontSize: 28)),
-          const SizedBox(width: 12),
+          Text(s.icone, style: const TextStyle(fontSize: 32)),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  servico.nome,
-                  style: GoogleFonts.dmSans(
-                    color: AppColors.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(servico.descricao, style: AppTheme.subtitle(size: 12)),
+                Text(s.nome, style: AppTheme.serif(size: 17)),
                 const SizedBox(height: 4),
+                Text(
+                  s.descricao,
+                  style: AppTheme.sans(size: 12, color: AppColors.muted),
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Text(
-                      'R\$ ${servico.preco.toStringAsFixed(2).replaceAll('.', ',')}',
-                      style: GoogleFonts.dmSans(
-                        color: AppColors.gold,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      formatarReal(s.preco),
+                      style: AppTheme.serif(size: 18, color: AppColors.gold),
                     ),
-                    const SizedBox(width: 10),
-                    Icon(Icons.access_time,
-                        size: 12, color: AppColors.muted),
-                    const SizedBox(width: 3),
+                    const SizedBox(width: 14),
+                    const Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: AppColors.muted,
+                    ),
+                    const SizedBox(width: 4),
                     Text(
-                      '${servico.duracaoMinutos} min',
-                      style: AppTheme.subtitle(size: 11),
+                      '${s.duracaoMinutos} min',
+                      style: AppTheme.sans(size: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              BookingFlow.servicoSelecionado = servico;
-              Navigator.pushNamed(context, '/barbeiro');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.gold,
-              foregroundColor: Colors.black,
-              elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              'Agendar',
-              style: GoogleFonts.dmSans(
-                  fontSize: 12, fontWeight: FontWeight.w700),
-            ),
+          const SizedBox(width: 8),
+          GoldButton(
+            texto: 'Agendar',
+            expandido: false,
+            onPressed: () => _agendar(s),
           ),
         ],
       ),

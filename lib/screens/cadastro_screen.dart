@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+
+import '../services/auth_service.dart';
+import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/auth_service.dart';
 
+/// Tela de cadastro (`/cadastro`). Ao concluir, o usuário já entra logado.
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
 
@@ -12,163 +15,175 @@ class CadastroScreen extends StatefulWidget {
 }
 
 class _CadastroScreenState extends State<CadastroScreen> {
-  final _nomeController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _telController = TextEditingController();
-  final _senhaController = TextEditingController();
-  bool _showPassword = false;
+  final _nomeCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  bool _ocultarSenha = true;
   bool _carregando = false;
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose();
+    _emailCtrl.dispose();
+    _telefoneCtrl.dispose();
+    _senhaCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _cadastrar() async {
     setState(() => _carregando = true);
-    final r = await AuthService.instance.cadastrar(
-      nome: _nomeController.text,
-      email: _emailController.text,
-      telefone: _telController.text,
-      senha: _senhaController.text,
+
+    final resultado = await AuthService.instance.cadastrar(
+      nome: _nomeCtrl.text,
+      email: _emailCtrl.text,
+      telefone: _telefoneCtrl.text,
+      senha: _senhaCtrl.text,
     );
+
     if (!mounted) return;
     setState(() => _carregando = false);
 
-    if (r.sucesso) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.green,
-          content: Row(
-            children: const [
-              Icon(Icons.check_circle, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Cadastro realizado com sucesso!',
-                  style: TextStyle(color: Colors.white)),
-            ],
-          ),
-        ),
-      );
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
-        }
-      });
+    if (resultado.sucesso) {
+      mostrarSucesso(context, 'Conta criada com sucesso!');
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
     } else {
-      _mostrarErro(r.erro ?? 'Erro ao cadastrar');
+      mostrarErro(context, resultado.erro ?? 'Não foi possível cadastrar');
     }
-  }
-
-  void _mostrarErro(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.red,
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(child: Text(msg, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(title: 'CRIAR CONTA'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Center(
-                      child: Text('👤', style: TextStyle(fontSize: 40)),
-                    ),
-                    const SizedBox(height: 4),
-                    Center(
-                      child: Text(
-                        'Preencha seus dados para continuar',
-                        style: AppTheme.subtitle(size: 12),
+      appBar: const BarberAppBar(titulo: 'CRIAR CONTA'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Bem-vindo à barbearia',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.serif(size: 22),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Preencha seus dados para começar',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.sans(size: 13, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 28),
+                  _campo(
+                    rotulo: 'Nome completo',
+                    controller: _nomeCtrl,
+                    hint: 'João da Silva',
+                    icone: Icons.person_outline,
+                    tipo: TextInputType.name,
+                  ),
+                  _campo(
+                    rotulo: 'E-mail',
+                    controller: _emailCtrl,
+                    hint: 'seu@email.com',
+                    icone: Icons.mail_outline,
+                    tipo: TextInputType.emailAddress,
+                  ),
+                  _campo(
+                    rotulo: 'Telefone',
+                    controller: _telefoneCtrl,
+                    hint: '(67) 99999-0000',
+                    icone: Icons.phone_outlined,
+                    tipo: TextInputType.phone,
+                    formatters: [TelefoneInputFormatter()],
+                  ),
+                  _campo(
+                    rotulo: 'Senha (mín. 6 caracteres)',
+                    controller: _senhaCtrl,
+                    hint: '••••••••',
+                    icone: Icons.lock_outline,
+                    obscuro: _ocultarSenha,
+                    sufixo: IconButton(
+                      tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                      icon: Icon(
+                        _ocultarSenha
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.muted,
+                        size: 20,
                       ),
+                      onPressed: () =>
+                          setState(() => _ocultarSenha = !_ocultarSenha),
                     ),
-                    const SizedBox(height: 20),
-                    const SectionLabel('Nome completo'),
-                    TextField(
-                      controller: _nomeController,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration:
-                          const InputDecoration(hintText: 'João da Silva'),
-                    ),
-                    const SizedBox(height: 16),
-                    const SectionLabel('E-mail'),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration:
-                          const InputDecoration(hintText: 'joao@email.com'),
-                    ),
-                    const SizedBox(height: 16),
-                    const SectionLabel('Telefone'),
-                    TextField(
-                      controller: _telController,
-                      keyboardType: TextInputType.phone,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration: const InputDecoration(
-                          hintText: '(67) 99999-9999'),
-                    ),
-                    const SizedBox(height: 16),
-                    const SectionLabel('Senha (mín. 6 caracteres)'),
-                    TextField(
-                      controller: _senhaController,
-                      obscureText: !_showPassword,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration: InputDecoration(
-                        hintText: '••••••••',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _showPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: AppColors.muted,
+                  ),
+                  const SizedBox(height: 16),
+                  GoldButton(
+                    texto: _carregando ? 'CADASTRANDO...' : 'CADASTRAR',
+                    onPressed: _carregando ? null : _cadastrar,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Já tem conta? ',
+                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'Entrar',
+                          style: AppTheme.sans(
+                            size: 13,
+                            weight: FontWeight.w700,
+                            color: AppColors.gold,
                           ),
-                          onPressed: () => setState(
-                              () => _showPassword = !_showPassword),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    GoldButton(
-                      label: _carregando ? 'CADASTRANDO...' : 'CADASTRAR',
-                      onPressed: _carregando ? null : _cadastrar,
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Wrap(
-                        children: [
-                          Text('Já tem conta? ',
-                              style: GoogleFonts.dmSans(
-                                  color: AppColors.muted, fontSize: 13)),
-                          GestureDetector(
-                            onTap: () =>
-                                Navigator.pushReplacementNamed(context, '/login'),
-                            child: Text('Fazer login',
-                                style: GoogleFonts.dmSans(
-                                    color: AppColors.gold,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _campo({
+    required String rotulo,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icone,
+    TextInputType tipo = TextInputType.text,
+    bool obscuro = false,
+    Widget? sufixo,
+    List<TextInputFormatter>? formatters,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(rotulo),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            keyboardType: tipo,
+            obscureText: obscuro,
+            inputFormatters: formatters,
+            autocorrect: false,
+            style: AppTheme.sans(size: 14),
+            decoration: InputDecoration(
+              hintText: hint,
+              prefixIcon: Icon(icone, color: AppColors.muted, size: 20),
+              suffixIcon: sufixo,
+            ),
+          ),
+        ],
       ),
     );
   }

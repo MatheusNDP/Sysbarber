@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../theme/app_theme.dart';
-import '../widgets/common_widgets.dart';
+
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common_widgets.dart';
 
+/// Perfil do usuário logado (`/perfil`).
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
 
@@ -13,8 +14,9 @@ class PerfilScreen extends StatefulWidget {
 }
 
 class _PerfilScreenState extends State<PerfilScreen> {
-  int _pontos = 0;
   int _totalAgendamentos = 0;
+  int _pontos = 0;
+  bool _carregando = true;
 
   @override
   void initState() {
@@ -23,138 +25,177 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }
 
   Future<void> _carregar() async {
-    final c = AuthService.instance.usuarioAtual;
-    if (c == null) return;
-    final p = await DatabaseService.instance.obterPontos(c.id!);
-    final ags =
-        await DatabaseService.instance.listarAgendamentosCliente(c.id!);
+    final usuario = AuthService.instance.usuarioAtual;
+    if (usuario?.id == null) {
+      if (mounted) setState(() => _carregando = false);
+      return;
+    }
+    final db = DatabaseService.instance;
+    final agendamentos = await db.listarAgendamentosCliente(usuario!.id!);
+    final pontos = await db.obterPontos(usuario.id!);
     if (!mounted) return;
     setState(() {
-      _pontos = p;
-      _totalAgendamentos = ags.length;
+      _totalAgendamentos = agendamentos.length;
+      _pontos = pontos;
+      _carregando = false;
     });
   }
 
-  Future<void> _logout() async {
-    final ok = await showDialog<bool>(
+  Future<void> _sair() async {
+    final confirmou = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border)),
-        title: Text('Sair?',
-            style: GoogleFonts.playfairDisplay(
-                color: AppColors.gold, fontSize: 18)),
-        content: Text('Deseja realmente sair da conta?',
-            style: GoogleFonts.dmSans(color: AppColors.text, fontSize: 14)),
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text('Sair da conta?', style: AppTheme.serif(size: 18)),
+        content: Text(
+          'Você precisará entrar novamente para acessar seus agendamentos.',
+          style: AppTheme.sans(size: 13, color: AppColors.muted),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancelar',
-                  style: GoogleFonts.dmSans(color: AppColors.muted))),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'CANCELAR',
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Sair',
-                  style: GoogleFonts.dmSans(
-                      color: AppColors.red, fontWeight: FontWeight.w700))),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'SAIR',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.red,
+              ),
+            ),
+          ),
         ],
       ),
     );
-    if (ok != true) return;
+
+    if (confirmou != true) return;
+
     await AuthService.instance.logout();
     if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = AuthService.instance.usuarioAtual;
-    if (c == null) {
-      return const Scaffold(
-        body: Center(
-            child: CircularProgressIndicator(color: AppColors.gold)),
-      );
-    }
+    final usuario = AuthService.instance.usuarioAtual;
+
     return Scaffold(
-      appBar: const BarberAppBar(title: 'MEU PERFIL'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            const SizedBox(height: 20),
-            const GoldAvatar(text: '✂', size: 90, large: true),
-            const SizedBox(height: 12),
-            Text(
-              c.nome,
-              style: GoogleFonts.playfairDisplay(
-                color: AppColors.text,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(c.email, style: AppTheme.subtitle(size: 13)),
-            const SizedBox(height: 22),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  _item(Icons.phone_outlined, 'Telefone', c.telefone),
-                  const SizedBox(height: 8),
-                  _item(Icons.calendar_month, 'Meus agendamentos',
-                      '$_totalAgendamentos no total',
-                      onTap: () =>
-                          Navigator.pushNamed(context, '/agendamentos')
-                              .then((_) => _carregar())),
-                  const SizedBox(height: 8),
-                  _item(Icons.star_outline, 'Pontos de fidelidade',
-                      '$_pontos pts',
-                      onTap: () =>
-                          Navigator.pushNamed(context, '/fidelidade')
-                              .then((_) => _carregar())),
-                  const SizedBox(height: 8),
-                  _item(Icons.settings_outlined, 'Área administrativa',
-                      'Painel de controle',
-                      onTap: () => Navigator.pushNamed(context, '/admin')),
-                  const SizedBox(height: 18),
-                  GoldOutlineButton(label: 'SAIR', onPressed: _logout),
-                ],
-              ),
-            ),
-          ],
-        ),
+      appBar: const BarberAppBar(titulo: 'PERFIL'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: _carregando
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 28,
+                    ),
+                    children: [
+                      Center(
+                        child: GoldAvatar(
+                          texto: usuario?.iniciais ?? '?',
+                          tamanho: 92,
+                          large: true,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        usuario?.nome ?? 'Visitante',
+                        textAlign: TextAlign.center,
+                        style: AppTheme.serif(size: 24),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        usuario?.email ?? '',
+                        textAlign: TextAlign.center,
+                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                      ),
+                      const SizedBox(height: 32),
+                      _item(
+                        Icons.phone_outlined,
+                        'Telefone',
+                        usuario?.telefone ?? '-',
+                      ),
+                      _item(
+                        Icons.calendar_today_outlined,
+                        'Meus agendamentos',
+                        '$_totalAgendamentos no total',
+                        onTap: () =>
+                            Navigator.of(context).pushNamed('/agendamentos'),
+                      ),
+                      _item(
+                        Icons.star_outline,
+                        'Pontos de fidelidade',
+                        '$_pontos pts',
+                        onTap: () =>
+                            Navigator.of(context).pushNamed('/fidelidade'),
+                      ),
+                      if (AuthService.instance.podeAdministrar)
+                        _item(
+                          Icons.settings_outlined,
+                          'Área administrativa',
+                          'Painel de controle',
+                          onTap: () =>
+                              Navigator.of(context).pushNamed('/admin'),
+                        ),
+                      const SizedBox(height: 28),
+                      GoldOutlineButton(texto: 'SAIR', onPressed: _sair),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _item(IconData icon, String titulo, String descricao,
-      {VoidCallback? onTap}) {
-    return GoldCard(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.gold, size: 24),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(titulo,
-                    style: GoogleFonts.dmSans(
-                      color: AppColors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    )),
-                const SizedBox(height: 2),
-                Text(descricao, style: AppTheme.subtitle(size: 12)),
-              ],
+  Widget _item(
+    IconData icone,
+    String rotulo,
+    String valor, {
+    VoidCallback? onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GoldCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(icone, color: AppColors.gold, size: 20),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rotulo,
+                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    valor,
+                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (onTap != null)
-            Icon(Icons.chevron_right,
-                color: AppColors.gold.withOpacity(0.6), size: 22),
-        ],
+            if (onTap != null)
+              const Icon(Icons.chevron_right, color: AppColors.gold),
+          ],
+        ),
       ),
     );
   }

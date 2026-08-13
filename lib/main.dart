@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'theme/app_theme.dart';
-import 'services/database_service.dart';
-import 'services/auth_service.dart';
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/cadastro_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/servicos_screen.dart';
-import 'screens/barbeiro_screen.dart';
-import 'screens/horario_screen.dart';
-import 'screens/confirmacao_screen.dart';
-import 'screens/agendamentos_screen.dart';
-import 'screens/pagamento_screen.dart';
-import 'screens/fidelidade_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'screens/admin_screen.dart';
+import 'screens/agendamentos_screen.dart';
+import 'screens/barbeiro_screen.dart';
+import 'screens/cadastro_screen.dart';
+import 'screens/confirmacao_screen.dart';
+import 'screens/fidelidade_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/horario_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/pagamento_screen.dart';
 import 'screens/perfil_screen.dart';
+import 'screens/servicos_screen.dart';
+import 'screens/splash_screen.dart';
+import 'services/auth_service.dart';
+import 'services/database_service.dart';
+import 'theme/app_theme.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.background,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
 
-  // Inicializa banco de dados
+  // Necessário para DateFormat com locale pt_BR.
+  try {
+    await initializeDateFormatting('pt_BR', null);
+  } catch (_) {
+    // Sem os dados de locale o app segue com a formatação padrão.
+  }
+
+  // Abre (e na primeira execução cria + popula) o banco.
   await DatabaseService.instance.database;
-  // Tenta restaurar sessão
+
+  // Restaura a sessão salva para manter o usuário logado entre execuções.
   await AuthService.instance.carregarSessao();
 
   runApp(const SysBarberApp());
@@ -42,7 +45,7 @@ class SysBarberApp extends StatelessWidget {
     return MaterialApp(
       title: 'SysBarber',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.tema,
       initialRoute: '/',
       routes: {
         '/': (_) => const SplashScreen(),

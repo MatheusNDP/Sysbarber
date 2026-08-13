@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/auth_service.dart';
 
+/// Tela de login (`/login`).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,84 +14,128 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _senhaController = TextEditingController();
-  bool _showPassword = false;
+  final _emailCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  bool _ocultarSenha = true;
   bool _carregando = false;
 
-  Future<void> _login() async {
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _senhaCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _entrar() async {
     setState(() => _carregando = true);
-    final r = await AuthService.instance
-        .login(_emailController.text, _senhaController.text);
+
+    final resultado = await AuthService.instance.login(
+      _emailCtrl.text,
+      _senhaCtrl.text,
+    );
+
     if (!mounted) return;
     setState(() => _carregando = false);
 
-    if (r.sucesso) {
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+    if (resultado.sucesso) {
+      // Profissional entra direto na própria agenda: a Home é a área do
+      // cliente e depende de um cadastro de cliente, que ele não tem.
+      final destino = AuthService.instance.ehBarbeiro
+          ? '/agendamentos'
+          : '/home';
+      Navigator.of(context).pushNamedAndRemoveUntil(destino, (_) => false);
     } else {
-      _mostrarErro(r.erro ?? 'Erro desconhecido');
+      mostrarErro(context, resultado.erro ?? 'Não foi possível entrar');
     }
-  }
-
-  void _mostrarErro(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.red,
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(child: Text(msg, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-              child: Row(
+      appBar: const BarberAppBar(titulo: 'ENTRAR'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      gradient: const LinearGradient(
-                        colors: [AppColors.gold, Color(0xFF7A5920)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                  _cabecalho(),
+                  const SizedBox(height: 28),
+                  _dicaDemo(),
+                  const SizedBox(height: 24),
+                  const SectionLabel('E-mail'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    style: AppTheme.sans(size: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'seu@email.com',
+                      prefixIcon: Icon(
+                        Icons.mail_outline,
+                        color: AppColors.muted,
+                        size: 20,
                       ),
-                    ),
-                    child: const Center(
-                      child: Text('✂️', style: TextStyle(fontSize: 22)),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 18),
+                  const SectionLabel('Senha'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _senhaCtrl,
+                    obscureText: _ocultarSenha,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _carregando ? null : _entrar(),
+                    style: AppTheme.sans(size: 14),
+                    decoration: InputDecoration(
+                      hintText: '••••••••',
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: AppColors.muted,
+                        size: 20,
+                      ),
+                      suffixIcon: IconButton(
+                        tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                        icon: Icon(
+                          _ocultarSenha
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppColors.muted,
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            setState(() => _ocultarSenha = !_ocultarSenha),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  GoldButton(
+                    texto: _carregando ? 'ENTRANDO...' : 'ENTRAR',
+                    onPressed: _carregando ? null : _entrar,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'SYSBARBER',
-                        style: GoogleFonts.playfairDisplay(
-                          color: AppColors.gold,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
-                        ),
+                        'Não tem conta? ',
+                        style: AppTheme.sans(size: 13, color: AppColors.muted),
                       ),
-                      Text(
-                        'FAÇA SEU LOGIN',
-                        style: GoogleFonts.dmSans(
-                          color: AppColors.muted,
-                          fontSize: 10,
-                          letterSpacing: 3,
+                      GestureDetector(
+                        onTap: () =>
+                            Navigator.of(context).pushNamed('/cadastro'),
+                        child: Text(
+                          'Criar conta',
+                          style: AppTheme.sans(
+                            size: 13,
+                            weight: FontWeight.w700,
+                            color: AppColors.gold,
+                          ),
                         ),
                       ),
                     ],
@@ -97,98 +143,83 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
             ),
-            const GoldDivider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Dica para a banca
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppColors.gold.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline,
-                              color: AppColors.gold, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Conta demo: demo@sysbarber.com / demo1234',
-                              style: GoogleFonts.dmSans(
-                                color: AppColors.gold,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SectionLabel('E-mail'),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration:
-                          const InputDecoration(hintText: 'exemplo@email.com'),
-                    ),
-                    const SizedBox(height: 16),
-                    const SectionLabel('Senha'),
-                    TextField(
-                      controller: _senhaController,
-                      obscureText: !_showPassword,
-                      style: const TextStyle(color: AppColors.text),
-                      decoration: InputDecoration(
-                        hintText: '••••••••',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _showPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: AppColors.muted,
-                          ),
-                          onPressed: () => setState(
-                              () => _showPassword = !_showPassword),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    GoldButton(
-                      label: _carregando ? 'ENTRANDO...' : 'ENTRAR',
-                      onPressed: _carregando ? null : _login,
-                    ),
-                    const SizedBox(height: 6),
-                    Center(
-                      child: Wrap(
-                        children: [
-                          Text('Não tem conta? ',
-                              style: GoogleFonts.dmSans(
-                                  color: AppColors.muted, fontSize: 13)),
-                          GestureDetector(
-                            onTap: () => Navigator.pushReplacementNamed(
-                                context, '/cadastro'),
-                            child: Text('Criar conta',
-                                style: GoogleFonts.dmSans(
-                                    color: AppColors.gold,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cabecalho() {
+    return Column(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.gold, width: 1.5),
+          ),
+          child: const Text('✂️', style: TextStyle(fontSize: 28)),
         ),
+        const SizedBox(height: 16),
+        Text(
+          'SYSBARBER',
+          style: AppTheme.serif(
+            size: 26,
+            color: AppColors.gold,
+            letterSpacing: 3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'FAÇA SEU LOGIN',
+          style: AppTheme.sans(
+            size: 11,
+            color: AppColors.muted,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dicaDemo() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Conta administradora',
+                  style: AppTheme.sans(
+                    size: 12,
+                    weight: FontWeight.w700,
+                    color: AppColors.gold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${DatabaseService.emailAdmin}  ·  '
+                  '${DatabaseService.senhaAdmin}',
+                  style: AppTheme.sans(size: 12, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

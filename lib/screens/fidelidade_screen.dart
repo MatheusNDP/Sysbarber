@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../models/models.dart';
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/database_service.dart';
-import '../services/auth_service.dart';
-import '../models/models.dart';
 
+/// Programa de fidelidade (`/fidelidade`). Meta: 500 pontos = 1 serviço grátis.
 class FidelidadeScreen extends StatefulWidget {
   const FidelidadeScreen({super.key});
 
@@ -14,10 +15,11 @@ class FidelidadeScreen extends StatefulWidget {
 }
 
 class _FidelidadeScreenState extends State<FidelidadeScreen> {
+  static const int metaPontos = 500;
+
   int _pontos = 0;
   List<HistoricoPonto> _historico = [];
   bool _carregando = true;
-  static const _meta = 500;
 
   @override
   void initState() {
@@ -26,191 +28,215 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
   }
 
   Future<void> _carregar() async {
-    final cliente = AuthService.instance.usuarioAtual;
-    if (cliente == null) return;
-    final pts = await DatabaseService.instance.obterPontos(cliente.id!);
-    final hist =
-        await DatabaseService.instance.listarHistoricoPontos(cliente.id!);
+    final usuario = AuthService.instance.usuarioAtual;
+    if (usuario?.id == null) {
+      if (mounted) setState(() => _carregando = false);
+      return;
+    }
+    final db = DatabaseService.instance;
+    final pontos = await db.obterPontos(usuario!.id!);
+    final historico = await db.listarHistoricoPontos(usuario.id!);
     if (!mounted) return;
     setState(() {
-      _pontos = pts;
-      _historico = hist;
+      _pontos = pontos;
+      _historico = historico;
       _carregando = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final progresso = (_pontos / _meta).clamp(0.0, 1.0);
-    final faltam = (_meta - _pontos).clamp(0, _meta);
-
     return Scaffold(
-      appBar: const BarberAppBar(title: 'FIDELIDADE'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            Expanded(
-              child: _carregando
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.gold))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                  color: AppColors.gold.withOpacity(0.35)),
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF1C1422), Color(0xFF120E0A)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Text('SEUS PONTOS',
-                                    style: AppTheme.goldLabel()),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$_pontos',
-                                  style: GoogleFonts.playfairDisplay(
-                                    color: AppColors.gold,
-                                    fontSize: 52,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                Text('pontos acumulados',
-                                    style: AppTheme.subtitle(size: 12)),
-                                const SizedBox(height: 14),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(3),
-                                  child: LinearProgressIndicator(
-                                    value: progresso,
-                                    minHeight: 6,
-                                    backgroundColor: AppColors.card,
-                                    valueColor: const AlwaysStoppedAnimation(
-                                        AppColors.gold),
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('0 pts',
-                                        style: AppTheme.subtitle(size: 11)),
-                                    Text(
-                                      faltam > 0
-                                          ? 'Faltam $faltam pts para prêmio'
-                                          : '🎉 Prêmio disponível!',
-                                      style: GoogleFonts.dmSans(
-                                        color: AppColors.gold,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    Text('$_meta pts',
-                                        style: AppTheme.subtitle(size: 11)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          const SectionLabel('Como funciona'),
-                          _benefitCard('✂️', 'Ganhe pontos',
-                              'A cada R\$ 1 gasto, você ganha 1 ponto'),
-                          _benefitCard('🎁', 'Troque por prêmios',
-                              'Cortes, barba e produtos grátis'),
-                          _benefitCard('👑', 'Nível VIP',
-                              '500 pts = 1 serviço gratuito'),
-                          const SizedBox(height: 14),
-                          const SectionLabel('Histórico de pontos'),
-                          if (_historico.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Center(
-                                child: Text(
-                                  'Nenhum histórico ainda. Faça seu primeiro agendamento!',
-                                  textAlign: TextAlign.center,
-                                  style: AppTheme.subtitle(size: 12),
-                                ),
-                              ),
-                            )
-                          else
-                            ..._historico.map((h) {
-                              final positivo = h.pontos > 0;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(color: Color(0x0DFFFFFF)),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        h.descricao,
-                                        style: GoogleFonts.dmSans(
-                                          color: AppColors.text,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      positivo
-                                          ? '+${h.pontos} pts'
-                                          : '${h.pontos} pts',
-                                      style: GoogleFonts.dmSans(
-                                        color: positivo
-                                            ? AppColors.green
-                                            : AppColors.red,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                        ],
+      appBar: const BarberAppBar(titulo: 'FIDELIDADE'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: _carregando
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : RefreshIndicator(
+                    color: AppColors.gold,
+                    backgroundColor: AppColors.card,
+                    onRefresh: _carregar,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 24,
                       ),
+                      children: [
+                        _cartaoPontos(),
+                        const SizedBox(height: 28),
+                        const SectionLabel('Como funciona'),
+                        const SizedBox(height: 12),
+                        _comoFunciona(),
+                        const SizedBox(height: 28),
+                        const SectionLabel('Histórico de pontos'),
+                        const SizedBox(height: 12),
+                        if (_historico.isEmpty)
+                          const EstadoVazio(
+                            icone: '⭐',
+                            titulo: 'Nenhum ponto ainda',
+                            descricao:
+                                'Finalize um pagamento para começar a '
+                                'acumular pontos.',
+                          )
+                        else
+                          ..._historico.map(_itemHistorico),
+                      ],
                     ),
-            ),
-          ],
-        ),
+                  ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _benefitCard(String icone, String titulo, String descricao) {
+  Widget _cartaoPontos() {
+    final progresso = (_pontos / metaPontos).clamp(0.0, 1.0);
+    final faltam = metaPontos - _pontos;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.card2, AppColors.dark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.gold, width: 1.5),
+      ),
+      child: Column(
+        children: [
+          const SectionLabel('Seus pontos'),
+          const SizedBox(height: 10),
+          Text(
+            '$_pontos',
+            style: AppTheme.serif(size: 52, color: AppColors.gold),
+          ),
+          Text(
+            'PONTOS ACUMULADOS',
+            style: AppTheme.sans(
+              size: 10,
+              color: AppColors.muted,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 22),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progresso,
+              minHeight: 10,
+              backgroundColor: AppColors.background,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.gold),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            faltam > 0
+                ? 'Faltam $faltam pts para prêmio'
+                : '🎉 Prêmio disponível!',
+            style: AppTheme.sans(
+              size: 13,
+              weight: FontWeight.w700,
+              color: faltam > 0 ? AppColors.muted : AppColors.green,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Meta: $metaPontos pontos = 1 serviço grátis',
+            style: AppTheme.sans(size: 11, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _comoFunciona() {
+    const itens = [
+      ('💰', 'Acumule', 'Cada R\$ 1,00 pago vira 1 ponto.'),
+      ('⭐', 'Junte 500', 'Ao atingir 500 pontos você ganha um prêmio.'),
+      ('🎁', 'Resgate', 'Troque seus pontos por um serviço gratuito.'),
+    ];
+
+    return Column(
+      children: itens
+          .map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GoldCard(
+                child: Row(
+                  children: [
+                    Text(item.$1, style: const TextStyle(fontSize: 22)),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.$2,
+                            style: AppTheme.sans(
+                              size: 14,
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            item.$3,
+                            style: AppTheme.sans(
+                              size: 12,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _itemHistorico(HistoricoPonto h) {
+    final ganho = h.pontos >= 0;
+    final cor = ganho ? AppColors.green : AppColors.red;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: GoldCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Text(icone, style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    titulo,
-                    style: GoogleFonts.dmSans(
-                      color: AppColors.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    h.descricao,
+                    style: AppTheme.sans(size: 13, weight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 2),
-                  Text(descricao, style: AppTheme.subtitle(size: 12)),
+                  const SizedBox(height: 3),
+                  Text(
+                    formatarDataCurta(DateTime.parse(h.criadoEm)),
+                    style: AppTheme.sans(size: 11, color: AppColors.muted),
+                  ),
                 ],
+              ),
+            ),
+            Text(
+              '${ganho ? '+' : '−'}${h.pontos.abs()} pts',
+              style: AppTheme.sans(
+                size: 14,
+                weight: FontWeight.w700,
+                color: cor,
               ),
             ),
           ],

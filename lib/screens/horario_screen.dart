@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../services/booking_flow.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
-import '../services/database_service.dart';
-import '../services/booking_flow.dart';
 
+/// Escolha de data e horário (`/horario`).
+///
+/// Os horários vêm de [DatabaseService.horariosDisponiveis] — os já ocupados
+/// pelo barbeiro naquele dia simplesmente não aparecem.
 class HorarioScreen extends StatefulWidget {
   const HorarioScreen({super.key});
 
@@ -13,236 +17,258 @@ class HorarioScreen extends StatefulWidget {
 }
 
 class _HorarioScreenState extends State<HorarioScreen> {
-  late List<DateTime> _datas;
-  DateTime? _dataSelecionada;
-  String? _horarioSelecionado;
-  List<String> _horariosDisponiveis = [];
-  bool _carregando = false;
+  late DateTime _dataSelecionada;
+  String? _horaSelecionada;
+  List<String> _horarios = [];
+  bool _carregando = true;
 
-  static const _diasSemana = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
+  late final List<DateTime> _dias;
 
   @override
   void initState() {
     super.initState();
     final hoje = DateTime.now();
-    _datas = List.generate(7, (i) => hoje.add(Duration(days: i)));
-    _dataSelecionada = _datas[1];
+    _dias = List.generate(
+      7,
+      (i) => DateTime(hoje.year, hoje.month, hoje.day).add(Duration(days: i)),
+    );
+    _dataSelecionada = _dias.first;
     _carregarHorarios();
   }
 
   Future<void> _carregarHorarios() async {
-    final barb = BookingFlow.barbeiroSelecionado;
-    final data = _dataSelecionada;
-    if (barb == null || data == null) return;
-    setState(() => _carregando = true);
-    final disponiveis =
-        await DatabaseService.instance.horariosDisponiveis(barb.id!, data);
+    setState(() {
+      _carregando = true;
+      _horaSelecionada = null;
+    });
+
+    final barbeiro = BookingFlow.barbeiroSelecionado;
+    final horarios = barbeiro?.id == null
+        ? DatabaseService.horariosBase
+        : await DatabaseService.instance.horariosDisponiveis(
+            barbeiro!.id!,
+            _dataSelecionada,
+          );
+
     if (!mounted) return;
     setState(() {
-      _horariosDisponiveis = disponiveis;
-      _horarioSelecionado = null;
+      _horarios = horarios;
       _carregando = false;
     });
   }
 
+  void _selecionarData(DateTime data) {
+    setState(() => _dataSelecionada = data);
+    _carregarHorarios();
+  }
+
+  void _confirmar() {
+    BookingFlow.dataSelecionada = _dataSelecionada;
+    BookingFlow.horaSelecionada = _horaSelecionada;
+    Navigator.of(context).pushNamed('/confirmacao');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final barb = BookingFlow.barbeiroSelecionado;
+    final barbeiro = BookingFlow.barbeiroSelecionado;
+
     return Scaffold(
-      appBar: const BarberAppBar(title: 'ESCOLHA O HORÁRIO'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const GoldDivider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionLabel('Selecione a data'),
-                    SizedBox(
-                      height: 70,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _datas.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) {
-                          final d = _datas[i];
-                          final isSelected = _dataSelecionada != null &&
-                              _dataSelecionada!.day == d.day &&
-                              _dataSelecionada!.month == d.month;
-                          final dia = _diasSemana[(d.weekday - 1) % 7];
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() => _dataSelecionada = d);
-                              _carregarHorarios();
-                            },
-                            child: Container(
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.gold.withOpacity(0.2)
-                                    : AppColors.card,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.gold
-                                      : AppColors.border,
-                                ),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    dia,
-                                    style: GoogleFonts.dmSans(
-                                      color: AppColors.muted,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    d.day.toString().padLeft(2, '0'),
-                                    style: GoogleFonts.dmSans(
-                                      color: isSelected
-                                          ? AppColors.gold
-                                          : AppColors.text,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+      appBar: const BarberAppBar(titulo: 'HORÁRIO'),
+      body: Column(
+        children: [
+          const GoldDivider(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              children: [
+                const SectionLabel('Escolha o dia'),
+                const SizedBox(height: 12),
+                _reguaDias(),
+                const SizedBox(height: 28),
+                const SectionLabel('Horários disponíveis'),
+                const SizedBox(height: 12),
+                if (_carregando)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 30),
+                    child: Center(
+                      child: CircularProgressIndicator(color: AppColors.gold),
                     ),
-                    const SizedBox(height: 22),
-                    const SectionLabel('Horários disponíveis'),
-                    if (_carregando)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Center(
-                          child:
-                              CircularProgressIndicator(color: AppColors.gold),
-                        ),
-                      )
-                    else if (_horariosDisponiveis.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Nenhum horário disponível nesta data',
-                            style: AppTheme.subtitle(size: 13),
+                  )
+                else if (_horarios.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('😕', style: TextStyle(fontSize: 34)),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Nenhum horário disponível neste dia',
+                          textAlign: TextAlign.center,
+                          style: AppTheme.sans(
+                            size: 13,
+                            weight: FontWeight.w700,
                           ),
                         ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _horariosDisponiveis.map((h) {
-                          final isSel = _horarioSelecionado == h;
-                          return GestureDetector(
-                            onTap: () =>
-                                setState(() => _horarioSelecionado = h),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 9),
-                              decoration: BoxDecoration(
-                                color: isSel
-                                    ? AppColors.gold.withOpacity(0.2)
-                                    : AppColors.card,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isSel
-                                      ? AppColors.gold
-                                      : AppColors.gold.withOpacity(0.25),
-                                ),
-                              ),
-                              child: Text(
-                                h,
-                                style: GoogleFonts.dmSans(
-                                  color:
-                                      isSel ? AppColors.gold : AppColors.text,
-                                  fontSize: 13,
-                                  fontWeight: isSel
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    const SizedBox(height: 18),
-                    if (barb != null && _horarioSelecionado != null)
-                      GoldCard(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Barbeiro',
-                                      style: AppTheme.subtitle(size: 11)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    barb.nome,
-                                    style: GoogleFonts.dmSans(
-                                      color: AppColors.text,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('Horário escolhido',
-                                    style: AppTheme.subtitle(size: 11)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${_dataSelecionada!.day.toString().padLeft(2, '0')}/${_dataSelecionada!.month.toString().padLeft(2, '0')} · $_horarioSelecionado',
-                                  style: GoogleFonts.dmSans(
-                                    color: AppColors.gold,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Escolha outra data na régua acima.',
+                          textAlign: TextAlign.center,
+                          style: AppTheme.sans(
+                            size: 12,
+                            color: AppColors.muted,
+                          ),
                         ),
-                      ),
-                    const SizedBox(height: 14),
-                    GoldButton(
-                      label: 'CONFIRMAR',
-                      onPressed: _horarioSelecionado == null
-                          ? null
-                          : () {
-                              BookingFlow.dataSelecionada = _dataSelecionada;
-                              BookingFlow.horarioSelecionado =
-                                  _horarioSelecionado;
-                              Navigator.pushNamed(context, '/confirmacao');
-                            },
+                      ],
                     ),
-                  ],
+                  )
+                else
+                  _chipsHorarios(),
+                const SizedBox(height: 28),
+                if (_horaSelecionada != null)
+                  GoldCard(
+                    selected: true,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.event_available,
+                          color: AppColors.gold,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                barbeiro?.nome ?? 'Profissional',
+                                style: AppTheme.sans(
+                                  size: 14,
+                                  weight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                formatarDataExtenso(_dataSelecionada),
+                                style: AppTheme.sans(
+                                  size: 12,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          _horaSelecionada!,
+                          style: AppTheme.serif(
+                            size: 22,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: GoldButton(
+              texto: 'CONFIRMAR',
+              onPressed: _horaSelecionada == null ? null : _confirmar,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _reguaDias() {
+    return SizedBox(
+      height: 78,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _dias.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final dia = _dias[i];
+          final selecionado =
+              dia.day == _dataSelecionada.day &&
+              dia.month == _dataSelecionada.month;
+
+          return GestureDetector(
+            onTap: () => _selecionarData(dia),
+            child: Container(
+              width: 62,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selecionado ? AppColors.gold : AppColors.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selecionado ? AppColors.gold : AppColors.border,
                 ),
               ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    abreviacaoDiaSemana(dia),
+                    style: AppTheme.sans(
+                      size: 10,
+                      weight: FontWeight.w700,
+                      color: selecionado ? Colors.black : AppColors.muted,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${dia.day}',
+                    style: AppTheme.serif(
+                      size: 20,
+                      color: selecionado ? Colors.black : AppColors.text,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _chipsHorarios() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _horarios.map((hora) {
+        final selecionado = hora == _horaSelecionada;
+        return GestureDetector(
+          onTap: () => setState(() => _horaSelecionada = hora),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: selecionado ? AppColors.gold : AppColors.card,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selecionado ? AppColors.gold : AppColors.border,
+              ),
+            ),
+            child: Text(
+              hora,
+              style: AppTheme.sans(
+                size: 14,
+                weight: FontWeight.w700,
+                color: selecionado ? Colors.black : AppColors.text,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

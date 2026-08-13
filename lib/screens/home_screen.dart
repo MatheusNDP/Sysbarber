@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import '../theme/app_theme.dart';
-import '../widgets/common_widgets.dart';
+
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
-import '../models/models.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common_widgets.dart';
 
+/// Tela principal (`/home`).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,6 +15,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _db = DatabaseService.instance;
+
   Agendamento? _proximo;
   int _pontos = 0;
   bool _carregando = true;
@@ -23,45 +24,64 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('pt_BR', null).then((_) => _carregarDados());
+    _carregarDados();
   }
 
   Future<void> _carregarDados() async {
-    final cliente = AuthService.instance.usuarioAtual;
-    if (cliente == null) {
-      // Não deveria estar aqui sem login
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
-      });
+    final usuario = AuthService.instance.usuarioAtual;
+    if (usuario?.id == null) {
+      if (mounted) setState(() => _carregando = false);
       return;
     }
+
+    final agendamentos = await _db.listarAgendamentosCliente(usuario!.id!);
+    final pontos = await _db.obterPontos(usuario.id!);
     final agora = DateTime.now();
-    final ags =
-        await DatabaseService.instance.listarAgendamentosCliente(cliente.id!);
-    final futuros = ags
-        .where((a) =>
-            a.dataHora.isAfter(agora) &&
-            a.status == StatusAgendamento.confirmado)
-        .toList()
-      ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
-    final pontos = await DatabaseService.instance.obterPontos(cliente.id!);
+
+    // O próximo horário é o confirmado mais próximo ainda no futuro.
+    final futuros =
+        agendamentos
+            .where(
+              (a) =>
+                  a.status == StatusAgendamento.confirmado &&
+                  a.data.isAfter(agora),
+            )
+            .toList()
+          ..sort((a, b) => a.data.compareTo(b.data));
+
     if (!mounted) return;
     setState(() {
-      _proximo = futuros.isNotEmpty ? futuros.first : null;
+      _proximo = futuros.isEmpty ? null : futuros.first;
       _pontos = pontos;
       _carregando = false;
     });
   }
 
+  /// Navega e recarrega os dados ao voltar.
+  Future<void> _irPara(String rota) async {
+    await Navigator.of(context).pushNamed(rota);
+    if (mounted) _carregarDados();
+  }
+
+  void _aoTocarNavegacao(int indice) {
+    switch (indice) {
+      case 1:
+        _irPara('/servicos');
+        break;
+      case 2:
+        _irPara('/agendamentos');
+        break;
+      case 3:
+        _irPara('/perfil');
+        break;
+      default:
+        _carregarDados();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cliente = AuthService.instance.usuarioAtual;
-    if (cliente == null) {
-      return const Scaffold(
-        body: Center(
-            child: CircularProgressIndicator(color: AppColors.gold)),
-      );
-    }
+    final usuario = AuthService.instance.usuarioAtual;
 
     return Scaffold(
       body: SafeArea(
@@ -69,282 +89,259 @@ class _HomeScreenState extends State<HomeScreen> {
           color: AppColors.gold,
           backgroundColor: AppColors.card,
           onRefresh: _carregarDados,
-          child: Column(
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Olá, bem-vindo 👋',
-                            style: GoogleFonts.dmSans(
-                                color: AppColors.muted, fontSize: 12),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            cliente.nome,
-                            style: GoogleFonts.dmSans(
-                              color: AppColors.text,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pushNamed(context, '/perfil')
-                          .then((_) => _carregarDados()),
-                      child:
-                          const GoldAvatar(text: '✂', size: 56, large: true),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  children: [
-                    if (_carregando)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 30),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.gold),
-                        ),
-                      )
-                    else ...[
-                      if (_proximo != null) _ProximoCard(agendamento: _proximo!),
-                      if (_proximo != null) const SizedBox(height: 12),
-                      // Pontos badge
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: AppColors.gold.withOpacity(0.25)),
-                          color: AppColors.card,
-                        ),
-                        child: Row(
-                          children: [
-                            const Text('⭐', style: TextStyle(fontSize: 28)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('SEUS PONTOS',
-                                      style: AppTheme.goldLabel()),
-                                  Text(
-                                    '$_pontos pts acumulados',
-                                    style: GoogleFonts.dmSans(
-                                      color: AppColors.text,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.chevron_right,
-                                color: AppColors.gold.withOpacity(0.6)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    const SectionLabel('Acesso rápido'),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 1.15,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      children: [
-                        _AcessoRapido(
-                          icone: '💈',
-                          titulo: 'Ver Serviços',
-                          onTap: () => Navigator.pushNamed(
-                                  context, '/servicos')
-                              .then((_) => _carregarDados()),
-                        ),
-                        _AcessoRapido(
-                          icone: '📋',
-                          titulo: 'Meus Agendamentos',
-                          onTap: () => Navigator.pushNamed(
-                                  context, '/agendamentos')
-                              .then((_) => _carregarDados()),
-                        ),
-                        _AcessoRapido(
-                          icone: '⭐',
-                          titulo: 'Fidelidade',
-                          onTap: () => Navigator.pushNamed(
-                                  context, '/fidelidade')
-                              .then((_) => _carregarDados()),
-                        ),
-                        _AcessoRapido(
-                          icone: '⚙️',
-                          titulo: 'Administração',
-                          onTap: () =>
-                              Navigator.pushNamed(context, '/admin'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              _saudacao(usuario),
+              const SizedBox(height: 20),
+              const GoldDivider(),
+              const SizedBox(height: 24),
+              if (_carregando)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  ),
+                )
+              else ...[
+                _cardProximoHorario(),
+                const SizedBox(height: 16),
+                _cardFidelidade(),
+                const SizedBox(height: 28),
+                const SectionLabel('Acesso rápido'),
+                const SizedBox(height: 12),
+                _gridAcessoRapido(),
+              ],
+              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _BottomBar(active: 0),
+      bottomNavigationBar: _navegacao(),
     );
   }
-}
 
-class _ProximoCard extends StatelessWidget {
-  final Agendamento agendamento;
-  const _ProximoCard({required this.agendamento});
-
-  @override
-  Widget build(BuildContext context) {
-    String data;
-    try {
-      data = DateFormat("EEEE, dd/MM 'às' HH:mm", 'pt_BR')
-          .format(agendamento.dataHora);
-    } catch (_) {
-      data =
-          '${agendamento.dataHora.day}/${agendamento.dataHora.month} às ${agendamento.dataHora.hour}:${agendamento.dataHora.minute.toString().padLeft(2, '0')}';
-    }
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.gold.withOpacity(0.25)),
-        gradient: const LinearGradient(
-          colors: [AppColors.card, AppColors.card2],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _saudacao(Cliente? usuario) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Olá, bem-vindo 👋',
+                style: AppTheme.sans(size: 13, color: AppColors.muted),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                usuario?.nome ?? 'Visitante',
+                style: AppTheme.serif(size: 24),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
+        GestureDetector(
+          onTap: () => _irPara('/perfil'),
+          child: GoldAvatar(
+            texto: usuario?.iniciais ?? '?',
+            tamanho: 48,
+            large: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _cardProximoHorario() {
+    final proximo = _proximo;
+    if (proximo == null) {
+      return GoldCard(
+        onTap: () => _irPara('/servicos'),
+        child: Row(
+          children: [
+            const Text('📅', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nenhum horário marcado',
+                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toque para agendar seu próximo corte',
+                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.gold),
+          ],
+        ),
+      );
+    }
+
+    return GoldCard(
+      selected: true,
+      onTap: () => _irPara('/agendamentos'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('Próximo horário'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                proximo.servico?.icone ?? '💈',
+                style: const TextStyle(fontSize: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      proximo.servico?.nome ?? 'Serviço',
+                      style: AppTheme.serif(size: 17),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatarDataExtenso(proximo.data),
+                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'com ${proximo.barbeiro?.nome ?? ''}',
+                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatarHora(proximo.data),
+                    style: AppTheme.serif(size: 20, color: AppColors.gold),
+                  ),
+                  const SizedBox(height: 4),
+                  const GoldBadge(texto: 'Confirmado', cor: AppColors.green),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _cardFidelidade() {
+    return GoldCard(
+      onTap: () => _irPara('/fidelidade'),
       child: Row(
         children: [
+          const Text('⭐', style: TextStyle(fontSize: 26)),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('PRÓXIMO HORÁRIO', style: AppTheme.goldLabel()),
-                const SizedBox(height: 6),
                 Text(
-                  agendamento.servico?.nome ?? 'Serviço',
-                  style: GoogleFonts.dmSans(
-                    color: AppColors.text,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  'Pontos de fidelidade',
+                  style: AppTheme.sans(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$data · ${agendamento.barbeiro?.nome ?? ""}',
-                  style: AppTheme.subtitle(size: 12),
+                  '$_pontos pts',
+                  style: AppTheme.serif(size: 22, color: AppColors.gold),
                 ),
               ],
             ),
           ),
-          const Text('📅', style: TextStyle(fontSize: 34)),
+          const Icon(Icons.chevron_right, color: AppColors.gold),
         ],
       ),
     );
   }
-}
 
-class _AcessoRapido extends StatelessWidget {
-  final String icone;
-  final String titulo;
-  final VoidCallback onTap;
-  const _AcessoRapido(
-      {required this.icone, required this.titulo, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GoldCard(
-      onTap: onTap,
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(icone, style: const TextStyle(fontSize: 32)),
-          const SizedBox(height: 8),
-          Text(
-            titulo,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(
-              color: AppColors.text,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  final int active;
-  const _BottomBar({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      {'icon': Icons.home_outlined, 'label': 'Início', 'route': '/home'},
-      {'icon': Icons.content_cut, 'label': 'Serviços', 'route': '/servicos'},
-      {
-        'icon': Icons.calendar_month_outlined,
-        'label': 'Agenda',
-        'route': '/agendamentos'
-      },
-      {'icon': Icons.person_outline, 'label': 'Perfil', 'route': '/perfil'},
+  Widget _gridAcessoRapido() {
+    // A administração só aparece para a conta administradora.
+    final ehAdmin = AuthService.instance.podeAdministrar;
+    final itens = [
+      ('💈', 'Ver Serviços', '/servicos'),
+      ('📋', 'Meus Agendamentos', '/agendamentos'),
+      ('⭐', 'Fidelidade', '/fidelidade'),
+      if (ehAdmin)
+        ('⚙️', 'Administração', '/admin')
+      else
+        ('👤', 'Meu Perfil', '/perfil'),
     ];
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.45,
+      children: itens
+          .map(
+            (item) => GoldCard(
+              onTap: () => _irPara(item.$3),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.$1, style: const TextStyle(fontSize: 26)),
+                  const SizedBox(height: 10),
+                  Text(
+                    item.$2,
+                    style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _navegacao() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF111111),
+        color: AppColors.dark,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      padding: const EdgeInsets.only(top: 10, bottom: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final isActive = i == active;
-          return GestureDetector(
-            onTap: () {
-              if (i == active) return;
-              Navigator.pushReplacementNamed(
-                  context, items[i]['route'] as String);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i]['icon'] as IconData,
-                    size: 22,
-                    color: isActive ? AppColors.gold : AppColors.muted),
-                const SizedBox(height: 4),
-                Text(
-                  items[i]['label'] as String,
-                  style: GoogleFonts.dmSans(
-                    color: isActive ? AppColors.gold : AppColors.muted,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
+      child: BottomNavigationBar(
+        currentIndex: 0,
+        onTap: _aoTocarNavegacao,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: AppColors.gold,
+        unselectedItemColor: AppColors.muted,
+        selectedLabelStyle: AppTheme.sans(size: 11, weight: FontWeight.w700),
+        unselectedLabelStyle: AppTheme.sans(size: 11),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Início'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.content_cut_outlined),
+            label: 'Serviços',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined),
+            label: 'Agenda',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: 'Perfil',
+          ),
+        ],
       ),
     );
   }
