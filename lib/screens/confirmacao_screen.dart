@@ -35,6 +35,19 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     setState(() => _salvando = true);
 
     try {
+      // O profissional pode ter ficado indisponível com a tela aberta.
+      final atual = await DatabaseService.instance.listarBarbeiros();
+      final aindaAtivo = atual.any((x) => x.id == barbeiro!.id && x.ativo);
+      if (!aindaAtivo) {
+        if (!mounted) return;
+        setState(() => _salvando = false);
+        mostrarErro(
+          context,
+          '${barbeiro!.nome} não está mais disponível para agendamentos',
+        );
+        return;
+      }
+
       // Reconfere a disponibilidade: outro cliente pode ter pego o horário
       // enquanto esta tela estava aberta.
       final livres = await DatabaseService.instance.horariosDisponiveis(

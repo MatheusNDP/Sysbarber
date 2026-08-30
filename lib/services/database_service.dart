@@ -21,7 +21,8 @@ class DatabaseService {
   /// v2: barbeiro ganhou contato/acesso/salário e pagamento ganhou tipo e
   /// cartão mascarado.
   /// v3: cliente ganhou a marca de administrador e a conta demo virou admin.
-  static const int versaoBanco = 3;
+  /// v4: barbeiro ganhou a marca de disponibilidade para novos agendamentos.
+  static const int versaoBanco = 4;
 
   /// Credenciais da conta administradora criada no seed.
   static const String emailAdmin = 'admin@sysbarber.com';
@@ -126,7 +127,8 @@ class DatabaseService {
         telefone TEXT NOT NULL DEFAULT '',
         email TEXT NOT NULL DEFAULT '',
         senha_hash TEXT NOT NULL DEFAULT '',
-        salario REAL NOT NULL DEFAULT 0
+        salario REAL NOT NULL DEFAULT 0,
+        ativo INTEGER NOT NULL DEFAULT 1
       )
     ''');
 
@@ -264,6 +266,13 @@ class DatabaseService {
         );
       }
     }
+
+    if (versaoAntiga < 4) {
+      // Quem já estava cadastrado continua disponível.
+      await db.execute(
+        'ALTER TABLE barbeiro ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1',
+      );
+    }
   }
 
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
@@ -319,6 +328,8 @@ class DatabaseService {
         email: 'marcos.lima@sysbarber.com',
         senhaHash: hashSenha('barbeiro123'),
         salario: 2650.00,
+        // Indisponível no seed para demonstrar o estado inativo.
+        ativo: false,
       ),
     ];
     for (final b in barbeiros) {
@@ -470,6 +481,31 @@ class DatabaseService {
     final db = await database;
     final linhas = await db.query('barbeiro', orderBy: 'id');
     return linhas.map(Barbeiro.fromMap).toList();
+  }
+
+  /// Somente os profissionais disponíveis para novos agendamentos.
+  Future<List<Barbeiro>> listarBarbeirosAtivos() async {
+    final db = await database;
+    final linhas = await db.query(
+      'barbeiro',
+      where: 'ativo = 1',
+      orderBy: 'id',
+    );
+    return linhas.map(Barbeiro.fromMap).toList();
+  }
+
+  /// Liga ou desliga o barbeiro para novos agendamentos.
+  ///
+  /// Não mexe nos atendimentos já marcados: quem ficou indisponível ainda
+  /// precisa fechar a agenda que assumiu.
+  Future<int> definirBarbeiroAtivo(int id, bool ativo) async {
+    final db = await database;
+    return db.update(
+      'barbeiro',
+      {'ativo': ativo ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<Barbeiro?> buscarBarbeiroPorEmail(String email) async {

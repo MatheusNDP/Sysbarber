@@ -28,9 +28,13 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
   Future<void> _carregar() async {
     final barbeiros = await DatabaseService.instance.listarBarbeiros();
     if (!mounted) return;
+    final anterior = BookingFlow.barbeiroSelecionado;
     setState(() {
       _barbeiros = barbeiros;
-      _selecionado = BookingFlow.barbeiroSelecionado;
+      // Uma escolha anterior pode ter ficado indisponível nesse meio-tempo.
+      _selecionado = barbeiros.any((b) => b.id == anterior?.id && b.ativo)
+          ? anterior
+          : null;
       _carregando = false;
     });
   }
@@ -110,6 +114,41 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
 
   Widget _cardBarbeiro(Barbeiro b) {
     final selecionado = _selecionado?.id == b.id;
+
+    // Indisponível continua visível, mas esmaecido e sem seleção: o cliente
+    // entende que o profissional existe e só não está atendendo agora.
+    if (!b.ativo) {
+      return Opacity(
+        opacity: 0.45,
+        child: GoldCard(
+          child: Row(
+            children: [
+              GoldAvatar(texto: b.iniciais, tamanho: 52),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(b.nome, style: AppTheme.serif(size: 17)),
+                    const SizedBox(height: 3),
+                    Text(
+                      b.especialidade,
+                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 8),
+                    const GoldBadge(
+                      texto: 'Indisponível',
+                      cor: AppColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.block, color: AppColors.muted, size: 22),
+            ],
+          ),
+        ),
+      );
+    }
 
     return GoldCard(
       selected: selecionado,

@@ -168,6 +168,10 @@ class Barbeiro {
   final String senhaHash;
   final double salario;
 
+  /// Profissional disponível para receber novos agendamentos. Quem está
+  /// inativo continua visível na escolha, porém esmaecido e sem seleção.
+  final bool ativo;
+
   const Barbeiro({
     this.id,
     required this.nome,
@@ -179,6 +183,7 @@ class Barbeiro {
     this.email = '',
     this.senhaHash = '',
     this.salario = 0,
+    this.ativo = true,
   });
 
   Map<String, dynamic> toMap() => {
@@ -192,6 +197,7 @@ class Barbeiro {
     'email': email,
     'senha_hash': senhaHash,
     'salario': salario,
+    'ativo': ativo ? 1 : 0,
   };
 
   factory Barbeiro.fromMap(Map<String, dynamic> map) => Barbeiro(
@@ -205,6 +211,8 @@ class Barbeiro {
     email: (map['email'] as String?) ?? '',
     senhaHash: (map['senha_hash'] as String?) ?? '',
     salario: (map['salario'] as num?)?.toDouble() ?? 0,
+    // Bancos anteriores à v4 não têm a coluna: quem não tem marca é ativo.
+    ativo: ((map['ativo'] as num?)?.toInt() ?? 1) == 1,
   );
 
   Barbeiro copyWith({
@@ -218,6 +226,7 @@ class Barbeiro {
     String? email,
     String? senhaHash,
     double? salario,
+    bool? ativo,
   }) => Barbeiro(
     id: id ?? this.id,
     nome: nome ?? this.nome,
@@ -229,6 +238,7 @@ class Barbeiro {
     email: email ?? this.email,
     senhaHash: senhaHash ?? this.senhaHash,
     salario: salario ?? this.salario,
+    ativo: ativo ?? this.ativo,
   );
 
   /// Gera as iniciais a partir do nome (usado ao cadastrar pelo admin).

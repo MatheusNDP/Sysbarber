@@ -53,6 +53,25 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
     if (salvou == true && mounted) await _carregar();
   }
 
+  /// Liga/desliga o profissional para novos agendamentos.
+  Future<void> _alternarDisponibilidade(Barbeiro b) async {
+    if (b.id == null) return;
+    try {
+      await _db.definirBarbeiroAtivo(b.id!, !b.ativo);
+      if (!mounted) return;
+      mostrarInfo(
+        context,
+        b.ativo
+            ? '${b.nome} não receberá novos agendamentos'
+            : '${b.nome} voltou a receber agendamentos',
+      );
+      await _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, 'Erro ao alterar disponibilidade: $e');
+    }
+  }
+
   Future<void> _excluir(Barbeiro b) async {
     if (b.id == null) return;
 
@@ -206,8 +225,26 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
                       b.especialidade,
                       style: AppTheme.sans(size: 12, color: AppColors.muted),
                     ),
+                    if (!b.ativo) ...[
+                      const SizedBox(height: 6),
+                      const GoldBadge(
+                        texto: 'Indisponível',
+                        cor: AppColors.muted,
+                      ),
+                    ],
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: b.ativo
+                    ? 'Marcar como indisponível'
+                    : 'Marcar como disponível',
+                icon: Icon(
+                  b.ativo ? Icons.toggle_on : Icons.toggle_off,
+                  color: b.ativo ? AppColors.green : AppColors.muted,
+                  size: 30,
+                ),
+                onPressed: () => _alternarDisponibilidade(b),
               ),
               IconButton(
                 tooltip: 'Excluir',

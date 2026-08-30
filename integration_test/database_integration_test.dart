@@ -484,6 +484,55 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  group('Disponibilidade do barbeiro', () {
+    test('o seed traz um profissional indisponível', () async {
+      final todos = await service.listarBarbeiros();
+      final ativos = await service.listarBarbeirosAtivos();
+
+      expect(todos.length, 3);
+      expect(ativos.length, 2);
+      expect(todos.firstWhere((b) => !b.ativo).nome, 'Marcos Lima');
+    });
+
+    test('alternar a disponibilidade muda quem aceita agendamento', () async {
+      final b = (await service.listarBarbeirosAtivos()).first;
+
+      expect(await service.definirBarbeiroAtivo(b.id!, false), 1);
+      var ativos = await service.listarBarbeirosAtivos();
+      expect(ativos.any((x) => x.id == b.id), isFalse);
+      // Continua cadastrado, apenas indisponível.
+      expect((await service.listarBarbeiros()).length, 3);
+
+      await service.definirBarbeiroAtivo(b.id!, true);
+      ativos = await service.listarBarbeirosAtivos();
+      expect(ativos.any((x) => x.id == b.id), isTrue);
+    });
+
+    test('ficar indisponível não apaga a agenda já assumida', () async {
+      final idCliente = await criarClienteTeste();
+      final b = (await service.listarBarbeirosAtivos()).first;
+      final s = (await service.listarServicos()).first;
+
+      await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: b.id!,
+          idServico: s.id!,
+          dataHora: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
+        ),
+      );
+
+      await service.definirBarbeiroAtivo(b.id!, false);
+
+      // O atendimento marcado continua valendo para os dois lados.
+      expect((await service.listarAgendamentosBarbeiro(b.id!)).length, 1);
+      expect((await service.listarAgendamentosCliente(idCliente)).length, 1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   group('Política de cancelamento', () {
     /// Cria um agendamento daqui a [minutos] e devolve
     /// (idCliente, idAgendamento, preco).
