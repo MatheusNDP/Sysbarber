@@ -484,6 +484,156 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  group('Política de cancelamento', () {
+    /// Cria um agendamento daqui a [minutos] e devolve
+    /// (idCliente, idAgendamento, preco).
+    Future<(int, int, double)> agendarEm(int minutos) async {
+      final idCliente = await criarClienteTeste();
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final servico = (await service.listarServicos()).first;
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: barbeiro.id!,
+          idServico: servico.id!,
+          dataHora: DateTime.now()
+              .add(Duration(minutes: minutos))
+              .toIso8601String(),
+        ),
+      );
+      return (idCliente, id, servico.preco);
+    }
+
+    test('dentroDoPrazo separa o limite de 1 hora', () {
+      final agora = DateTime(2026, 8, 30, 12, 0);
+      expect(
+        DatabaseService.dentroDoPrazo(
+          agora.add(const Duration(minutes: 61)),
+          agora: agora,
+        ),
+        isTrue,
+      );
+      expect(
+        DatabaseService.dentroDoPrazo(
+          agora.add(const Duration(minutes: 59)),
+          agora: agora,
+        ),
+        isFalse,
+      );
+    });
+
+    test('sem pagamento e no prazo: cancela sem cobrar nada', () async {
+      final (_, id, _) = await agendarEm(180);
+      final r = await service.cancelarAgendamento(id);
+
+      expect(r.comMulta, isFalse);
+      expect(r.multa, 0);
+      expect(await service.buscarPagamentoDoAgendamento(id), isNull);
+      expect((await service.gerarRelatorio()).cancelados, 1);
+    });
+
+    test('sem pagamento e fora do prazo: gera multa a pagar', () async {
+      final (_, id, preco) = await agendarEm(30);
+      final r = await service.cancelarAgendamento(id);
+
+      expect(r.comMulta, isTrue);
+      expect(r.multa, preco * 0.5);
+      expect(r.multaAPagar, preco * 0.5);
+
+      final p = await service.buscarPagamentoDoAgendamento(id);
+      expect(p!.metodo, DatabaseService.metodoMulta);
+      expect(p.pendente, isTrue);
+      expect(p.valor, preco * 0.5);
+
+      // A multa devida entra como valor a receber.
+      expect((await service.gerarRelatorio()).aReceber, preco * 0.5);
+    });
+
+    test('pagamento pendente no prazo: nada fica a receber', () async {
+      final (_, id, preco) = await agendarEm(180);
+      await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: preco,
+          metodo: 'A combinar',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+          tipo: 'na_hora',
+        ),
+      );
+
+      final r = await service.cancelarAgendamento(id);
+      expect(r.comMulta, isFalse);
+      expect((await service.gerarRelatorio()).aReceber, 0);
+    });
+
+    test('pago e no prazo: estorna tudo e reverte os pontos', () async {
+      final (idCliente, id, preco) = await agendarEm(180);
+      final idPag = await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: preco,
+          metodo: 'Pix',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+      await service.confirmarPagamento(idPag);
+      expect(await service.obterPontos(idCliente), preco.round());
+
+      final r = await service.cancelarAgendamento(id);
+
+      expect(r.comMulta, isFalse);
+      expect(r.estorno, preco);
+      expect(r.pontosAjustados, -preco.round());
+      expect(await service.obterPontos(idCliente), 0);
+
+      // Pagamento + estorno se anulam: nada sobra no faturamento.
+      expect((await service.gerarRelatorio()).faturamento, 0);
+    });
+
+    test('pago e fora do prazo: retém 50% e estorna o resto', () async {
+      final (idCliente, id, preco) = await agendarEm(30);
+      final idPag = await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: preco,
+          metodo: 'Pix',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+      await service.confirmarPagamento(idPag);
+
+      final r = await service.cancelarAgendamento(id);
+
+      expect(r.comMulta, isTrue);
+      expect(r.multa, preco * 0.5);
+      expect(r.estorno, preco * 0.5);
+      expect(await service.obterPontos(idCliente), 0);
+
+      // Só a multa permanece como receita.
+      expect((await service.gerarRelatorio()).faturamento, preco * 0.5);
+    });
+
+    test('serviço resgatado com pontos devolve os pontos', () async {
+      final (idCliente, id, _) = await agendarEm(180);
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      await service.resgatarPremio(
+        idCliente: idCliente,
+        idAgendamento: id,
+        nomeServico: 'Corte de Cabelo',
+      );
+      expect(await service.obterPontos(idCliente), 0);
+
+      final r = await service.cancelarAgendamento(id);
+
+      expect(r.pontosAjustados, DatabaseService.pontosParaPremio);
+      expect(await service.obterPontos(idCliente), 500);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   group('Conclusão do atendimento', () {
     test('finalizarAgendamento atribui o status finalizado', () async {
       final idCliente = await criarClienteTeste();

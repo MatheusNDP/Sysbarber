@@ -212,9 +212,55 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           side: const BorderSide(color: AppColors.border),
         ),
         title: Text('Cancelar agendamento?', style: AppTheme.serif(size: 18)),
-        content: Text(
-          'O horário voltará a ficar disponível para outros clientes.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'O horário voltará a ficar disponível para outros clientes.',
+              style: AppTheme.sans(
+                size: 13,
+                color: AppColors.muted,
+                height: 1.4,
+              ),
+            ),
+            // O cliente precisa saber da multa antes de decidir, não depois.
+            if (!DatabaseService.dentroDoPrazo(a.data)) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.red),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.red,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Falta menos de 1 hora para o atendimento. Será '
+                        'cobrada multa de '
+                        '${formatarReal((a.servico?.preco ?? 0) * DatabaseService.percentualMulta)}'
+                        ' (50% do serviço).',
+                        style: AppTheme.sans(
+                          size: 12,
+                          color: AppColors.text,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -241,14 +287,85 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
     if (confirmou != true || a.id == null) return;
 
-    await DatabaseService.instance.atualizarStatusAgendamento(
-      a.id!,
-      StatusAgendamento.cancelado,
-    );
+    try {
+      final r = await DatabaseService.instance.cancelarAgendamento(a.id!);
+      if (!mounted) return;
+      await _mostrarDesfecho(r);
+      if (!mounted) return;
+      await _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, 'Erro ao cancelar: $e');
+    }
+  }
 
-    if (!mounted) return;
-    mostrarInfo(context, 'Agendamento cancelado');
-    await _carregar();
+  /// Explica o acerto financeiro do cancelamento.
+  Future<void> _mostrarDesfecho(ResultadoCancelamento r) async {
+    if (!r.comMulta && r.estorno <= 0 && r.pontosAjustados == 0) {
+      mostrarInfo(context, 'Agendamento cancelado');
+      return;
+    }
+
+    final linhas = <String>[
+      if (r.estorno > 0) 'Estorno de ${formatarReal(r.estorno)}',
+      if (r.multa > 0) 'Multa retida: ${formatarReal(r.multa)}',
+      if (r.multaAPagar > 0)
+        'Multa de ${formatarReal(r.multaAPagar)} a pagar na barbearia',
+      if (r.pontosAjustados > 0) '${r.pontosAjustados} pontos devolvidos',
+      if (r.pontosAjustados < 0)
+        '${r.pontosAjustados.abs()} pontos estornados',
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          r.comMulta ? 'Cancelado com multa' : 'Agendamento cancelado',
+          style: AppTheme.serif(size: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: linhas
+              .map(
+                (l) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('•  ', style: TextStyle(color: AppColors.gold)),
+                      Expanded(
+                        child: Text(
+                          l,
+                          style: AppTheme.sans(size: 13, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'ENTENDI',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

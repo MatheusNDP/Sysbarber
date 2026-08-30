@@ -31,6 +31,18 @@ class DatabaseService {
   /// (regra de negócio 5).
   static const int pontosParaPremio = 500;
 
+  /// Antecedência mínima para cancelar sem multa (regra de negócio 9).
+  static const Duration prazoCancelamento = Duration(hours: 1);
+
+  /// Percentual do serviço cobrado em cancelamentos fora do prazo.
+  static const double percentualMulta = 0.5;
+
+  /// Método registrado quando a barbearia devolve dinheiro ao cliente.
+  static const String metodoEstorno = 'Estorno';
+
+  /// Método registrado na multa por cancelamento em cima da hora.
+  static const String metodoMulta = 'Multa por cancelamento';
+
   /// Grade de horários atendidos pela barbearia.
   static const List<String> horariosBase = [
     '09:00',
@@ -790,6 +802,151 @@ class DatabaseService {
   /// pagamento marcado para "pagar na barbearia" não pontua enquanto não for
   /// quitado. A operação é idempotente — confirmar duas vezes não duplica os
   /// pontos.
+  /// O cancelamento ainda está dentro do prazo sem multa?
+  static bool dentroDoPrazo(DateTime dataHora, {DateTime? agora}) =>
+      dataHora.difference(agora ?? DateTime.now()) >= prazoCancelamento;
+
+  /// Cancela o agendamento aplicando a política de multa
+  /// (regra de negócio 9).
+  ///
+  /// Fora do prazo, a barbearia retém [percentualMulta] do valor do serviço.
+  /// O acerto financeiro depende de o cliente já ter pago:
+  ///
+  /// - **pago antecipado**: lança um estorno com valor negativo. A soma dos
+  ///   lançamentos deixa no faturamento apenas o que foi efetivamente retido,
+  ///   preservando o histórico em vez de apagar o pagamento original.
+  /// - **pendente**: o pagamento é cancelado quando não há multa, ou passa a
+  ///   valer somente a multa, que segue devida.
+  ///
+  /// Os pontos creditados pelo pagamento são revertidos, já que o serviço não
+  /// foi prestado; um serviço obtido por resgate devolve os pontos gastos.
+  Future<ResultadoCancelamento> cancelarAgendamento(
+    int idAgendamento, {
+    DateTime? agora,
+  }) async {
+    final db = await database;
+
+    final linhas = await db.rawQuery(
+      '''
+      SELECT a.id_cliente AS id_cliente, a.data_hora AS data_hora,
+             s.preco AS preco, s.nome AS nome
+      FROM agendamento a
+      INNER JOIN servico s ON s.id = a.id_servico
+      WHERE a.id = ?
+      ''',
+      [idAgendamento],
+    );
+    if (linhas.isEmpty) return const ResultadoCancelamento(comMulta: false);
+
+    final idCliente = (linhas.first['id_cliente'] as num).toInt();
+    final dataHora = DateTime.parse(linhas.first['data_hora'] as String);
+    final preco = (linhas.first['preco'] as num).toDouble();
+    final nomeServico = linhas.first['nome'] as String;
+
+    final noPrazo = dentroDoPrazo(dataHora, agora: agora);
+    final multa = noPrazo ? 0.0 : preco * percentualMulta;
+
+    await atualizarStatusAgendamento(idAgendamento, StatusAgendamento.cancelado);
+
+    final pagamento = await buscarPagamentoDoAgendamento(idAgendamento);
+    if (pagamento == null) {
+      // Sem pagamento registrado, a multa nasce como pendência.
+      if (multa > 0) {
+        await criarPagamento(
+          Pagamento(
+            idAgendamento: idAgendamento,
+            valor: multa,
+            metodo: metodoMulta,
+            status: 'Pendente',
+            criadoEm: DateTime.now().toIso8601String(),
+            tipo: TipoPagamento.naHora.dbValue,
+          ),
+        );
+      }
+      return ResultadoCancelamento(
+        comMulta: multa > 0,
+        multa: multa,
+        multaAPagar: multa,
+      );
+    }
+
+    // Serviço obtido com pontos: devolve o que foi gasto no resgate.
+    if (pagamento.metodo == 'Pontos de fidelidade') {
+      await db.update(
+        'pagamento',
+        {'status': 'Cancelado'},
+        where: 'id = ?',
+        whereArgs: [pagamento.id],
+      );
+      await adicionarPontos(
+        idCliente,
+        pontosParaPremio,
+        'Devolução por cancelamento — $nomeServico',
+      );
+      return const ResultadoCancelamento(
+        comMulta: false,
+        pontosAjustados: pontosParaPremio,
+      );
+    }
+
+    if (pagamento.pendente) {
+      if (multa > 0) {
+        await db.update(
+          'pagamento',
+          {'valor': multa, 'metodo': metodoMulta},
+          where: 'id = ?',
+          whereArgs: [pagamento.id],
+        );
+      } else {
+        await db.update(
+          'pagamento',
+          {'status': 'Cancelado'},
+          where: 'id = ?',
+          whereArgs: [pagamento.id],
+        );
+      }
+      return ResultadoCancelamento(
+        comMulta: multa > 0,
+        multa: multa,
+        multaAPagar: multa,
+      );
+    }
+
+    // Pagamento já confirmado: devolve o que não for retido como multa.
+    final estorno = pagamento.valor - multa;
+    if (estorno > 0) {
+      await criarPagamento(
+        Pagamento(
+          idAgendamento: idAgendamento,
+          valor: -estorno,
+          metodo: multa > 0 ? '$metodoEstorno (multa retida)' : metodoEstorno,
+          status: 'Confirmado',
+          criadoEm: DateTime.now().toIso8601String(),
+          tipo: pagamento.tipo,
+        ),
+      );
+    }
+
+    // O serviço não foi prestado, então os pontos dele não se sustentam.
+    final creditados = pagamento.valor.round();
+    final saldo = await obterPontos(idCliente);
+    final aReverter = creditados > saldo ? saldo : creditados;
+    if (aReverter > 0) {
+      await adicionarPontos(
+        idCliente,
+        -aReverter,
+        'Estorno por cancelamento — $nomeServico',
+      );
+    }
+
+    return ResultadoCancelamento(
+      comMulta: multa > 0,
+      multa: multa,
+      estorno: estorno,
+      pontosAjustados: -aReverter,
+    );
+  }
+
   /// Marca o atendimento como concluído.
   ///
   /// Sem isto o status `finalizado` nunca seria atribuído e o indicador de

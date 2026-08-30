@@ -474,6 +474,34 @@ class Fidelidade {
 // RELATÓRIOS
 // ---------------------------------------------------------------------------
 
+/// Desfecho financeiro de um cancelamento (regra de negócio 9).
+class ResultadoCancelamento {
+  /// `true` quando o cancelamento ocorreu dentro do prazo mínimo e houve
+  /// cobrança de multa.
+  final bool comMulta;
+
+  /// Valor retido pela barbearia a título de multa.
+  final double multa;
+
+  /// Valor devolvido ao cliente, quando o serviço já havia sido pago.
+  final double estorno;
+
+  /// Multa que ficou pendente de cobrança (caso o cliente ainda não tivesse
+  /// pago o serviço).
+  final double multaAPagar;
+
+  /// Pontos de fidelidade estornados ou devolvidos ao cliente.
+  final int pontosAjustados;
+
+  const ResultadoCancelamento({
+    required this.comMulta,
+    this.multa = 0,
+    this.estorno = 0,
+    this.multaAPagar = 0,
+    this.pontosAjustados = 0,
+  });
+}
+
 /// Números do dia corrente exibidos no painel administrativo.
 ///
 /// Cada indicador traz o valor de hoje e o total geral, para que o painel
