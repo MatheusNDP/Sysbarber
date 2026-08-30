@@ -86,7 +86,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final idPagamento = pagamento?.id;
     if (pagamento == null || idPagamento == null) return;
 
-    final confirmou = await showDialog<bool>(
+    // O balcão é o único momento em que se sabe como o cliente pagou.
+    final metodo = await showDialog<MetodoPagamento>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
@@ -94,41 +95,76 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Confirmar recebimento?', style: AppTheme.serif(size: 18)),
-        content: Text(
-          'Confirma o recebimento de ${formatarReal(pagamento.valor)} de '
-          '${a.cliente?.nome ?? 'este cliente'}?\n\n'
-          'O cliente receberá ${pagamento.valor.round()} pontos de '
-          'fidelidade.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+        title: Text('Como o cliente pagou?', style: AppTheme.serif(size: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${formatarReal(pagamento.valor)} de '
+              '${a.cliente?.nome ?? 'este cliente'}. '
+              'Ao confirmar, o cliente recebe ${pagamento.valor.round()} '
+              'pontos de fidelidade.',
+              style: AppTheme.sans(
+                size: 13,
+                color: AppColors.muted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...MetodoPagamento.values.map(
+              (m) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GoldCard(
+                  onTap: () => Navigator.of(ctx).pop(m),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        switch (m) {
+                          MetodoPagamento.pix => '📱',
+                          MetodoPagamento.cartao => '💳',
+                          MetodoPagamento.dinheiro => '💵',
+                        },
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        m.label,
+                        style: AppTheme.sans(
+                          size: 14,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'AGORA NÃO',
               style: AppTheme.sans(size: 13, color: AppColors.muted),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              'CONFIRMAR RECEBIMENTO',
-              style: AppTheme.sans(
-                size: 13,
-                weight: FontWeight.w700,
-                color: AppColors.green,
-              ),
             ),
           ),
         ],
       ),
     );
 
-    if (confirmou != true) return;
+    if (metodo == null) return;
 
     try {
-      await DatabaseService.instance.confirmarPagamento(idPagamento);
+      await DatabaseService.instance.confirmarPagamento(
+        idPagamento,
+        metodo: metodo.label,
+      );
       if (!mounted) return;
       mostrarSucesso(
         context,
@@ -343,25 +379,103 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             const SizedBox(height: 12),
             const Divider(color: AppColors.border, height: 1),
             const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _cancelar(a),
-                icon: const Icon(
-                  Icons.close,
-                  size: 16,
-                  color: AppColors.red,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Concluir o atendimento é atribuição do profissional.
+                if (_modoBarbeiro)
+                  TextButton.icon(
+                    onPressed: () => _finalizar(a),
+                    icon: const Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: AppColors.gold,
+                    ),
+                    label: Text(
+                      'Finalizar',
+                      style: AppTheme.sans(size: 12, color: AppColors.gold),
+                    ),
+                  ),
+                TextButton.icon(
+                  onPressed: () => _cancelar(a),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AppColors.red,
+                  ),
+                  label: Text(
+                    _modoBarbeiro ? 'Cancelar' : 'Cancelar agendamento',
+                    style: AppTheme.sans(size: 12, color: AppColors.red),
+                  ),
                 ),
-                label: Text(
-                  'Cancelar agendamento',
-                  style: AppTheme.sans(size: 12, color: AppColors.red),
-                ),
-              ),
+              ],
             ),
           ],
         ],
       ),
     );
+  }
+
+  /// Conclui o atendimento, atribuindo o status `finalizado`.
+  ///
+  /// É o único caminho que dá esse status a um agendamento — sem ele o
+  /// indicador de concluídos dos relatórios nunca sai de zero.
+  Future<void> _finalizar(Agendamento a) async {
+    if (!_modoBarbeiro || a.id == null) return;
+
+    final pendente = _pagamentos[a.id]?.pendente ?? false;
+
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text('Finalizar atendimento?', style: AppTheme.serif(size: 18)),
+        content: Text(
+          pendente
+              ? 'O pagamento deste atendimento ainda está pendente. '
+                    'Finalize apenas se já registrou o recebimento.'
+              : 'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
+                    'marcado como concluído e sairá da lista de próximos.',
+          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'VOLTAR',
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'FINALIZAR',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmou != true) return;
+
+    try {
+      await DatabaseService.instance.finalizarAgendamento(a.id!);
+      if (!mounted) return;
+      mostrarSucesso(context, 'Atendimento finalizado');
+      await _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, 'Erro ao finalizar: $e');
+    }
   }
 
   /// Cabeçalho com o profissional logado e o movimento de hoje.

@@ -733,7 +733,27 @@ class DatabaseService {
         .map((d) => '${_doisDigitos(d.hour)}:${_doisDigitos(d.minute)}')
         .toSet();
 
-    return horariosBase.where((h) => !ocupados.contains(h)).toList();
+    // No dia corrente, horários que já passaram não podem ser oferecidos —
+    // sem isto o app aceita agendar para as 09:00 quando já são 15:00.
+    final agora = DateTime.now();
+    final ehHoje =
+        data.year == agora.year &&
+        data.month == agora.month &&
+        data.day == agora.day;
+
+    return horariosBase.where((h) {
+      if (ocupados.contains(h)) return false;
+      if (!ehHoje) return true;
+      final partes = h.split(':');
+      final horario = DateTime(
+        data.year,
+        data.month,
+        data.day,
+        int.parse(partes[0]),
+        int.parse(partes[1]),
+      );
+      return horario.isAfter(agora);
+    }).toList();
   }
 
   // -------------------------------------------------------------------------
@@ -770,7 +790,14 @@ class DatabaseService {
   /// pagamento marcado para "pagar na barbearia" não pontua enquanto não for
   /// quitado. A operação é idempotente — confirmar duas vezes não duplica os
   /// pontos.
-  Future<bool> confirmarPagamento(int idPagamento) async {
+  /// Marca o atendimento como concluído.
+  ///
+  /// Sem isto o status `finalizado` nunca seria atribuído e o indicador de
+  /// atendimentos concluídos dos relatórios ficaria sempre em zero.
+  Future<int> finalizarAgendamento(int id) =>
+      atualizarStatusAgendamento(id, StatusAgendamento.finalizado);
+
+  Future<bool> confirmarPagamento(int idPagamento, {String? metodo}) async {
     final db = await database;
     final linhas = await db.query(
       'pagamento',
@@ -793,9 +820,14 @@ class DatabaseService {
     if (agendamentos.isEmpty) return false;
     final idCliente = (agendamentos.first['id_cliente'] as num).toInt();
 
+    // O método só é conhecido no balcão: até aqui o registro fica como
+    // 'A combinar', o que sujaria o relatório por forma de pagamento.
     await db.update(
       'pagamento',
-      {'status': 'Confirmado'},
+      {
+        'status': 'Confirmado',
+        if (metodo != null) 'metodo': metodo,
+      },
       where: 'id = ?',
       whereArgs: [idPagamento],
     );

@@ -484,6 +484,111 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  group('Conclusão do atendimento', () {
+    test('finalizarAgendamento atribui o status finalizado', () async {
+      final idCliente = await criarClienteTeste();
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final servico = (await service.listarServicos()).first;
+
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: barbeiro.id!,
+          idServico: servico.id!,
+          dataHora: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
+        ),
+      );
+
+      expect(await service.finalizarAgendamento(id), 1);
+
+      final lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.first.status, StatusAgendamento.finalizado);
+
+      // O indicador de concluídos deixa de ficar preso em zero.
+      final r = await service.gerarRelatorio();
+      expect(r.finalizados, 1);
+      expect(r.confirmados, 0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('Forma de recebimento no balcão', () {
+    test('confirmarPagamento substitui o método provisório', () async {
+      final idCliente = await criarClienteTeste();
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final servico = (await service.listarServicos()).first;
+
+      final idAgendamento = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: barbeiro.id!,
+          idServico: servico.id!,
+          dataHora: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
+        ),
+      );
+
+      final idPagamento = await service.criarPagamento(
+        Pagamento(
+          idAgendamento: idAgendamento,
+          valor: servico.preco,
+          metodo: 'A combinar',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+          tipo: 'na_hora',
+        ),
+      );
+
+      await service.confirmarPagamento(idPagamento, metodo: 'Dinheiro');
+
+      final p = await service.buscarPagamentoDoAgendamento(idAgendamento);
+      expect(p!.metodo, 'Dinheiro');
+      expect(p.confirmado, isTrue);
+
+      // 'A combinar' não pode sobrar no relatório por forma de pagamento.
+      final r = await service.gerarRelatorio();
+      expect(r.porMetodo.map((m) => m.rotulo), isNot(contains('A combinar')));
+      expect(r.porMetodo.first.rotulo, 'Dinheiro');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('Horários já passados', () {
+    test('não são oferecidos no dia corrente', () async {
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final agora = DateTime.now();
+
+      final hoje = await service.horariosDisponiveis(barbeiro.id!, agora);
+      for (final h in hoje) {
+        final partes = h.split(':');
+        final horario = DateTime(
+          agora.year,
+          agora.month,
+          agora.day,
+          int.parse(partes[0]),
+          int.parse(partes[1]),
+        );
+        expect(
+          horario.isAfter(agora),
+          isTrue,
+          reason: '$h já passou e não deveria estar disponível',
+        );
+      }
+    });
+
+    test('a grade completa continua valendo para dias futuros', () async {
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final amanha = DateTime.now().add(const Duration(days: 1));
+
+      final livres = await service.horariosDisponiveis(barbeiro.id!, amanha);
+      expect(livres.length, DatabaseService.horariosBase.length);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   group('Resgate de pontos', () {
     /// Cria um agendamento e devolve (idCliente, idAgendamento, nomeServico).
     Future<(int, int, String)> prepararAgendamento() async {
