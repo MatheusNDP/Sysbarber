@@ -484,6 +484,92 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  group('Resgate de pontos', () {
+    /// Cria um agendamento e devolve (idCliente, idAgendamento, nomeServico).
+    Future<(int, int, String)> prepararAgendamento() async {
+      final idCliente = await criarClienteTeste();
+      final barbeiro = (await service.listarBarbeiros()).first;
+      final servico = (await service.listarServicos()).first;
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: barbeiro.id!,
+          idServico: servico.id!,
+          dataHora: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
+        ),
+      );
+      return (idCliente, id, servico.nome);
+    }
+
+    test('recusa o resgate quando o saldo é insuficiente', () async {
+      final (idCliente, idAgendamento, nome) = await prepararAgendamento();
+      await service.adicionarPontos(idCliente, 499, 'Saldo de teste');
+
+      final id = await service.resgatarPremio(
+        idCliente: idCliente,
+        idAgendamento: idAgendamento,
+        nomeServico: nome,
+      );
+
+      expect(id, isNull);
+      // Nada pode ter sido debitado nem gravado.
+      expect(await service.obterPontos(idCliente), 499);
+      expect(await service.buscarPagamentoDoAgendamento(idAgendamento), isNull);
+    });
+
+    test('debita os pontos e gera pagamento de valor zero', () async {
+      final (idCliente, idAgendamento, nome) = await prepararAgendamento();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+
+      final id = await service.resgatarPremio(
+        idCliente: idCliente,
+        idAgendamento: idAgendamento,
+        nomeServico: nome,
+      );
+
+      expect(id, isNotNull);
+      expect(await service.obterPontos(idCliente), 0);
+
+      final p = await service.buscarPagamentoDoAgendamento(idAgendamento);
+      expect(p!.valor, 0);
+      expect(p.metodo, 'Pontos de fidelidade');
+      expect(p.confirmado, isTrue);
+
+      // O resgate precisa aparecer no extrato como saída.
+      final extrato = await service.listarHistoricoPontos(idCliente);
+      expect(extrato.first.pontos, -500);
+      expect(extrato.first.descricao, contains('Resgate'));
+    });
+
+    test('o serviço gratuito não entra no faturamento', () async {
+      final (idCliente, idAgendamento, nome) = await prepararAgendamento();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      await service.resgatarPremio(
+        idCliente: idCliente,
+        idAgendamento: idAgendamento,
+        nomeServico: nome,
+      );
+
+      final r = await service.gerarRelatorio();
+      expect(r.faturamento, 0);
+      expect(r.aReceber, 0);
+    });
+
+    test('premiosDisponiveis acompanha o saldo', () async {
+      final idCliente = await criarClienteTeste();
+      expect(await service.premiosDisponiveis(idCliente), 0);
+
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      expect(await service.premiosDisponiveis(idCliente), 1);
+
+      await service.adicionarPontos(idCliente, 600, 'Saldo de teste');
+      expect(await service.premiosDisponiveis(idCliente), 2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   group('Painel do dia', () {
     test('conta apenas o movimento da data e ignora cancelados', () async {
       final idCliente = await criarClienteTeste();

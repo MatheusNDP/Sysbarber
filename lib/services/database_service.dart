@@ -27,6 +27,10 @@ class DatabaseService {
   static const String emailAdmin = 'admin@sysbarber.com';
   static const String senhaAdmin = 'admin1234';
 
+  /// Pontos necessários para trocar por um serviço gratuito
+  /// (regra de negócio 5).
+  static const int pontosParaPremio = 500;
+
   /// Grade de horários atendidos pela barbearia.
   static const List<String> horariosBase = [
     '09:00',
@@ -1016,6 +1020,49 @@ class DatabaseService {
       'pontos': pontos,
       'criado_em': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// Quantos prêmios o cliente consegue resgatar com o saldo atual.
+  Future<int> premiosDisponiveis(int idCliente) async {
+    final pontos = await obterPontos(idCliente);
+    return pontos ~/ pontosParaPremio;
+  }
+
+  /// Troca [pontosParaPremio] pontos por um serviço gratuito
+  /// (regra de negócio 5).
+  ///
+  /// Debita os pontos e registra o pagamento com valor zero numa única
+  /// operação, evitando que sobre um resgate sem pagamento — ou o contrário.
+  /// O valor zero mantém o faturamento dos relatórios honesto: o serviço foi
+  /// prestado, mas não entrou dinheiro.
+  ///
+  /// Retorna o id do pagamento criado, ou `null` se o saldo for insuficiente.
+  Future<int?> resgatarPremio({
+    required int idCliente,
+    required int idAgendamento,
+    required String nomeServico,
+  }) async {
+    final saldo = await obterPontos(idCliente);
+    if (saldo < pontosParaPremio) return null;
+
+    final db = await database;
+    final idPagamento = await db.insert('pagamento', {
+      'id_agendamento': idAgendamento,
+      'valor': 0.0,
+      'metodo': 'Pontos de fidelidade',
+      'status': 'Confirmado',
+      'criado_em': DateTime.now().toIso8601String(),
+      'tipo': TipoPagamento.antecipado.dbValue,
+      'cartao_final': null,
+    });
+
+    await adicionarPontos(
+      idCliente,
+      -pontosParaPremio,
+      'Resgate — $nomeServico',
+    );
+
+    return idPagamento;
   }
 
   Future<List<HistoricoPonto>> listarHistoricoPontos(int idCliente) async {

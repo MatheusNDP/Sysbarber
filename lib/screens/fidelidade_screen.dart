@@ -15,7 +15,7 @@ class FidelidadeScreen extends StatefulWidget {
 }
 
 class _FidelidadeScreenState extends State<FidelidadeScreen> {
-  static const int metaPontos = 500;
+  static const int metaPontos = DatabaseService.pontosParaPremio;
 
   int _pontos = 0;
   List<HistoricoPonto> _historico = [];
@@ -97,6 +97,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
   Widget _cartaoPontos() {
     final progresso = (_pontos / metaPontos).clamp(0.0, 1.0);
     final faltam = metaPontos - _pontos;
+    final premios = _pontos ~/ metaPontos;
 
     return Container(
       width: double.infinity,
@@ -140,6 +141,8 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           Text(
             faltam > 0
                 ? 'Faltam $faltam pts para prêmio'
+                : premios > 1
+                ? '🎉 $premios prêmios disponíveis!'
                 : '🎉 Prêmio disponível!',
             style: AppTheme.sans(
               size: 13,
@@ -152,6 +155,21 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
             'Meta: $metaPontos pontos = 1 serviço grátis',
             style: AppTheme.sans(size: 11, color: AppColors.muted),
           ),
+          // Sem esta indicação o cliente vê "prêmio disponível" e não
+          // descobre onde usá-lo.
+          if (premios > 0) ...[
+            const SizedBox(height: 16),
+            GoldButton(
+              texto: 'RESGATAR EM UM AGENDAMENTO',
+              onPressed: () => Navigator.of(context).pushNamed('/servicos'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'O resgate é feito na etapa de pagamento do agendamento.',
+              textAlign: TextAlign.center,
+              style: AppTheme.sans(size: 11, color: AppColors.muted),
+            ),
+          ],
         ],
       ),
     );

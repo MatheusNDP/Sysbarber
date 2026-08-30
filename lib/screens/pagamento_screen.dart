@@ -28,10 +28,34 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   MetodoPagamento _metodo = MetodoPagamento.pix;
   bool _processando = false;
 
+  /// Saldo do cliente, usado para liberar o resgate por pontos.
+  int _pontos = 0;
+  bool _usarPontos = false;
+
   final _numeroCtrl = TextEditingController();
   final _nomeCartaoCtrl = TextEditingController();
   final _validadeCtrl = TextEditingController();
   final _cvvCtrl = TextEditingController();
+
+  bool get _podeResgatar => _pontos >= DatabaseService.pontosParaPremio;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarPontos();
+  }
+
+  Future<void> _carregarPontos() async {
+    final id = AuthService.instance.usuarioAtual?.id;
+    if (id == null) return;
+    try {
+      final pontos = await DatabaseService.instance.obterPontos(id);
+      if (!mounted) return;
+      setState(() => _pontos = pontos);
+    } catch (_) {
+      // Sem o saldo o resgate simplesmente não é oferecido.
+    }
+  }
 
   @override
   void dispose() {
@@ -58,6 +82,31 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
     if (usuario?.id == null || servico == null || idAgendamento == null) {
       mostrarErro(context, 'Não há agendamento para pagar');
+      return;
+    }
+
+    // Resgate por pontos: troca o saldo pelo serviço, sem cobrança.
+    if (_usarPontos && _podeResgatar) {
+      setState(() => _processando = true);
+      try {
+        final id = await DatabaseService.instance.resgatarPremio(
+          idCliente: usuario!.id!,
+          idAgendamento: idAgendamento,
+          nomeServico: servico.nome,
+        );
+        if (!mounted) return;
+        setState(() => _processando = false);
+
+        if (id == null) {
+          mostrarErro(context, 'Saldo insuficiente para o resgate');
+          return;
+        }
+        await _mostrarResgate(servico.nome);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _processando = false);
+        mostrarErro(context, 'Não foi possível resgatar: $e');
+      }
       return;
     }
 
@@ -115,6 +164,51 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       setState(() => _processando = false);
       mostrarErro(context, 'Não foi possível registrar o pagamento: $e');
     }
+  }
+
+  /// Confirmação do resgate: o serviço saiu de graça.
+  Future<void> _mostrarResgate(String nomeServico) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Column(
+          children: [
+            const Text('🎁', style: TextStyle(fontSize: 46)),
+            const SizedBox(height: 12),
+            Text(
+              'Prêmio resgatado!',
+              textAlign: TextAlign.center,
+              style: AppTheme.serif(size: 19),
+            ),
+          ],
+        ),
+        content: Text(
+          '$nomeServico saiu de graça. Foram debitados '
+          '${DatabaseService.pontosParaPremio} pontos do seu saldo, que agora '
+          'é de ${_pontos - DatabaseService.pontosParaPremio} pontos.',
+          textAlign: TextAlign.center,
+          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          GoldButton(
+            texto: 'OK',
+            expandido: false,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    BookingFlow.limpar();
+    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
 
   Future<void> _mostrarResultado(bool antecipado, int pontos) async {
@@ -223,11 +317,17 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: [
                 _cartaoValor(servico),
-                const SizedBox(height: 26),
-                const SectionLabel('Quando pagar'),
-                const SizedBox(height: 12),
-                ...TipoPagamento.values.map(_opcaoTipo),
-                if (antecipado) ...[
+                if (_podeResgatar) ...[
+                  const SizedBox(height: 22),
+                  _cardResgate(),
+                ],
+                if (!_usarPontos) ...[
+                  const SizedBox(height: 26),
+                  const SectionLabel('Quando pagar'),
+                  const SizedBox(height: 12),
+                  ...TipoPagamento.values.map(_opcaoTipo),
+                ],
+                if (!_usarPontos && antecipado) ...[
                   const SizedBox(height: 26),
                   const SectionLabel('Forma de pagamento'),
                   const SizedBox(height: 12),
@@ -244,7 +344,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                     _blocoPix()
                   else
                     _blocoCartao(),
-                ] else ...[
+                ] else if (!_usarPontos) ...[
                   const SizedBox(height: 20),
                   _avisoNaBarbearia(),
                 ],
@@ -256,6 +356,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             child: GoldButton(
               texto: _processando
                   ? 'PROCESSANDO...'
+                  : _usarPontos
+                  ? 'RESGATAR COM PONTOS'
                   : antecipado
                   ? 'CONFIRMAR PAGAMENTO'
                   : 'RESERVAR E PAGAR NA BARBEARIA',
@@ -288,6 +390,66 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           Text(
             servico?.nome ?? '',
             style: AppTheme.sans(size: 13, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Oferta de resgate — só aparece com saldo suficiente.
+  Widget _cardResgate() {
+    final saldoRestante = _pontos - DatabaseService.pontosParaPremio;
+
+    return GoldCard(
+      selected: _usarPontos,
+      onTap: () => setState(() => _usarPontos = !_usarPontos),
+      child: Row(
+        children: [
+          const Text('🎁', style: TextStyle(fontSize: 28)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Usar ${DatabaseService.pontosParaPremio} pontos',
+                  style: AppTheme.sans(
+                    size: 14,
+                    weight: FontWeight.w700,
+                    color: AppColors.gold,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _usarPontos
+                      ? 'Serviço gratuito. Saldo após o resgate: '
+                            '$saldoRestante pts'
+                      : 'Você tem $_pontos pts — troque por este serviço',
+                  style: AppTheme.sans(
+                    size: 12,
+                    color: AppColors.muted,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _usarPontos ? AppColors.gold : Colors.transparent,
+              border: Border.all(
+                color: _usarPontos ? AppColors.gold : AppColors.muted,
+                width: 1.5,
+              ),
+            ),
+            child: _usarPontos
+                ? const Icon(Icons.check, size: 14, color: Colors.black)
+                : null,
           ),
         ],
       ),
