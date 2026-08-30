@@ -856,9 +856,12 @@ class DatabaseService {
   ///
   /// Os pontos creditados pelo pagamento são revertidos, já que o serviço não
   /// foi prestado; um serviço obtido por resgate devolve os pontos gastos.
+  /// [porBarbeiro] isenta a multa: quando a falta é da barbearia, não faz
+  /// sentido penalizar o cliente, que recebe o valor integral de volta.
   Future<ResultadoCancelamento> cancelarAgendamento(
     int idAgendamento, {
     DateTime? agora,
+    bool porBarbeiro = false,
   }) async {
     final db = await database;
 
@@ -879,7 +882,7 @@ class DatabaseService {
     final preco = (linhas.first['preco'] as num).toDouble();
     final nomeServico = linhas.first['nome'] as String;
 
-    final noPrazo = dentroDoPrazo(dataHora, agora: agora);
+    final noPrazo = porBarbeiro || dentroDoPrazo(dataHora, agora: agora);
     final multa = noPrazo ? 0.0 : preco * percentualMulta;
 
     await atualizarStatusAgendamento(idAgendamento, StatusAgendamento.cancelado);

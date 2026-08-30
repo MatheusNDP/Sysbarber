@@ -217,7 +217,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'O horário voltará a ficar disponível para outros clientes.',
+              _modoBarbeiro
+                  ? 'O horário voltará a ficar disponível. Como o '
+                        'cancelamento parte da barbearia, o cliente não paga '
+                        'multa e recebe de volta o que já tiver pago.'
+                  : 'O horário voltará a ficar disponível para outros '
+                        'clientes.',
               style: AppTheme.sans(
                 size: 13,
                 color: AppColors.muted,
@@ -225,7 +230,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ),
             ),
             // O cliente precisa saber da multa antes de decidir, não depois.
-            if (!DatabaseService.dentroDoPrazo(a.data)) ...[
+            // O barbeiro é isento: a falta é da barbearia.
+            if (!_modoBarbeiro && !DatabaseService.dentroDoPrazo(a.data)) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -288,7 +294,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     if (confirmou != true || a.id == null) return;
 
     try {
-      final r = await DatabaseService.instance.cancelarAgendamento(a.id!);
+      final r = await DatabaseService.instance.cancelarAgendamento(
+        a.id!,
+        porBarbeiro: _modoBarbeiro,
+      );
       if (!mounted) return;
       await _mostrarDesfecho(r);
       if (!mounted) return;

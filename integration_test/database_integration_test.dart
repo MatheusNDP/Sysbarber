@@ -665,6 +665,46 @@ void main() {
       expect((await service.gerarRelatorio()).faturamento, preco * 0.5);
     });
 
+    test('cancelamento pela barbearia isenta a multa', () async {
+      final (_, id, preco) = await agendarEm(30);
+
+      // O mesmo horário multaria o cliente.
+      final comoCliente = DatabaseService.dentroDoPrazo(
+        DateTime.now().add(const Duration(minutes: 30)),
+      );
+      expect(comoCliente, isFalse);
+
+      final r = await service.cancelarAgendamento(id, porBarbeiro: true);
+
+      expect(r.comMulta, isFalse);
+      expect(r.multa, 0);
+      expect(r.multaAPagar, 0);
+      expect((await service.gerarRelatorio()).aReceber, 0);
+      expect(preco, greaterThan(0));
+    });
+
+    test('barbearia cancela em cima da hora: estorno integral', () async {
+      final (idCliente, id, preco) = await agendarEm(30);
+      final idPag = await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: preco,
+          metodo: 'Pix',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+      await service.confirmarPagamento(idPag);
+
+      final r = await service.cancelarAgendamento(id, porBarbeiro: true);
+
+      // Nada é retido: o cliente recebe tudo de volta.
+      expect(r.estorno, preco);
+      expect(r.multa, 0);
+      expect((await service.gerarRelatorio()).faturamento, 0);
+      expect(await service.obterPontos(idCliente), 0);
+    });
+
     test('serviço resgatado com pontos devolve os pontos', () async {
       final (idCliente, id, _) = await agendarEm(180);
       await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
