@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -17,6 +18,7 @@ class ServicosScreen extends StatefulWidget {
 class _ServicosScreenState extends State<ServicosScreen> {
   List<Servico> _servicos = [];
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -25,16 +27,30 @@ class _ServicosScreenState extends State<ServicosScreen> {
   }
 
   Future<void> _carregar() async {
-    final servicos = await DatabaseService.instance.listarServicos();
-    if (!mounted) return;
-    setState(() {
-      _servicos = servicos;
-      _carregando = false;
-    });
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
+    try {
+      final servicos = await DatabaseService.instance.listarServicos();
+      if (!mounted) return;
+      setState(() {
+        _servicos = servicos;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar os serviços');
+      });
+    }
   }
 
   void _agendar(Servico servico) {
-    BookingFlow.servicoSelecionado = servico;
+    BookingFlow.iniciar(servico);
     Navigator.of(context).pushNamed('/barbeiro');
   }
 
@@ -50,6 +66,8 @@ class _ServicosScreenState extends State<ServicosScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
+                : _erro != null
+                ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : _servicos.isEmpty
                 ? const EstadoVazio(
                     icone: '💈',

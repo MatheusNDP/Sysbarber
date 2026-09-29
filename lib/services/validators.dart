@@ -13,7 +13,14 @@ class Validators {
 
   static bool nomeValido(String nome) => nome.trim().length >= 3;
 
-  static bool telefoneValido(String telefone) => telefone.trim().length >= 8;
+  /// Telefone brasileiro com DDD: 10 dígitos (fixo) ou 11 (celular).
+  ///
+  /// Conta só os dígitos — antes a máscara entrava na conta e "(67) 999",
+  /// com 5 dígitos, passava por ter 8 caracteres.
+  static bool telefoneValido(String telefone) {
+    final digitos = telefone.replaceAll(RegExp(r'\D'), '').length;
+    return digitos == 10 || digitos == 11;
+  }
 
   static bool senhaValida(String senha) => senha.length >= 6;
 

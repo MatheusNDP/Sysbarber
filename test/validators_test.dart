@@ -30,14 +30,20 @@ void main() {
   });
 
   group('Validators.telefoneValido', () {
-    test('aceita telefones com 8 ou mais caracteres', () {
-      expect(Validators.telefoneValido('99999999'), isTrue);
+    test('aceita fixo (10 dígitos) e celular (11), com ou sem máscara', () {
+      expect(Validators.telefoneValido('(67) 3333-4444'), isTrue);
       expect(Validators.telefoneValido('(67) 99999-0000'), isTrue);
+      expect(Validators.telefoneValido('67999990000'), isTrue);
     });
 
-    test('rejeita telefones curtos', () {
+    test('rejeita telefones incompletos ou longos demais', () {
       expect(Validators.telefoneValido(''), isFalse);
       expect(Validators.telefoneValido('9999'), isFalse);
+      // Antes passava: 8 caracteres contando a máscara, mas só 5 dígitos.
+      expect(Validators.telefoneValido('(67) 999'), isFalse);
+      // Sem DDD não é um telefone completo.
+      expect(Validators.telefoneValido('99999999'), isFalse);
+      expect(Validators.telefoneValido('679999900001'), isFalse);
     });
   });
 

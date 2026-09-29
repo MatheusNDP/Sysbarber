@@ -123,9 +123,23 @@ double moedaParaDouble(String texto) {
   return int.parse(d) / 100;
 }
 
-/// Cartão: `0000 0000 0000 0000`.
-class CartaoInputFormatter extends _MascaraDigitos {
-  const CartaoInputFormatter() : super('#### #### #### ####');
+/// Cartão: `0000 0000 0000 0000`, até 19 dígitos (o mesmo limite do
+/// validador de Luhn). Amex (34/37) usa o agrupamento `0000 000000 00000`.
+class CartaoInputFormatter extends TextInputFormatter {
+  const CartaoInputFormatter();
+
+  static const _amex = _MascaraDigitos('#### ###### #####');
+  static const _padrao = _MascaraDigitos('#### #### #### #### ###');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue anterior,
+    TextEditingValue novo,
+  ) {
+    final digitos = somenteDigitos(novo.text);
+    final amex = digitos.startsWith('34') || digitos.startsWith('37');
+    return (amex ? _amex : _padrao).formatEditUpdate(anterior, novo);
+  }
 }
 
 /// Validade do cartão: `MM/AA`.

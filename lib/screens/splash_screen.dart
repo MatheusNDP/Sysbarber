@@ -28,12 +28,16 @@ class _SplashScreenState extends State<SplashScreen> {
     setState(() => _restaurandoSessao = true);
     await Future<void>.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+    // O barbeiro volta direto para a própria agenda.
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AuthService.instance.rotaInicial,
+      (_) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final usuario = AuthService.instance.usuarioAtual;
+    final nome = AuthService.instance.nomeLogado;
 
     return Scaffold(
       body: Stack(
@@ -109,7 +113,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Entrando como ${usuario?.nome ?? ''}...',
+                          'Entrando como ${nome ?? ''}...',
                           style: AppTheme.sans(
                             size: 13,
                             color: AppColors.muted,

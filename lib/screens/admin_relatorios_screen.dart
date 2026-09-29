@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -16,9 +17,43 @@ class AdminRelatoriosScreen extends StatefulWidget {
   State<AdminRelatoriosScreen> createState() => _AdminRelatoriosScreenState();
 }
 
+/// Recorte de tempo do relatório.
+enum _Periodo { esteMes, mesPassado, tudo }
+
 class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   RelatorioGeral? _relatorio;
   bool _carregando = true;
+
+  /// O padrão é o mês corrente: é o único recorte em que comparar
+  /// faturamento com a folha mensal faz sentido.
+  _Periodo _periodo = _Periodo.esteMes;
+
+  /// Início e fim (exclusivo) do período escolhido.
+  (DateTime?, DateTime?) get _intervalo {
+    final agora = DateTime.now();
+    return switch (_periodo) {
+      _Periodo.esteMes => (
+        DateTime(agora.year, agora.month),
+        DateTime(agora.year, agora.month + 1),
+      ),
+      _Periodo.mesPassado => (
+        DateTime(agora.year, agora.month - 1),
+        DateTime(agora.year, agora.month),
+      ),
+      _Periodo.tudo => (null, null),
+    };
+  }
+
+  bool get _mensal => _periodo != _Periodo.tudo;
+
+  void _mudarPeriodo(_Periodo p) {
+    if (p == _periodo) return;
+    setState(() {
+      _periodo = p;
+      _carregando = true;
+    });
+    _carregar();
+  }
 
   @override
   void initState() {
@@ -28,7 +63,11 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
 
   Future<void> _carregar() async {
     try {
-      final r = await DatabaseService.instance.gerarRelatorio();
+      final (inicio, fim) = _intervalo;
+      final r = await DatabaseService.instance.gerarRelatorio(
+        inicio: inicio,
+        fim: fim,
+      );
       if (!mounted) return;
       setState(() {
         _relatorio = r;
@@ -37,7 +76,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      mostrarErro(context, 'Erro ao gerar relatório: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao gerar relatório'));
     }
   }
 
@@ -72,6 +111,8 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         vertical: 24,
                       ),
                       children: [
+                        _seletorPeriodo(),
+                        const SizedBox(height: 18),
                         _destaqueFaturamento(r),
                         const SizedBox(height: 22),
                         const SectionLabel('Financeiro'),
@@ -80,26 +121,30 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                           _indicador(
                             'A receber',
                             formatarReal(r.aReceber),
-                            'pagamentos pendentes',
+                            'pendente hoje',
                           ),
                           _indicador(
                             'Ticket médio',
                             formatarReal(r.ticketMedio),
-                            'por pagamento',
+                            'por atendimento pago',
                           ),
                           _indicador(
                             'Folha salarial',
                             formatarReal(r.folhaSalarial),
                             'mensal da equipe',
                           ),
-                          _indicador(
-                            'Resultado',
-                            formatarReal(r.faturamento - r.folhaSalarial),
-                            'faturamento − folha',
-                            cor: r.faturamento - r.folhaSalarial >= 0
-                                ? AppColors.green
-                                : AppColors.red,
-                          ),
+                          // Faturamento de todo o histórico menos UMA folha
+                          // mensal não significa nada: o resultado só
+                          // aparece quando o recorte é de um mês.
+                          if (_mensal)
+                            _indicador(
+                              'Resultado do mês',
+                              formatarReal(r.faturamento - r.folhaSalarial),
+                              'faturamento − folha',
+                              cor: r.faturamento - r.folhaSalarial >= 0
+                                  ? AppColors.green
+                                  : AppColors.red,
+                            ),
                         ]),
                         const SizedBox(height: 26),
                         const SectionLabel('Agendamentos'),
@@ -122,6 +167,12 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                             'Finalizados',
                             '${r.finalizados}',
                             'concluídos',
+                          ),
+                          _indicador(
+                            'Faltas',
+                            '${r.faltas}',
+                            'cliente não compareceu',
+                            cor: AppColors.red,
                           ),
                         ]),
                         const SizedBox(height: 26),
@@ -180,7 +231,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
       ),
       child: Column(
         children: [
-          const SectionLabel('Faturamento confirmado'),
+          const SectionLabel('Faturamento líquido'),
           const SizedBox(height: 10),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -192,7 +243,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Somente pagamentos efetivados',
+            'Pagamentos e multas recebidos, menos estornos',
             style: AppTheme.sans(size: 11, color: AppColors.muted),
           ),
         ],
@@ -200,17 +251,36 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     );
   }
 
-  Widget _grade(List<Widget> filhos) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.35,
-      children: filhos,
+  Widget _seletorPeriodo() {
+    const rotulos = {
+      _Periodo.esteMes: 'Este mês',
+      _Periodo.mesPassado: 'Mês passado',
+      _Periodo.tudo: 'Tudo',
+    };
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final p in _Periodo.values)
+          ChoiceChip(
+            label: Text(rotulos[p]!),
+            selected: _periodo == p,
+            onSelected: (_) => _mudarPeriodo(p),
+            selectedColor: AppColors.gold,
+            backgroundColor: AppColors.card,
+            labelStyle: AppTheme.sans(
+              size: 12,
+              weight: FontWeight.w700,
+              color: _periodo == p ? Colors.black : AppColors.text,
+            ),
+            side: const BorderSide(color: AppColors.border),
+            showCheckmark: false,
+          ),
+      ],
     );
   }
+
+  Widget _grade(List<Widget> filhos) => GradeDuasColunas(filhos: filhos);
 
   Widget _indicador(
     String rotulo,

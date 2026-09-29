@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../services/formatters.dart';
+import '../services/senhas.dart';
 import '../services/validators.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
@@ -41,7 +43,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      mostrarErro(context, 'Erro ao carregar barbeiros: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar barbeiros'));
     }
   }
 
@@ -68,7 +70,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
       await _carregar();
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, 'Erro ao alterar disponibilidade: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao alterar disponibilidade'));
     }
   }
 
@@ -159,7 +161,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
       await _carregar();
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, 'Erro ao excluir: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao excluir'));
     }
   }
 
@@ -386,7 +388,7 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
       final anterior = widget.barbeiro;
       final senhaHash = _senha.text.isEmpty && anterior != null
           ? anterior.senhaHash
-          : DatabaseService.hashSenha(_senha.text);
+          : await Senhas.gerarHashEmSegundoPlano(_senha.text);
 
       final registro = Barbeiro(
         id: anterior?.id,
@@ -399,6 +401,8 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
         email: email,
         senhaHash: senhaHash,
         salario: salario,
+        // O formulário não mexe na disponibilidade: ela é do interruptor.
+        ativo: anterior?.ativo ?? true,
       );
 
       if (_editando) {
@@ -416,7 +420,7 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
-      mostrarErro(context, 'Erro ao salvar: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao salvar'));
     }
   }
 

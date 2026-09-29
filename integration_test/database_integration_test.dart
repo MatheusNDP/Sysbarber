@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sysbarber/models/models.dart';
+import 'package:sysbarber/services/auth_service.dart';
+import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
+import 'package:sysbarber/services/senhas.dart';
 
 /// Testes de integração do [DatabaseService].
 ///
@@ -13,13 +17,20 @@ void main() {
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    // Menos iterações só para a suíte rodar rápido; o formato é o mesmo.
+    Senhas.iteracoes = 1000;
   });
 
   setUp(() async {
     service = DatabaseService.instance;
     final db = await databaseFactory.openDatabase(
       inMemoryDatabasePath,
-      options: OpenDatabaseOptions(version: 1, onCreate: service.criarSchema),
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: service.criarSchema,
+        // Mesma configuração do aparelho: chaves estrangeiras ligadas.
+        onConfigure: DatabaseService.configurar,
+      ),
     );
     service.injetarBancoParaTeste(db);
   });
@@ -70,8 +81,8 @@ void main() {
       expect(admin.admin, isTrue);
       expect(admin.senhaHash, isNot(equals(DatabaseService.senhaAdmin)));
       expect(
-        admin.senhaHash,
-        DatabaseService.hashSenha(DatabaseService.senhaAdmin),
+        Senhas.conferir(DatabaseService.senhaAdmin, admin.senhaHash),
+        isTrue,
       );
     });
 
@@ -258,7 +269,7 @@ void main() {
       expect(b.salario, greaterThan(0));
       // A senha nunca fica em texto puro.
       expect(b.senhaHash, isNot(equals('barbeiro123')));
-      expect(b.senhaHash, DatabaseService.hashSenha('barbeiro123'));
+      expect(Senhas.conferir('barbeiro123', b.senhaHash), isTrue);
     });
 
     test('cadastra, edita e exclui um barbeiro', () async {
@@ -740,7 +751,9 @@ void main() {
         ),
       );
 
-      expect(await service.finalizarAgendamento(id), 1);
+      // Concluído no dia do atendimento (dias antes não é permitido).
+      final noDia = DateTime.now().add(const Duration(days: 1));
+      expect(await service.finalizarAgendamento(id, agora: noDia), 1);
 
       final lista = await service.listarAgendamentosCliente(idCliente);
       expect(lista.first.status, StatusAgendamento.finalizado);
@@ -1125,6 +1138,1429 @@ void main() {
       final excluidas = await service.excluirServico(id);
       expect(excluidas, 1);
       expect((await service.listarServicos()).length, 5);
+    });
+  });
+
+  // =========================================================================
+  // CORREÇÕES DA AUDITORIA
+  // =========================================================================
+
+  /// O saldo de pontos precisa bater com a soma do extrato — qualquer
+  /// atualização perdida quebra essa igualdade.
+  Future<void> expectSaldoConfereComExtrato(int idCliente) async {
+    final saldo = await service.obterPontos(idCliente);
+    final extrato = await service.listarHistoricoPontos(idCliente);
+    final soma = extrato.fold<int>(0, (t, h) => t + h.pontos);
+    expect(saldo, soma, reason: 'saldo $saldo difere do extrato $soma');
+  }
+
+  /// Agendamento de teste para amanhã no horário informado.
+  Future<int> agendarAmanha(
+    int idCliente, {
+    int hora = 9,
+    int minuto = 0,
+    int idBarbeiro = 1,
+    int idServico = 1,
+  }) {
+    final d = DateTime.now().add(const Duration(days: 1));
+    return service.criarAgendamento(
+      Agendamento(
+        idCliente: idCliente,
+        idBarbeiro: idBarbeiro,
+        idServico: idServico,
+        dataHora: DateTime(d.year, d.month, d.day, hora, minuto)
+            .toIso8601String(),
+      ),
+    );
+  }
+
+  group('Correção 1 — transações e pontos atômicos', () {
+    test('créditos simultâneos não se perdem', () async {
+      final idCliente = await criarClienteTeste();
+
+      await Future.wait([
+        for (var i = 0; i < 10; i++)
+          service.adicionarPontos(idCliente, 10, 'Crédito $i'),
+      ]);
+
+      expect(await service.obterPontos(idCliente), 100);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('resgates simultâneos não gastam o mesmo saldo duas vezes', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      final a1 = await agendarAmanha(idCliente, hora: 9);
+      final a2 = await agendarAmanha(idCliente, hora: 14);
+
+      final ids = await Future.wait([
+        service.resgatarPremio(
+          idCliente: idCliente,
+          idAgendamento: a1,
+          nomeServico: 'Corte',
+        ),
+        service.resgatarPremio(
+          idCliente: idCliente,
+          idAgendamento: a2,
+          nomeServico: 'Corte',
+        ),
+      ]);
+
+      // Com saldo para um único prêmio, só um resgate pode passar.
+      expect(ids.whereType<int>().length, 1);
+      expect(await service.obterPontos(idCliente), 0);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('confirmações simultâneas creditam os pontos uma vez', () async {
+      final idCliente = await criarClienteTeste();
+      final a = await agendarAmanha(idCliente);
+      final p = await service.criarPagamento(
+        Pagamento(
+          idAgendamento: a,
+          valor: 35,
+          metodo: 'Pix',
+          status: 'Pendente',
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      final r = await Future.wait([
+        service.confirmarPagamento(p),
+        service.confirmarPagamento(p),
+      ]);
+
+      expect(r.where((ok) => ok).length, 1);
+      expect(await service.obterPontos(idCliente), 35);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+  });
+
+  /// Amanhã no horário informado.
+  DateTime amanhaAs(int hora, [int minuto = 0]) {
+    final d = DateTime.now().add(const Duration(days: 1));
+    return DateTime(d.year, d.month, d.day, hora, minuto);
+  }
+
+  group('Correção 2 — reserva atômica (agendamento + pagamento)', () {
+    test('pagar agora grava os dois registros e credita os pontos', () async {
+      final idCliente = await criarClienteTeste();
+
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // Corte + Barba, R$ 55
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Cartão',
+        cartaoFinal: '1111',
+      );
+
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.confirmado, isTrue);
+      expect(p.valor, 55);
+      expect(p.metodo, 'Cartão');
+      expect(p.cartaoFinal, '1111');
+      expect(r.pontosCreditados, 55);
+      expect(await service.obterPontos(idCliente), 55);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('pagar na barbearia deixa pendente e não pontua', () async {
+      final idCliente = await criarClienteTeste();
+
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.pendente, isTrue);
+      expect(p.metodo, 'A combinar');
+      expect(p.tipo, TipoPagamento.naHora.dbValue);
+      expect(await service.obterPontos(idCliente), 0);
+    });
+
+    test('resgate por pontos debita o saldo e gera pagamento zero', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 520, 'Saldo de teste');
+
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 5,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.resgatarPontos,
+      );
+
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.valor, 0);
+      expect(p.metodo, 'Pontos de fidelidade');
+      expect(r.pontosDebitados, 500);
+      expect(r.saldoPontos, 20);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('saldo insuficiente não deixa agendamento órfão', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 499, 'Saldo de teste');
+
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: amanhaAs(9),
+          modo: ModoReserva.resgatarPontos,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.contarAgendamentos(), 0);
+      expect(await service.obterPontos(idCliente), 499);
+    });
+
+    test('horário ocupado recusa a reserva sem gravar nada', () async {
+      final c1 = await criarClienteTeste();
+      final c2 = await criarClienteTeste(email: 'outro@teste.com');
+      await service.reservar(
+        idCliente: c1,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: amanhaAs(10),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      await expectLater(
+        service.reservar(
+          idCliente: c2,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: amanhaAs(10),
+          modo: ModoReserva.pagarAgora,
+          metodo: 'Pix',
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.contarAgendamentos(), 1);
+      expect(await service.obterPontos(c2), 0);
+    });
+
+    test('barbeiro indisponível não recebe reserva nem oferece horário',
+        () async {
+      final idCliente = await criarClienteTeste();
+      final inativo = (await service.listarBarbeiros()).firstWhere(
+        (b) => !b.ativo,
+      );
+
+      expect(
+        await service.horariosDisponiveis(inativo.id!, amanhaAs(0)),
+        isEmpty,
+      );
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: inativo.id!,
+          idServico: 1,
+          dataHora: amanhaAs(9),
+          modo: ModoReserva.pagarNaBarbearia,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.contarAgendamentos(), 0);
+    });
+
+    test('horário que já passou é recusado', () async {
+      final idCliente = await criarClienteTeste();
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: DateTime.now().subtract(const Duration(hours: 1)),
+          modo: ModoReserva.pagarNaBarbearia,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('o valor cobrado vem do banco, não da tela', () async {
+      final idCliente = await criarClienteTeste();
+      final corte = (await service.listarServicos()).first;
+      // O admin reajusta o preço enquanto o cliente está no fluxo.
+      await service.atualizarServico(corte.copyWith(preco: 40));
+
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: corte.id!,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+
+      expect(r.valor, 40);
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.valor, 40);
+    });
+
+    test('verificarReserva antecipa o impedimento sem gravar', () async {
+      final idCliente = await criarClienteTeste();
+      expect(
+        await service.verificarReserva(idBarbeiro: 1, dataHora: amanhaAs(9)),
+        isNull,
+      );
+      await agendarAmanha(idCliente, hora: 9);
+      expect(
+        await service.verificarReserva(idBarbeiro: 1, dataHora: amanhaAs(9)),
+        isNotNull,
+      );
+      expect(await service.contarAgendamentos(), 1);
+    });
+  });
+
+  group('Correção 3 — pagamentos cancelados e multas', () {
+    test('pagamento cancelado não pode ser recebido', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await service.cancelarAgendamento(r.idAgendamento); // no prazo
+
+      final cancelado = await service.buscarPagamentoDoAgendamento(
+        r.idAgendamento,
+      );
+      expect(cancelado!.cancelado, isTrue);
+
+      // Antes: virava 'Confirmado', creditava 55 pontos e R$ 55 de receita.
+      expect(
+        await service.confirmarPagamento(r.idPagamento, metodo: 'Pix'),
+        isFalse,
+      );
+      expect(await service.obterPontos(idCliente), 0);
+      expect((await service.gerarRelatorio()).faturamento, 0);
+    });
+
+    test('quitar a multa não gera pontos e mantém a identificação', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 3,
+          dataHora: DateTime.now()
+              .add(const Duration(minutes: 30))
+              .toIso8601String(),
+        ),
+      );
+      await service.cancelarAgendamento(id); // fora do prazo: multa 27,50
+
+      final multa = await service.buscarPagamentoDoAgendamento(id);
+      expect(multa!.natureza, NaturezaPagamento.multa);
+      expect(await service.confirmarPagamento(multa.id!, metodo: 'Pix'), isTrue);
+
+      final quitada = await service.buscarPagamentoDoAgendamento(id);
+      expect(quitada!.confirmado, isTrue);
+      expect(quitada.metodo, 'Pix');
+      expect(quitada.natureza, NaturezaPagamento.multa);
+      // Multa é receita, mas não é serviço prestado: não pontua.
+      expect(await service.obterPontos(idCliente), 0);
+      expect((await service.gerarRelatorio()).faturamento, 27.5);
+    });
+
+    test('estorno e resgate ficam identificados pela natureza', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      final pago = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      final gratis = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 2,
+        idServico: 1,
+        dataHora: amanhaAs(14),
+        modo: ModoReserva.resgatarPontos,
+      );
+      await service.cancelarAgendamento(pago.idAgendamento);
+
+      final todos = await service.listarPagamentos();
+      NaturezaPagamento natureza(int idAgendamento, double valor) => todos
+          .firstWhere(
+            (p) => p.idAgendamento == idAgendamento && p.valor == valor,
+          )
+          .natureza;
+
+      expect(natureza(pago.idAgendamento, 35), NaturezaPagamento.servico);
+      expect(natureza(pago.idAgendamento, -35), NaturezaPagamento.estorno);
+      expect(natureza(gratis.idAgendamento, 0), NaturezaPagamento.resgate);
+    });
+  });
+
+  group('Correção 4 — conclusão do atendimento e estados', () {
+    test('não se conclui um atendimento dias antes', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await agendarAmanha(idCliente);
+
+      await expectLater(
+        service.finalizarAgendamento(id),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      final lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.first.status, StatusAgendamento.confirmado);
+    });
+
+    test('conclui depois do horário marcado', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await agendarAmanha(idCliente, hora: 9);
+
+      // Antes a opção sumia da tela exatamente neste momento.
+      final depois = amanhaAs(11);
+      expect(await service.finalizarAgendamento(id, agora: depois), 1);
+    });
+
+    test('atendimento concluído não pode ser cancelado nem estornado',
+        () async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      await service.finalizarAgendamento(r.idAgendamento, agora: amanhaAs(10));
+
+      await expectLater(
+        service.cancelarAgendamento(r.idAgendamento, porBarbeiro: true),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect((await service.gerarRelatorio()).faturamento, 55);
+      expect(await service.obterPontos(idCliente), 55);
+    });
+
+    test('cancelar duas vezes é recusado', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await agendarAmanha(idCliente);
+      await service.cancelarAgendamento(id);
+
+      await expectLater(
+        service.cancelarAgendamento(id),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('falta só é registrada depois do horário e cobra multa', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // R$ 55
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      await expectLater(
+        service.registrarFalta(r.idAgendamento, agora: amanhaAs(8)),
+        throwsA(isA<RegraNegocioException>()),
+      );
+
+      final resultado = await service.registrarFalta(
+        r.idAgendamento,
+        agora: amanhaAs(10),
+      );
+      expect(resultado.multaAPagar, 27.5);
+
+      final lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.first.status, StatusAgendamento.faltou);
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.natureza, NaturezaPagamento.multa);
+      expect(p.pendente, isTrue);
+
+      final rel = await service.gerarRelatorio();
+      expect(rel.faltas, 1);
+      expect(rel.confirmados, 0);
+    });
+  });
+
+  group('Correção 5 — estorno de pontos que já foram gastos', () {
+    test('cancelar o serviço pago depois de usar os pontos deixa saldo '
+        'devedor', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 460, 'Saldo de teste');
+      final pago = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // R$ 55 → 515 pontos
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 2,
+        idServico: 5, // prêmio → sobram 15 pontos
+        dataHora: amanhaAs(14),
+        modo: ModoReserva.resgatarPontos,
+      );
+
+      final r = await service.cancelarAgendamento(pago.idAgendamento);
+
+      // Antes: só 15 pontos eram revertidos e o prêmio saía por 460.
+      expect(r.estorno, 55);
+      expect(r.pontosAjustados, -55);
+      expect(await service.obterPontos(idCliente), -40);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('saldo devedor não libera prêmio', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, -600, 'Estorno de teste');
+
+      expect(await service.premiosDisponiveis(idCliente), 0);
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: amanhaAs(9),
+          modo: ModoReserva.resgatarPontos,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+  });
+
+  group('Correção 6 — duração do serviço e sobreposição', () {
+    test('serviço longo bloqueia os horários que ele ocupa', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 5, // Coloração, 60 min
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      final livres = await service.horariosDisponiveis(1, amanhaAs(0));
+      expect(livres, isNot(contains('09:00')));
+      expect(livres, isNot(contains('09:30'))); // antes: oferecido
+      expect(livres, contains('10:00'));
+    });
+
+    test('serviço longo não é oferecido onde não cabe', () async {
+      final idCliente = await criarClienteTeste();
+      await agendarAmanha(idCliente, hora: 10); // Corte, 30 min
+
+      final livres = await service.horariosDisponiveis(
+        1,
+        amanhaAs(0),
+        duracaoMinutos: 60,
+      );
+      expect(livres, contains('09:00')); // 09:00–10:00 cabe
+      expect(livres, isNot(contains('09:30'))); // 09:30–10:30 invade
+    });
+
+    test('reserva que invade outro atendimento é recusada', () async {
+      final c1 = await criarClienteTeste();
+      final c2 = await criarClienteTeste(email: 'outro@teste.com');
+      await service.reservar(
+        idCliente: c1,
+        idBarbeiro: 1,
+        idServico: 5,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      await expectLater(
+        service.reservar(
+          idCliente: c2,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: amanhaAs(9, 30),
+          modo: ModoReserva.pagarNaBarbearia,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('cliente não marca dois horários ao mesmo tempo', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // 50 min: 09:00–09:50
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 2,
+          idServico: 1,
+          dataHora: amanhaAs(9, 30),
+          modo: ModoReserva.pagarNaBarbearia,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      // Na grade do cliente, o horário também some.
+      final livres = await service.horariosDisponiveis(
+        2,
+        amanhaAs(0),
+        idCliente: idCliente,
+      );
+      expect(livres, isNot(contains('09:30')));
+      expect(livres, contains('10:00'));
+    });
+
+    test('o banco recusa dois agendamentos no mesmo horário', () async {
+      final idCliente = await criarClienteTeste();
+      await agendarAmanha(idCliente, hora: 11);
+
+      await expectLater(
+        agendarAmanha(idCliente, hora: 11),
+        throwsA(isA<DatabaseException>()),
+      );
+      expect(await service.contarAgendamentos(), 1);
+    });
+
+    test('a duração fica registrada no agendamento', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 5,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      // Encurtar o serviço depois não libera o que já foi marcado.
+      final coloracao = (await service.listarServicos()).firstWhere(
+        (s) => s.id == 5,
+      );
+      await service.atualizarServico(coloracao.copyWith(duracaoMinutos: 30));
+
+      final livres = await service.horariosDisponiveis(1, amanhaAs(0));
+      expect(livres, isNot(contains('09:30')));
+      final agenda = await service.listarAgendamentosCliente(idCliente);
+      expect(agenda.first.duracaoMinutos, 60);
+    });
+  });
+
+  group('Correção 7 — editar barbeiro preserva a disponibilidade', () {
+    test('salvar o cadastro de um indisponível não o reativa', () async {
+      final inativo = (await service.listarBarbeiros()).firstWhere(
+        (b) => !b.ativo,
+      );
+
+      // O formulário monta um Barbeiro novo a partir dos campos; antes o
+      // `ativo` padrão (true) ia junto e reativava o profissional.
+      await service.atualizarBarbeiro(
+        Barbeiro(
+          id: inativo.id,
+          nome: inativo.nome,
+          especialidade: 'Coloração, Corte e Barba',
+          avaliacao: inativo.avaliacao,
+          avaliacoes: inativo.avaliacoes,
+          iniciais: inativo.iniciais,
+          telefone: inativo.telefone,
+          email: inativo.email,
+          senhaHash: inativo.senhaHash,
+          salario: 2700,
+        ),
+      );
+
+      final depois = (await service.listarBarbeiros()).firstWhere(
+        (b) => b.id == inativo.id,
+      );
+      expect(depois.especialidade, 'Coloração, Corte e Barba');
+      expect(depois.salario, 2700);
+      expect(depois.ativo, isFalse);
+    });
+
+    test('a disponibilidade muda só pelo interruptor', () async {
+      final inativo = (await service.listarBarbeiros()).firstWhere(
+        (b) => !b.ativo,
+      );
+      await service.definirBarbeiroAtivo(inativo.id!, true);
+      final depois = (await service.listarBarbeiros()).firstWhere(
+        (b) => b.id == inativo.id,
+      );
+      expect(depois.ativo, isTrue);
+    });
+  });
+
+  group('Correção 8 — preço registrado no agendamento', () {
+    test('reajuste do serviço não muda a multa de quem já agendou', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 3, // R$ 55 na hora de agendar
+          dataHora: DateTime.now()
+              .add(const Duration(minutes: 30))
+              .toIso8601String(),
+        ),
+      );
+      final combo = (await service.listarServicos()).firstWhere(
+        (s) => s.id == 3,
+      );
+      await service.atualizarServico(combo.copyWith(preco: 100));
+
+      final r = await service.cancelarAgendamento(id); // fora do prazo
+      expect(r.multa, 27.5); // 50% de 55, não de 100
+    });
+
+    test('a listagem mostra o valor da época do agendamento', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1, // R$ 35
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      final corte = (await service.listarServicos()).first;
+      await service.atualizarServico(corte.copyWith(preco: 50));
+
+      final lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.first.preco, 35);
+      expect(lista.first.valor, 35);
+      final agenda = await service.listarAgendamentosBarbeiro(1);
+      expect(agenda.first.valor, 35);
+    });
+  });
+
+  group('Correção 9 — relatórios', () {
+    test('estorno não distorce ticket médio nem forma de pagamento', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1, // R$ 35
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      final estornado = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // R$ 55, cancelado no prazo
+        dataHora: amanhaAs(14),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      await service.cancelarAgendamento(estornado.idAgendamento);
+
+      final r = await service.gerarRelatorio();
+      expect(r.faturamento, 35);
+      expect(r.ticketMedio, 35); // antes: 11,67
+      final pix = r.porMetodo.firstWhere((m) => m.rotulo == 'Pix');
+      expect(pix.valor, 35); // antes: 90, com o estorno numa linha à parte
+      expect(r.porMetodo.where((m) => m.rotulo.startsWith('Estorno')), isEmpty);
+    });
+
+    test('resgate não entra no ticket nem nas formas de pagamento', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 5,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.resgatarPontos,
+      );
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 2,
+        idServico: 1,
+        dataHora: amanhaAs(14),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Cartão',
+      );
+
+      final r = await service.gerarRelatorio();
+      expect(r.ticketMedio, 35);
+      expect(r.porMetodo.map((m) => m.rotulo), ['Cartão']);
+    });
+
+    test('multa quitada entra pela forma em que foi paga', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 3,
+          dataHora: DateTime.now()
+              .add(const Duration(minutes: 30))
+              .toIso8601String(),
+        ),
+      );
+      await service.cancelarAgendamento(id);
+      final multa = await service.buscarPagamentoDoAgendamento(id);
+      await service.confirmarPagamento(multa!.id!, metodo: 'Dinheiro');
+
+      final r = await service.gerarRelatorio();
+      expect(r.faturamento, 27.5);
+      expect(r.porMetodo.single.rotulo, 'Dinheiro');
+      expect(r.porMetodo.single.valor, 27.5);
+      // Multa não é atendimento: não entra no ticket médio.
+      expect(r.ticketMedio, 0);
+    });
+
+    test('filtra pelo período', () async {
+      final idCliente = await criarClienteTeste();
+      final id = await agendarAmanha(idCliente);
+      final agora = DateTime.now();
+      final inicioMes = DateTime(agora.year, agora.month);
+      final proximoMes = DateTime(agora.year, agora.month + 1);
+      await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: 35,
+          metodo: 'Pix',
+          criadoEm: inicioMes
+              .subtract(const Duration(days: 3))
+              .toIso8601String(),
+        ),
+      );
+
+      final doMes = await service.gerarRelatorio(
+        inicio: inicioMes,
+        fim: proximoMes,
+      );
+      expect(doMes.faturamento, 0);
+
+      final geral = await service.gerarRelatorio();
+      expect(geral.faturamento, 35);
+    });
+  });
+
+  group('Correção 10 — pagamento do agendamento na listagem', () {
+    test('depois do estorno, o pagamento do agendamento segue o original',
+        () async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 3, // R$ 55
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      // Cancelado 30 min antes: retém 27,50 e estorna 27,50.
+      await service.cancelarAgendamento(
+        r.idAgendamento,
+        agora: amanhaAs(8, 30),
+      );
+
+      // Antes devolvia o estorno, e a tela mostrava "Pago via Estorno".
+      final p = await service.buscarPagamentoDoAgendamento(r.idAgendamento);
+      expect(p!.natureza, NaturezaPagamento.servico);
+      expect(p.valor, 55);
+
+      final a = (await service.listarAgendamentosCliente(idCliente)).first;
+      expect(a.pagamento!.metodo, 'Pix');
+      expect(a.pagamento!.confirmado, isTrue);
+      expect(a.valorEstornado, 27.5);
+    });
+
+    test('a listagem já traz o pagamento de cada agendamento', () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await agendarAmanha(idCliente, hora: 14); // sem pagamento
+
+      final lista = await service.listarAgendamentosCliente(idCliente);
+      final comPagamento = lista.firstWhere((a) => a.data.hour == 9);
+      final semPagamento = lista.firstWhere((a) => a.data.hour == 14);
+      expect(comPagamento.pagamento!.pendente, isTrue);
+      expect(semPagamento.pagamento, isNull);
+      expect(semPagamento.valorEstornado, 0);
+
+      final agenda = await service.listarAgendamentosBarbeiro(1);
+      expect(agenda.where((a) => a.pagamento != null).length, 1);
+    });
+
+    test('não aceita um segundo pagamento do mesmo serviço', () async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+
+      await expectLater(
+        service.criarPagamento(
+          Pagamento(
+            idAgendamento: r.idAgendamento,
+            valor: 35,
+            metodo: 'Dinheiro',
+            criadoEm: DateTime.now().toIso8601String(),
+          ),
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      // Resgatar um serviço que já foi pago também não passa — e não debita.
+      await expectLater(
+        service.resgatarPremio(
+          idCliente: idCliente,
+          idAgendamento: r.idAgendamento,
+          nomeServico: 'Corte',
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.obterPontos(idCliente), 535);
+    });
+
+    test('a agenda do barbeiro não carrega a senha dos clientes', () async {
+      final idCliente = await criarClienteTeste();
+      await agendarAmanha(idCliente);
+
+      final agenda = await service.listarAgendamentosBarbeiro(1);
+      expect(agenda.first.cliente!.nome, 'Novo Cliente');
+      expect(agenda.first.cliente!.senhaHash, isEmpty);
+    });
+  });
+
+  group('Correção 11 — senhas com salt individual', () {
+    test('senhas de contas diferentes não compartilham hash', () async {
+      final a = await criarClienteTeste(email: 'a@teste.com', senha: 'igual123');
+      final b = await criarClienteTeste(email: 'b@teste.com', senha: 'igual123');
+      final ca = await service.buscarClientePorId(a);
+      final cb = await service.buscarClientePorId(b);
+      expect(ca!.senhaHash, isNot(equals(cb!.senhaHash)));
+    });
+
+    test('hash antigo entra e é atualizado no primeiro login', () async {
+      final id = await service.cadastrarCliente(
+        Cliente(
+          nome: 'Cliente Antigo',
+          email: 'antigo@teste.com',
+          telefone: '(67) 98888-1234',
+          senhaHash: Senhas.hashLegado('senha123'),
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      expect(await service.autenticar('antigo@teste.com', 'errada'), isNull);
+      expect(await service.autenticar('antigo@teste.com', 'senha123'), isNotNull);
+
+      final depois = await service.buscarClientePorId(id);
+      expect(depois!.senhaHash, startsWith('pbkdf2-sha256\$'));
+      expect(await service.autenticar('antigo@teste.com', 'senha123'), isNotNull);
+    });
+
+    test('o barbeiro com hash antigo também é atualizado', () async {
+      final b = (await service.listarBarbeiros()).first;
+      await service.atualizarBarbeiro(
+        b.copyWith(senhaHash: Senhas.hashLegado('barbeiro123')),
+      );
+
+      expect(
+        await service.autenticarBarbeiro(b.email, 'barbeiro123'),
+        isNotNull,
+      );
+      final depois = await service.buscarBarbeiroPorEmail(b.email);
+      expect(depois!.senhaHash, startsWith('pbkdf2-sha256\$'));
+    });
+  });
+
+  group('Correção 12 — migração de bancos antigos', () {
+    /// Banco exatamente como a versão 2 do app o deixava.
+    Future<Database> bancoV2() => databaseFactory.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: 1,
+        // Um banco em memória separado do que o serviço já tem aberto.
+        singleInstance: false,
+        onCreate: (db, _) async {
+          await db.execute('''
+            CREATE TABLE cliente (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nome TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
+              telefone TEXT NOT NULL, senha_hash TEXT NOT NULL,
+              criado_em TEXT NOT NULL)''');
+          await db.execute('''
+            CREATE TABLE barbeiro (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nome TEXT NOT NULL, especialidade TEXT NOT NULL,
+              avaliacao REAL NOT NULL DEFAULT 0,
+              avaliacoes INTEGER NOT NULL DEFAULT 0,
+              iniciais TEXT NOT NULL,
+              telefone TEXT NOT NULL DEFAULT '',
+              email TEXT NOT NULL DEFAULT '',
+              senha_hash TEXT NOT NULL DEFAULT '',
+              salario REAL NOT NULL DEFAULT 0)''');
+          await db.execute('''
+            CREATE TABLE servico (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nome TEXT NOT NULL, descricao TEXT NOT NULL,
+              preco REAL NOT NULL, duracao_minutos INTEGER NOT NULL,
+              icone TEXT NOT NULL)''');
+          await db.execute('''
+            CREATE TABLE agendamento (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id_cliente INTEGER NOT NULL, id_barbeiro INTEGER NOT NULL,
+              id_servico INTEGER NOT NULL, data_hora TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'confirmado')''');
+          await db.execute('''
+            CREATE TABLE pagamento (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id_agendamento INTEGER NOT NULL, valor REAL NOT NULL,
+              metodo TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'Confirmado',
+              criado_em TEXT NOT NULL,
+              tipo TEXT NOT NULL DEFAULT 'antecipado',
+              cartao_final TEXT)''');
+          await db.execute('''
+            CREATE TABLE fidelidade (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id_cliente INTEGER NOT NULL UNIQUE,
+              pontos INTEGER NOT NULL DEFAULT 0)''');
+          await db.execute('''
+            CREATE TABLE historico_ponto (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id_cliente INTEGER NOT NULL, descricao TEXT NOT NULL,
+              pontos INTEGER NOT NULL, criado_em TEXT NOT NULL)''');
+        },
+      ),
+    );
+
+    Future<int> inserirCliente(Database db, String email) =>
+        db.insert('cliente', {
+          'nome': 'Conta $email',
+          'email': email,
+          'telefone': '(67) 90000-0000',
+          'senha_hash': Senhas.hashLegado('senha123'),
+          'criado_em': '2026-01-01T10:00:00.000',
+        });
+
+    Future<List<Map<String, Object?>>> admins(Database db) =>
+        db.query('cliente', where: 'admin = 1');
+
+    test('cliente comum com o e-mail oficial não é promovido nem quebra a '
+        'migração', () async {
+      final db = await bancoV2();
+      await inserirCliente(db, 'demo@sysbarber.com');
+      final intruso = await inserirCliente(db, DatabaseService.emailAdmin);
+
+      // Antes: o UPDATE violava o UNIQUE do e-mail e o app não abria.
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final lista = await admins(db);
+      expect(lista.length, 1);
+      expect(lista.single['email'], 'demo@sysbarber.com');
+      expect(lista.single['id'], isNot(intruso));
+      await db.close();
+    });
+
+    test('sem conta demo e com o e-mail oficial tomado, cria uma '
+        'administradora própria', () async {
+      final db = await bancoV2();
+      final intruso = await inserirCliente(db, DatabaseService.emailAdmin);
+
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final lista = await admins(db);
+      expect(lista.length, 1);
+      expect(lista.single['id'], isNot(intruso));
+      expect(lista.single['email'], DatabaseService.emailAdminAlternativo);
+      await db.close();
+    });
+
+    test('caminho feliz: a conta demo vira a administradora oficial',
+        () async {
+      final db = await bancoV2();
+      await inserirCliente(db, 'demo@sysbarber.com');
+
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final lista = await admins(db);
+      expect(lista.single['email'], DatabaseService.emailAdmin);
+      await db.close();
+    });
+
+    test('v2 → atual preserva e completa os dados financeiros', () async {
+      final db = await bancoV2();
+      final idCliente = await inserirCliente(db, 'demo@sysbarber.com');
+      await db.insert('barbeiro', {
+        'nome': 'Carlos Eduardo',
+        'especialidade': 'Barba',
+        'iniciais': 'CE',
+      });
+      await db.insert('servico', {
+        'nome': 'Coloração',
+        'descricao': 'Tintura',
+        'preco': 80.0,
+        'duracao_minutos': 60,
+        'icone': '🎨',
+      });
+      final idA = await db.insert('agendamento', {
+        'id_cliente': idCliente,
+        'id_barbeiro': 1,
+        'id_servico': 1,
+        'data_hora': '2026-01-10T09:00:00.000',
+        'status': 'cancelado',
+      });
+      Future<void> pagamento(double valor, String metodo, String status) =>
+          db.insert('pagamento', {
+            'id_agendamento': idA,
+            'valor': valor,
+            'metodo': metodo,
+            'status': status,
+            'criado_em': '2026-01-09T10:00:00.000',
+          });
+      await pagamento(80, 'Cartão', 'Confirmado');
+      await pagamento(-40, 'Estorno (multa retida)', 'Confirmado');
+      await pagamento(40, 'Multa por cancelamento', 'Pendente');
+      await pagamento(0, 'Pontos de fidelidade', 'Cancelado');
+
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final pagamentos = (await db.query('pagamento', orderBy: 'id'))
+          .map(Pagamento.fromMap)
+          .toList();
+      expect(pagamentos.map((p) => p.natureza), [
+        NaturezaPagamento.servico,
+        NaturezaPagamento.estorno,
+        NaturezaPagamento.multa,
+        NaturezaPagamento.resgate,
+      ]);
+      // O estorno antigo passa a sair pela forma do pagamento original.
+      expect(pagamentos[1].metodo, 'Cartão');
+
+      final agendamento = Agendamento.fromMap(
+        (await db.query('agendamento')).single,
+      );
+      expect(agendamento.duracaoMinutos, 60);
+      expect(agendamento.preco, 80);
+
+      final barbeiro = Barbeiro.fromMap((await db.query('barbeiro')).single);
+      expect(barbeiro.ativo, isTrue);
+
+      final indice = await db.query(
+        'sqlite_master',
+        where: 'type = ? AND name = ?',
+        whereArgs: ['index', 'idx_agendamento_horario'],
+      );
+      expect(indice, hasLength(1));
+      await db.close();
+    });
+  });
+
+  group('Correção 13 — sessão do barbeiro e acesso às rotas', () {
+    final auth = AuthService.instance;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+    });
+
+    /// Simula fechar e abrir o app: a memória some, o que foi salvo fica.
+    Future<void> reiniciarApp() async {
+      auth.esquecerSessaoEmMemoria();
+      await auth.carregarSessao();
+    }
+
+    test('a sessão do barbeiro sobrevive ao reinício', () async {
+      final r = await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      expect(r.sucesso, isTrue);
+
+      await reiniciarApp();
+
+      // Antes: o login do barbeiro não era salvo e ele caía na tela inicial.
+      expect(auth.estaLogado, isTrue);
+      expect(auth.ehBarbeiro, isTrue);
+      expect(auth.barbeiroAtual!.nome, 'Rafael Souza');
+      // E não existe mais um "cliente" falso com id nulo.
+      expect(auth.usuarioAtual, isNull);
+      expect(auth.rotaInicial, '/agendamentos');
+    });
+
+    test('a sessão do cliente continua sendo restaurada', () async {
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+
+      await reiniciarApp();
+
+      expect(auth.ehBarbeiro, isFalse);
+      expect(auth.usuarioAtual!.email, 'novo@teste.com');
+      expect(auth.rotaInicial, '/home');
+    });
+
+    test('sessão salva por versões antigas (só o id) é de cliente', () async {
+      final id = await criarClienteTeste();
+      SharedPreferences.setMockInitialValues({AuthService.chaveSessao: id});
+
+      await reiniciarApp();
+
+      expect(auth.usuarioAtual!.id, id);
+      expect(auth.ehBarbeiro, isFalse);
+    });
+
+    test('barbeiro excluído perde a sessão salva', () async {
+      final novo = await service.cadastrarBarbeiro(
+        Barbeiro(
+          nome: 'Pedro Alves',
+          especialidade: 'Degradê',
+          avaliacao: 0,
+          avaliacoes: 0,
+          iniciais: 'PA',
+          email: 'pedro@sysbarber.com',
+          senhaHash: DatabaseService.hashSenha('senha123'),
+          salario: 2000,
+        ),
+      );
+      await auth.login('pedro@sysbarber.com', 'senha123');
+      await service.excluirBarbeiro(novo);
+
+      await reiniciarApp();
+
+      expect(auth.estaLogado, isFalse);
+    });
+
+    test('cada perfil só abre as próprias rotas', () async {
+      // Ninguém logado.
+      expect(auth.podeAcessar('/login'), isTrue);
+      expect(auth.podeAcessar('/home'), isFalse);
+      expect(auth.podeAcessar('/admin'), isFalse);
+
+      // Cliente comum.
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+      expect(auth.podeAcessar('/home'), isTrue);
+      expect(auth.podeAcessar('/pagamento'), isTrue);
+      expect(auth.podeAcessar('/agendamentos'), isTrue);
+      expect(auth.podeAcessar('/admin'), isFalse);
+
+      // Administrador.
+      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+      expect(auth.podeAcessar('/admin'), isTrue);
+
+      // Barbeiro: só a própria agenda.
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      expect(auth.podeAcessar('/agendamentos'), isTrue);
+      expect(auth.podeAcessar('/home'), isFalse);
+      expect(auth.podeAcessar('/admin'), isFalse);
+    });
+  });
+
+  group('Correção 14 — rascunho do agendamento', () {
+    final auth = AuthService.instance;
+
+    Future<void> preencherRascunho() async {
+      BookingFlow.iniciar((await service.listarServicos()).first);
+      BookingFlow.barbeiroSelecionado = (await service.listarBarbeiros()).first;
+      BookingFlow.dataSelecionada = amanhaAs(0);
+      BookingFlow.horaSelecionada = '09:00';
+    }
+
+    void expectRascunhoVazio() {
+      expect(BookingFlow.servicoSelecionado, isNull);
+      expect(BookingFlow.barbeiroSelecionado, isNull);
+      expect(BookingFlow.dataHoraCompleta, isNull);
+    }
+
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('sair da conta descarta o agendamento em andamento', () async {
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+      await preencherRascunho();
+
+      await auth.logout();
+
+      expectRascunhoVazio();
+    });
+
+    test('entrar com outra conta começa sem rascunho', () async {
+      await preencherRascunho();
+
+      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+
+      expectRascunhoVazio();
+    });
+
+    test('escolher um serviço recomeça o fluxo', () async {
+      await preencherRascunho();
+      final outro = (await service.listarServicos()).last;
+
+      BookingFlow.iniciar(outro);
+
+      expect(BookingFlow.servicoSelecionado!.id, outro.id);
+      expect(BookingFlow.barbeiroSelecionado, isNull);
+      expect(BookingFlow.dataHoraCompleta, isNull);
+    });
+  });
+
+  group('Correção 16 — editar perfil e alterar senha', () {
+    final auth = AuthService.instance;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+    });
+
+    test('atualiza nome e telefone sem tocar em e-mail, senha e privilégio',
+        () async {
+      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+      final antes = auth.usuarioAtual!;
+
+      final r = await auth.atualizarPerfil(
+        nome: 'Dono da Barbearia',
+        telefone: '(67) 98765-4321',
+      );
+
+      expect(r.sucesso, isTrue);
+      final depois = await service.buscarClientePorId(antes.id!);
+      expect(depois!.nome, 'Dono da Barbearia');
+      expect(depois.telefone, '(67) 98765-4321');
+      expect(depois.email, antes.email);
+      expect(depois.senhaHash, antes.senhaHash);
+      expect(depois.admin, isTrue);
+      // A sessão em memória também reflete a mudança.
+      expect(auth.usuarioAtual!.nome, 'Dono da Barbearia');
+    });
+
+    test('dados inválidos não são gravados', () async {
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+
+      final r = await auth.atualizarPerfil(nome: 'Jo', telefone: '123');
+
+      expect(r.sucesso, isFalse);
+      expect(auth.usuarioAtual!.nome, 'Novo Cliente');
+    });
+
+    test('alterar a senha exige a senha atual', () async {
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+
+      final errada = await auth.alterarSenha(
+        senhaAtual: 'chute123',
+        novaSenha: 'novaSenha1',
+      );
+      expect(errada.sucesso, isFalse);
+
+      final ok = await auth.alterarSenha(
+        senhaAtual: 'senha123',
+        novaSenha: 'novaSenha1',
+      );
+      expect(ok.sucesso, isTrue);
+
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNull);
+      expect(
+        await service.autenticar('novo@teste.com', 'novaSenha1'),
+        isNotNull,
+      );
+    });
+
+    test('nova senha curta é recusada', () async {
+      await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+
+      final r = await auth.alterarSenha(senhaAtual: 'senha123', novaSenha: '123');
+
+      expect(r.sucesso, isFalse);
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNotNull);
+    });
+  });
+
+  group('Correção 18 — índices, e-mail único e centavos', () {
+    test('as consultas frequentes têm índice', () async {
+      final db = await service.database;
+      final indices = (await db.query(
+        'sqlite_master',
+        columns: ['name'],
+        where: "type = 'index'",
+      )).map((l) => l['name']).toSet();
+
+      expect(
+        indices,
+        containsAll([
+          'idx_agendamento_horario',
+          'idx_agendamento_barbeiro_data',
+          'idx_agendamento_cliente',
+          'idx_pagamento_agendamento',
+          'idx_historico_cliente',
+          'idx_barbeiro_email',
+        ]),
+      );
+    });
+
+    test('o banco recusa dois barbeiros com o mesmo e-mail', () async {
+      await expectLater(
+        service.cadastrarBarbeiro(
+          Barbeiro(
+            nome: 'Outro Rafael',
+            especialidade: 'Corte',
+            avaliacao: 0,
+            avaliacoes: 0,
+            iniciais: 'OR',
+            email: 'Rafael.Souza@sysbarber.com',
+            senhaHash: DatabaseService.hashSenha('senha123'),
+            salario: 2000,
+          ),
+        ),
+        throwsA(isA<DatabaseException>()),
+      );
+    });
+
+    test('multa e estorno ficam em centavos exatos', () async {
+      final idCliente = await criarClienteTeste();
+      final idServico = await service.cadastrarServico(
+        const Servico(
+          nome: 'Pigmentação',
+          descricao: 'Barba',
+          preco: 35.55, // metade: 17,775
+          duracaoMinutos: 30,
+          icone: '🧔',
+        ),
+      );
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: idServico,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+
+      final c = await service.cancelarAgendamento(
+        r.idAgendamento,
+        agora: amanhaAs(8, 30),
+      );
+
+      bool emCentavos(double v) => (v * 100) == (v * 100).roundToDouble();
+      expect(emCentavos(c.multa), isTrue, reason: '${c.multa}');
+      expect(emCentavos(c.estorno), isTrue, reason: '${c.estorno}');
+      expect(c.multa + c.estorno, closeTo(35.55, 1e-9));
+      expect(
+        (await service.gerarRelatorio()).faturamento,
+        closeTo(c.multa, 1e-9),
+      );
     });
   });
 }

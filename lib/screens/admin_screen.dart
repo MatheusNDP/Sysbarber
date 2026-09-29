@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'admin_barbeiros_screen.dart';
@@ -40,7 +41,7 @@ class _AdminScreenState extends State<AdminScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      mostrarErro(context, 'Erro ao carregar estatísticas: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar estatísticas'));
     }
   }
 
@@ -100,15 +101,10 @@ class _AdminScreenState extends State<AdminScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        GridView.count(
-                          crossAxisCount: 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          // 1.5 estourava por ~4px com a fonte serifada.
-                          childAspectRatio: 1.25,
-                          children: [
+                        // Linhas com a altura do conteúdo: a proporção fixa
+                        // do GridView estourava com a fonte do sistema maior.
+                        GradeDuasColunas(
+                          filhos: [
                             _estatistica(
                               '📋',
                               resumo.agendamentosHoje,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -21,6 +23,12 @@ class _HorarioScreenState extends State<HorarioScreen> {
   String? _horaSelecionada;
   List<String> _horarios = [];
   bool _carregando = true;
+  String? _erro;
+
+  /// Número da consulta mais recente. Trocar de dia rápido dispara várias;
+  /// só a última pode preencher a grade, senão os horários de um dia
+  /// apareceriam sob outro.
+  int _consulta = 0;
 
   late final List<DateTime> _dias;
 
@@ -37,24 +45,38 @@ class _HorarioScreenState extends State<HorarioScreen> {
   }
 
   Future<void> _carregarHorarios() async {
+    final consulta = ++_consulta;
     setState(() {
       _carregando = true;
+      _erro = null;
       _horaSelecionada = null;
     });
 
-    final barbeiro = BookingFlow.barbeiroSelecionado;
-    final horarios = barbeiro?.id == null
-        ? DatabaseService.horariosBase
-        : await DatabaseService.instance.horariosDisponiveis(
-            barbeiro!.id!,
-            _dataSelecionada,
-          );
+    try {
+      final barbeiro = BookingFlow.barbeiroSelecionado;
+      final horarios = barbeiro?.id == null
+          ? DatabaseService.horariosBase
+          : await DatabaseService.instance.horariosDisponiveis(
+              barbeiro!.id!,
+              _dataSelecionada,
+              // Só aparece o horário em que o serviço inteiro cabe e que não
+              // conflita com outro atendimento do próprio cliente.
+              duracaoMinutos: BookingFlow.servicoSelecionado?.duracaoMinutos,
+              idCliente: AuthService.instance.usuarioAtual?.id,
+            );
 
-    if (!mounted) return;
-    setState(() {
-      _horarios = horarios;
-      _carregando = false;
-    });
+      if (!mounted || consulta != _consulta) return;
+      setState(() {
+        _horarios = horarios;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted || consulta != _consulta) return;
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar os horários');
+      });
+    }
   }
 
   void _selecionarData(DateTime data) {
@@ -62,10 +84,13 @@ class _HorarioScreenState extends State<HorarioScreen> {
     _carregarHorarios();
   }
 
-  void _confirmar() {
+  Future<void> _confirmar() async {
     BookingFlow.dataSelecionada = _dataSelecionada;
     BookingFlow.horaSelecionada = _horaSelecionada;
-    Navigator.of(context).pushNamed('/confirmacao');
+    await Navigator.of(context).pushNamed('/confirmacao');
+    // Na volta a grade pode ter mudado (o horário foi ocupado no meio do
+    // caminho, por exemplo), então ela é relida.
+    if (mounted) _carregarHorarios();
   }
 
   @override
@@ -93,6 +118,11 @@ class _HorarioScreenState extends State<HorarioScreen> {
                     child: Center(
                       child: CircularProgressIndicator(color: AppColors.gold),
                     ),
+                  )
+                else if (_erro != null)
+                  EstadoErro(
+                    mensagem: _erro!,
+                    onTentarNovamente: _carregarHorarios,
                   )
                 else if (_horarios.isEmpty)
                   Container(
@@ -200,39 +230,47 @@ class _HorarioScreenState extends State<HorarioScreen> {
               dia.day == _dataSelecionada.day &&
               dia.month == _dataSelecionada.month;
 
-          return GestureDetector(
-            onTap: () => _selecionarData(dia),
-            child: Container(
-              width: 62,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selecionado ? AppColors.gold : AppColors.card,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: selecionado ? AppColors.gold : AppColors.border,
+          // Leitor de tela anuncia a data completa ("Terça, 30 de setembro")
+          // como botão, e não "TER 30" solto.
+          return Semantics(
+            button: true,
+            selected: selecionado,
+            label: formatarDataExtenso(dia),
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: () => _selecionarData(dia),
+              child: Container(
+                width: 62,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selecionado ? AppColors.gold : AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selecionado ? AppColors.gold : AppColors.border,
+                  ),
                 ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    abreviacaoDiaSemana(dia),
-                    style: AppTheme.sans(
-                      size: 10,
-                      weight: FontWeight.w700,
-                      color: selecionado ? Colors.black : AppColors.muted,
-                      letterSpacing: 1,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      abreviacaoDiaSemana(dia),
+                      style: AppTheme.sans(
+                        size: 10,
+                        weight: FontWeight.w700,
+                        color: selecionado ? Colors.black : AppColors.muted,
+                        letterSpacing: 1,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${dia.day}',
-                    style: AppTheme.serif(
-                      size: 20,
-                      color: selecionado ? Colors.black : AppColors.text,
+                    const SizedBox(height: 6),
+                    Text(
+                      '${dia.day}',
+                      style: AppTheme.serif(
+                        size: 20,
+                        color: selecionado ? Colors.black : AppColors.text,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -247,23 +285,29 @@ class _HorarioScreenState extends State<HorarioScreen> {
       runSpacing: 10,
       children: _horarios.map((hora) {
         final selecionado = hora == _horaSelecionada;
-        return GestureDetector(
-          onTap: () => setState(() => _horaSelecionada = hora),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: selecionado ? AppColors.gold : AppColors.card,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selecionado ? AppColors.gold : AppColors.border,
+        return Semantics(
+          button: true,
+          selected: selecionado,
+          child: GestureDetector(
+            onTap: () => setState(() => _horaSelecionada = hora),
+            child: Container(
+              // 14 + 14 de respiro deixam o alvo de toque perto dos 48 pt
+              // recomendados.
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: selecionado ? AppColors.gold : AppColors.card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selecionado ? AppColors.gold : AppColors.border,
+                ),
               ),
-            ),
-            child: Text(
-              hora,
-              style: AppTheme.sans(
-                size: 14,
-                weight: FontWeight.w700,
-                color: selecionado ? Colors.black : AppColors.text,
+              child: Text(
+                hora,
+                style: AppTheme.sans(
+                  size: 14,
+                  weight: FontWeight.w700,
+                  color: selecionado ? Colors.black : AppColors.text,
+                ),
               ),
             ),
           ),

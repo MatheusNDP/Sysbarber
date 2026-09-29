@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -44,7 +45,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      mostrarErro(context, 'Erro ao carregar clientes: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar clientes'));
     }
   }
 
@@ -123,7 +124,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, 'Erro ao abrir o cliente: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao abrir o cliente'));
     }
   }
 

@@ -1,11 +1,10 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/models.dart';
+import 'senhas.dart';
+import 'validators.dart';
 
 /// Camada única de acesso ao SQLite (padrão Singleton).
 ///
@@ -22,11 +21,17 @@ class DatabaseService {
   /// cartão mascarado.
   /// v3: cliente ganhou a marca de administrador e a conta demo virou admin.
   /// v4: barbeiro ganhou a marca de disponibilidade para novos agendamentos.
-  static const int versaoBanco = 4;
+  /// v5: pagamento ganhou a natureza do lançamento (serviço, multa, estorno
+  /// ou resgate); agendamento guarda a própria duração e o preço da época, e
+  /// ganhou índice único por barbeiro e horário.
+  static const int versaoBanco = 5;
 
   /// Credenciais da conta administradora criada no seed.
   static const String emailAdmin = 'admin@sysbarber.com';
   static const String senhaAdmin = 'admin1234';
+
+  /// Usado na migração quando um cliente comum já ocupa [emailAdmin].
+  static const String emailAdminAlternativo = 'administrador@sysbarber.com';
 
   /// Pontos necessários para trocar por um serviço gratuito
   /// (regra de negócio 5).
@@ -38,11 +43,19 @@ class DatabaseService {
   /// Percentual do serviço cobrado em cancelamentos fora do prazo.
   static const double percentualMulta = 0.5;
 
-  /// Método registrado quando a barbearia devolve dinheiro ao cliente.
+  /// Método com que estornos eram registrados até a v4. Desde a v5 o estorno
+  /// sai pela mesma forma em que o cliente pagou e é identificado pela
+  /// natureza; a constante ficou para a migração reconhecer os antigos.
   static const String metodoEstorno = 'Estorno';
 
   /// Método registrado na multa por cancelamento em cima da hora.
   static const String metodoMulta = 'Multa por cancelamento';
+
+  /// Método registrado quando o serviço é trocado por pontos.
+  static const String metodoResgate = 'Pontos de fidelidade';
+
+  /// Passo da grade, usado como duração quando nenhuma é informada.
+  static const int intervaloGrade = 30;
 
   /// Grade de horários atendidos pela barbearia.
   static const List<String> horariosBase = [
@@ -74,11 +87,15 @@ class DatabaseService {
       version: versaoBanco,
       onCreate: criarSchema,
       onUpgrade: migrar,
-      onConfigure: (db) async {
-        await db.execute('PRAGMA foreign_keys = ON');
-      },
+      onConfigure: configurar,
     );
     return _db!;
+  }
+
+  /// Configuração aplicada a cada abertura do banco (também usada pelos
+  /// testes, para que rodem com as mesmas garantias do aparelho).
+  static Future<void> configurar(Database db) async {
+    await db.execute('PRAGMA foreign_keys = ON');
   }
 
   /// Injeta um banco already-open (usado pelos testes com banco em memória).
@@ -151,6 +168,8 @@ class DatabaseService {
         id_servico INTEGER NOT NULL,
         data_hora TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'confirmado',
+        duracao_minutos INTEGER NOT NULL DEFAULT 30,
+        preco REAL NOT NULL DEFAULT 0,
         FOREIGN KEY (id_cliente) REFERENCES cliente(id),
         FOREIGN KEY (id_barbeiro) REFERENCES barbeiro(id),
         FOREIGN KEY (id_servico) REFERENCES servico(id)
@@ -167,6 +186,7 @@ class DatabaseService {
         criado_em TEXT NOT NULL,
         tipo TEXT NOT NULL DEFAULT 'antecipado',
         cartao_final TEXT,
+        natureza TEXT NOT NULL DEFAULT 'servico',
         FOREIGN KEY (id_agendamento) REFERENCES agendamento(id)
       )
     ''');
@@ -191,8 +211,51 @@ class DatabaseService {
       )
     ''');
 
+    await _criarIndiceHorario(db);
+    await _criarIndicesDeConsulta(db);
+    await _criarIndiceEmailBarbeiro(db);
+
     await _popularDadosIniciais(db);
   }
+
+  /// Índices das consultas mais frequentes: grade do barbeiro, histórico do
+  /// cliente, pagamento de cada agendamento e extrato de pontos.
+  static Future<void> _criarIndicesDeConsulta(DatabaseExecutor db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_agendamento_barbeiro_data '
+      'ON agendamento (id_barbeiro, data_hora)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_agendamento_cliente '
+      'ON agendamento (id_cliente, data_hora)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_pagamento_agendamento '
+      'ON pagamento (id_agendamento)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_historico_cliente '
+      'ON historico_ponto (id_cliente)',
+    );
+  }
+
+  /// O e-mail de acesso identifica o barbeiro no login, então não pode se
+  /// repetir. (Vazios, de cadastros antigos sem acesso, não contam.)
+  static Future<void> _criarIndiceEmailBarbeiro(DatabaseExecutor db) =>
+      db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_barbeiro_email '
+        "ON barbeiro (email) WHERE email != ''",
+      );
+
+  /// Última barreira contra horário duplicado: o próprio banco recusa dois
+  /// agendamentos ativos do mesmo barbeiro no mesmo horário. (A sobreposição
+  /// por duração é conferida em [reservar], dentro da transação.)
+  static Future<void> _criarIndiceHorario(DatabaseExecutor db) =>
+      db.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_agendamento_horario
+        ON agendamento (id_barbeiro, data_hora)
+        WHERE status != 'cancelado'
+      ''');
 
   /// Evolui um banco já existente sem apagar os dados do usuário.
   Future<void> migrar(Database db, int versaoAntiga, int versaoNova) async {
@@ -238,33 +301,7 @@ class DatabaseService {
       await db.execute(
         'ALTER TABLE cliente ADD COLUMN admin INTEGER NOT NULL DEFAULT 0',
       );
-      // A antiga conta `demo` vira a conta administradora.
-      await db.update(
-        'cliente',
-        {
-          'nome': 'Administrador',
-          'email': emailAdmin,
-          'senha_hash': hashSenha(senhaAdmin),
-          'admin': 1,
-        },
-        where: 'email = ?',
-        whereArgs: ['demo@sysbarber.com'],
-      );
-      // Se o banco já vier de uma instalação sem a conta demo, garante que
-      // exista exatamente um administrador.
-      final admins = await db.query(
-        'cliente',
-        where: 'admin = 1',
-        limit: 1,
-      );
-      if (admins.isEmpty) {
-        await db.update(
-          'cliente',
-          {'admin': 1},
-          where: 'email = ?',
-          whereArgs: [emailAdmin],
-        );
-      }
+      await _definirAdministradora(db);
     }
 
     if (versaoAntiga < 4) {
@@ -273,6 +310,134 @@ class DatabaseService {
         'ALTER TABLE barbeiro ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1',
       );
     }
+
+    if (versaoAntiga < 5) {
+      await db.execute(
+        "ALTER TABLE pagamento ADD COLUMN natureza TEXT NOT NULL "
+        "DEFAULT 'servico'",
+      );
+      // Até aqui a natureza só podia ser deduzida pelo texto do método.
+      await db.rawUpdate(
+        "UPDATE pagamento SET natureza = 'multa' WHERE metodo = ?",
+        [metodoMulta],
+      );
+      await db.rawUpdate(
+        "UPDATE pagamento SET natureza = 'estorno' WHERE metodo LIKE ?",
+        ['$metodoEstorno%'],
+      );
+      await db.rawUpdate(
+        "UPDATE pagamento SET natureza = 'resgate' WHERE metodo = ?",
+        [metodoResgate],
+      );
+      // Estornos antigos passam a sair pela forma do pagamento original.
+      await db.execute('''
+        UPDATE pagamento SET metodo = COALESCE(
+          (SELECT p2.metodo FROM pagamento p2
+           WHERE p2.id_agendamento = pagamento.id_agendamento
+             AND p2.natureza = 'servico'
+           ORDER BY p2.id LIMIT 1),
+          metodo)
+        WHERE natureza = 'estorno'
+      ''');
+
+      await db.execute(
+        'ALTER TABLE agendamento ADD COLUMN duracao_minutos INTEGER '
+        'NOT NULL DEFAULT $intervaloGrade',
+      );
+      await db.execute('''
+        UPDATE agendamento SET duracao_minutos = COALESCE(
+          (SELECT s.duracao_minutos FROM servico s
+           WHERE s.id = agendamento.id_servico),
+          $intervaloGrade)
+      ''');
+
+      // O preço da época não foi guardado; o atual é a melhor aproximação.
+      await db.execute(
+        'ALTER TABLE agendamento ADD COLUMN preco REAL NOT NULL DEFAULT 0',
+      );
+      await db.execute('''
+        UPDATE agendamento SET preco = COALESCE(
+          (SELECT s.preco FROM servico s WHERE s.id = agendamento.id_servico),
+          0)
+      ''');
+
+      // Bancos antigos podem já ter horários duplicados (o bug que o índice
+      // previne). Nesse caso o índice não pode ser criado sem apagar dados;
+      // a checagem transacional de [reservar] continua protegendo.
+      final duplicados = Sqflite.firstIntValue(
+        await db.rawQuery('''
+          SELECT COUNT(*) FROM (
+            SELECT 1 FROM agendamento WHERE status != 'cancelado'
+            GROUP BY id_barbeiro, data_hora HAVING COUNT(*) > 1
+          )
+        '''),
+      );
+      if ((duplicados ?? 0) == 0) await _criarIndiceHorario(db);
+
+      await _criarIndicesDeConsulta(db);
+
+      // Mesma cautela com e-mails de barbeiro repetidos (a migração v2 os
+      // gerava pelo nome, e dois homônimos colidiriam).
+      final emailsRepetidos = Sqflite.firstIntValue(
+        await db.rawQuery('''
+          SELECT COUNT(*) FROM (
+            SELECT 1 FROM barbeiro WHERE email != ''
+            GROUP BY email HAVING COUNT(*) > 1
+          )
+        '''),
+      );
+      if ((emailsRepetidos ?? 0) == 0) await _criarIndiceEmailBarbeiro(db);
+    }
+  }
+
+  /// Garante exatamente uma conta administradora ao chegar na v3.
+  ///
+  /// A antiga conta `demo` vira a administradora. Ela só herda o e-mail
+  /// oficial se ninguém o estiver usando: antes, um cliente que tivesse se
+  /// cadastrado com esse e-mail fazia o UPDATE violar o UNIQUE e o app não
+  /// abria mais — ou, sem a conta demo, era promovido a administrador.
+  /// Cliente comum nunca é promovido; se preciso, nasce uma conta nova.
+  Future<void> _definirAdministradora(DatabaseExecutor db) async {
+    Future<int?> idPorEmail(String email) async {
+      final linhas = await db.query(
+        'cliente',
+        columns: ['id'],
+        where: 'email = ?',
+        whereArgs: [email],
+        limit: 1,
+      );
+      return linhas.isEmpty ? null : linhas.first['id'] as int;
+    }
+
+    final emailLivre = await idPorEmail(emailAdmin) == null;
+    final idDemo = await idPorEmail('demo@sysbarber.com');
+
+    if (idDemo != null) {
+      await db.update(
+        'cliente',
+        {
+          'nome': 'Administrador',
+          if (emailLivre) 'email': emailAdmin,
+          'senha_hash': hashSenha(senhaAdmin),
+          'admin': 1,
+        },
+        where: 'id = ?',
+        whereArgs: [idDemo],
+      );
+      return;
+    }
+
+    final email = emailLivre ? emailAdmin : emailAdminAlternativo;
+    if (await idPorEmail(email) != null) return;
+    final id = await db.insert('cliente', {
+      'nome': 'Administrador',
+      'email': email,
+      'telefone': '(67) 99999-0000',
+      'senha_hash': hashSenha(senhaAdmin),
+      'criado_em': DateTime.now().toIso8601String(),
+      'admin': 1,
+    });
+    await db.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
   }
 
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
@@ -397,11 +562,9 @@ class DatabaseService {
   // SEGURANÇA
   // -------------------------------------------------------------------------
 
-  /// SHA-256 com salt fixo. Senhas nunca são gravadas em texto puro.
-  static String hashSenha(String senha) {
-    final bytes = utf8.encode('sysbarber_salt_$senha');
-    return sha256.convert(bytes).toString();
-  }
+  /// PBKDF2 com salt individual ([Senhas]). Senhas nunca são gravadas em
+  /// texto puro, e a mesma senha gera hashes diferentes em cada conta.
+  static String hashSenha(String senha) => Senhas.gerarHash(senha);
 
   // -------------------------------------------------------------------------
   // CLIENTE
@@ -416,9 +579,12 @@ class DatabaseService {
     final dados = c.toMap()
       ..remove('id')
       ..['email'] = c.email.trim().toLowerCase();
-    final id = await db.insert('cliente', dados);
-    await db.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
-    return id;
+    // Cliente e fidelidade nascem juntos ou não nascem.
+    return db.transaction((txn) async {
+      final id = await txn.insert('cliente', dados);
+      await txn.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
+      return id;
+    });
   }
 
   Future<Cliente?> buscarClientePorEmail(String email) async {
@@ -450,27 +616,73 @@ class DatabaseService {
   }
 
   /// Retorna o cliente quando e-mail e senha conferem, senão `null`.
+  ///
+  /// Um hash no formato antigo é regravado no novo assim que a senha confere
+  /// — é o único momento em que o app conhece a senha para refazer o hash.
   Future<Cliente?> autenticar(String email, String senha) async {
     final cliente = await buscarClientePorEmail(email);
     if (cliente == null) return null;
-    if (cliente.senhaHash != hashSenha(senha)) return null;
-    return cliente;
+    if (!await Senhas.conferirEmSegundoPlano(senha, cliente.senhaHash)) {
+      return null;
+    }
+    if (!Senhas.precisaAtualizar(cliente.senhaHash)) return cliente;
+
+    final novo = await Senhas.gerarHashEmSegundoPlano(senha);
+    final db = await database;
+    await db.update(
+      'cliente',
+      {'senha_hash': novo},
+      where: 'id = ?',
+      whereArgs: [cliente.id],
+    );
+    return cliente.copyWith(senhaHash: novo);
   }
 
-  Future<int> atualizarCliente(Cliente c) async {
+  /// Atualiza só os dados de contato do cliente.
+  ///
+  /// E-mail, senha e marca de administrador ficam de fora de propósito: o
+  /// antigo `atualizarCliente` gravava o objeto inteiro e podia sobrescrever
+  /// o hash da senha ou o privilégio de admin com um valor desatualizado.
+  Future<int> atualizarContatoCliente(
+    int id, {
+    required String nome,
+    required String telefone,
+  }) async {
     final db = await database;
     return db.update(
       'cliente',
-      c.toMap(),
+      {'nome': nome.trim(), 'telefone': telefone.trim()},
       where: 'id = ?',
-      whereArgs: [c.id],
+      whereArgs: [id],
     );
   }
 
-  Future<int> contarClientes() async {
+  /// Troca a senha do cliente, exigindo a senha atual.
+  Future<void> alterarSenhaCliente(
+    int id, {
+    required String senhaAtual,
+    required String novaSenha,
+  }) async {
+    final cliente = await buscarClientePorId(id);
+    if (cliente == null) {
+      throw const RegraNegocioException('Conta não encontrada');
+    }
+    if (!await Senhas.conferirEmSegundoPlano(senhaAtual, cliente.senhaHash)) {
+      throw const RegraNegocioException('Senha atual incorreta');
+    }
+    if (!Validators.senhaValida(novaSenha)) {
+      throw const RegraNegocioException(
+        'A nova senha deve ter no mínimo 6 caracteres',
+      );
+    }
+    final hash = await Senhas.gerarHashEmSegundoPlano(novaSenha);
     final db = await database;
-    final r = await db.rawQuery('SELECT COUNT(*) AS total FROM cliente');
-    return Sqflite.firstIntValue(r) ?? 0;
+    await db.update(
+      'cliente',
+      {'senha_hash': hash},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -508,6 +720,18 @@ class DatabaseService {
     );
   }
 
+  Future<Barbeiro?> buscarBarbeiroPorId(int id) async {
+    final db = await database;
+    final linhas = await db.query(
+      'barbeiro',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (linhas.isEmpty) return null;
+    return Barbeiro.fromMap(linhas.first);
+  }
+
   Future<Barbeiro?> buscarBarbeiroPorEmail(String email) async {
     final db = await database;
     final linhas = await db.query(
@@ -529,13 +753,26 @@ class DatabaseService {
     return existente.id != ignorarId;
   }
 
-  /// Autentica um profissional pelo e-mail e senha de acesso.
+  /// Autentica um profissional pelo e-mail e senha de acesso, atualizando
+  /// o hash antigo como em [autenticar].
   Future<Barbeiro?> autenticarBarbeiro(String email, String senha) async {
     final barbeiro = await buscarBarbeiroPorEmail(email);
     if (barbeiro == null) return null;
     if (barbeiro.senhaHash.isEmpty) return null;
-    if (barbeiro.senhaHash != hashSenha(senha)) return null;
-    return barbeiro;
+    if (!await Senhas.conferirEmSegundoPlano(senha, barbeiro.senhaHash)) {
+      return null;
+    }
+    if (!Senhas.precisaAtualizar(barbeiro.senhaHash)) return barbeiro;
+
+    final novo = await Senhas.gerarHashEmSegundoPlano(senha);
+    final db = await database;
+    await db.update(
+      'barbeiro',
+      {'senha_hash': novo},
+      where: 'id = ?',
+      whereArgs: [barbeiro.id],
+    );
+    return barbeiro.copyWith(senhaHash: novo);
   }
 
   Future<int> cadastrarBarbeiro(Barbeiro b) async {
@@ -546,9 +783,16 @@ class DatabaseService {
     return db.insert('barbeiro', dados);
   }
 
+  /// Atualiza o cadastro do profissional.
+  ///
+  /// A disponibilidade (`ativo`) fica de fora de propósito: ela só muda por
+  /// [definirBarbeiroAtivo]. Antes, salvar o formulário de um barbeiro
+  /// indisponível o reativava sem ninguém pedir.
   Future<int> atualizarBarbeiro(Barbeiro b) async {
     final db = await database;
-    final dados = b.toMap()..['email'] = b.email.trim().toLowerCase();
+    final dados = b.toMap()
+      ..remove('ativo')
+      ..['email'] = b.email.trim().toLowerCase();
     return db.update('barbeiro', dados, where: 'id = ?', whereArgs: [b.id]);
   }
 
@@ -617,13 +861,91 @@ class DatabaseService {
   // AGENDAMENTOS
   // -------------------------------------------------------------------------
 
+  /// Grava um agendamento. Duração e preço não informados são copiados do
+  /// serviço naquele momento.
   Future<int> criarAgendamento(Agendamento a) async {
     final db = await database;
-    return db.insert('agendamento', a.toMap()..remove('id'));
+    final servico = await _buscarServico(db, a.idServico);
+    final dados = a.toMap()..remove('id');
+    dados['duracao_minutos'] ??= servico?.duracaoMinutos ?? intervaloGrade;
+    dados['preco'] ??= servico?.preco ?? 0;
+    return db.insert('agendamento', dados);
   }
 
-  /// Lista os agendamentos do cliente já com barbeiro e serviço carregados
-  /// via INNER JOIN — evita uma consulta extra por item na tela.
+  Future<Servico?> _buscarServico(DatabaseExecutor db, int idServico) async {
+    final linhas = await db.query(
+      'servico',
+      where: 'id = ?',
+      whereArgs: [idServico],
+      limit: 1,
+    );
+    if (linhas.isEmpty) return null;
+    return Servico.fromMap(linhas.first);
+  }
+
+  /// Colunas do pagamento principal e do total estornado, comuns às duas
+  /// listagens: a tela recebe tudo numa consulta só, em vez de buscar o
+  /// pagamento de cada agendamento separadamente.
+  static const String _colunasPagamento = '''
+        (SELECT COALESCE(-SUM(e.valor), 0) FROM pagamento e
+         WHERE e.id_agendamento = a.id AND e.natureza = 'estorno')
+                          AS valor_estornado,
+        p.id              AS p_id,
+        p.valor           AS p_valor,
+        p.metodo          AS p_metodo,
+        p.status          AS p_status,
+        p.criado_em       AS p_criado_em,
+        p.tipo            AS p_tipo,
+        p.cartao_final    AS p_cartao_final,
+        p.natureza        AS p_natureza''';
+
+  /// O pagamento "do" agendamento é o último lançamento que não é estorno —
+  /// o do serviço, o do resgate ou a multa. O estorno aparece à parte, em
+  /// `valor_estornado`.
+  static const String _juncaoPagamento = '''
+      LEFT JOIN pagamento p ON p.id = (
+        SELECT p2.id FROM pagamento p2
+        WHERE p2.id_agendamento = a.id AND p2.natureza != 'estorno'
+        ORDER BY p2.id DESC LIMIT 1
+      )''';
+
+  static Agendamento _agendamentoDaLinha(
+    Map<String, Object?> linha, {
+    Barbeiro? barbeiro,
+    Cliente? cliente,
+  }) {
+    final servico = Servico.fromMap({
+      'id': linha['s_id'],
+      'nome': linha['s_nome'],
+      'descricao': linha['s_descricao'],
+      'preco': linha['s_preco'],
+      'duracao_minutos': linha['s_duracao_minutos'],
+      'icone': linha['s_icone'],
+    });
+    final pagamento = linha['p_id'] == null
+        ? null
+        : Pagamento.fromMap({
+            'id': linha['p_id'],
+            'id_agendamento': linha['id'],
+            'valor': linha['p_valor'],
+            'metodo': linha['p_metodo'],
+            'status': linha['p_status'],
+            'criado_em': linha['p_criado_em'],
+            'tipo': linha['p_tipo'],
+            'cartao_final': linha['p_cartao_final'],
+            'natureza': linha['p_natureza'],
+          });
+    return Agendamento.fromMap(linha).copyWith(
+      barbeiro: barbeiro,
+      cliente: cliente,
+      servico: servico,
+      pagamento: pagamento,
+      valorEstornado: (linha['valor_estornado'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  /// Lista os agendamentos do cliente já com barbeiro, serviço e pagamento
+  /// carregados — evita uma consulta extra por item na tela.
   Future<List<Agendamento>> listarAgendamentosCliente(int idCliente) async {
     final db = await database;
     final linhas = await db.rawQuery(
@@ -635,6 +957,8 @@ class DatabaseService {
         a.id_servico    AS id_servico,
         a.data_hora     AS data_hora,
         a.status        AS status,
+        a.duracao_minutos AS duracao_minutos,
+        a.preco         AS preco,
         b.id            AS b_id,
         b.nome          AS b_nome,
         b.especialidade AS b_especialidade,
@@ -646,44 +970,41 @@ class DatabaseService {
         s.descricao     AS s_descricao,
         s.preco         AS s_preco,
         s.duracao_minutos AS s_duracao_minutos,
-        s.icone         AS s_icone
+        s.icone         AS s_icone,
+        $_colunasPagamento
       FROM agendamento a
       INNER JOIN barbeiro b ON b.id = a.id_barbeiro
       INNER JOIN servico  s ON s.id = a.id_servico
+      $_juncaoPagamento
       WHERE a.id_cliente = ?
       ORDER BY a.data_hora DESC
       ''',
       [idCliente],
     );
 
-    return linhas.map((linha) {
-      final barbeiro = Barbeiro.fromMap({
-        'id': linha['b_id'],
-        'nome': linha['b_nome'],
-        'especialidade': linha['b_especialidade'],
-        'avaliacao': linha['b_avaliacao'],
-        'avaliacoes': linha['b_avaliacoes'],
-        'iniciais': linha['b_iniciais'],
-      });
-      final servico = Servico.fromMap({
-        'id': linha['s_id'],
-        'nome': linha['s_nome'],
-        'descricao': linha['s_descricao'],
-        'preco': linha['s_preco'],
-        'duracao_minutos': linha['s_duracao_minutos'],
-        'icone': linha['s_icone'],
-      });
-      return Agendamento.fromMap(linha).copyWith(
-        barbeiro: barbeiro,
-        servico: servico,
-      );
-    }).toList();
+    return linhas
+        .map(
+          (linha) => _agendamentoDaLinha(
+            linha,
+            barbeiro: Barbeiro.fromMap({
+              'id': linha['b_id'],
+              'nome': linha['b_nome'],
+              'especialidade': linha['b_especialidade'],
+              'avaliacao': linha['b_avaliacao'],
+              'avaliacoes': linha['b_avaliacoes'],
+              'iniciais': linha['b_iniciais'],
+            }),
+          ),
+        )
+        .toList();
   }
 
-  /// Agenda de um profissional, com o cliente e o serviço já carregados.
+  /// Agenda de um profissional, com o cliente, o serviço e o pagamento já
+  /// carregados.
   ///
   /// É o espelho de [listarAgendamentosCliente]: lá o cliente vê quem vai
-  /// atendê-lo; aqui o barbeiro vê quem vai atender.
+  /// atendê-lo; aqui o barbeiro vê quem vai atender. Do cliente vêm só os
+  /// dados de contato — o hash da senha não sai do banco.
   Future<List<Agendamento>> listarAgendamentosBarbeiro(int idBarbeiro) async {
     final db = await database;
     final linhas = await db.rawQuery(
@@ -695,57 +1016,58 @@ class DatabaseService {
         a.id_servico    AS id_servico,
         a.data_hora     AS data_hora,
         a.status        AS status,
+        a.duracao_minutos AS duracao_minutos,
+        a.preco         AS preco,
         c.id            AS c_id,
         c.nome          AS c_nome,
         c.email         AS c_email,
         c.telefone      AS c_telefone,
-        c.senha_hash    AS c_senha_hash,
         c.criado_em     AS c_criado_em,
-        c.admin         AS c_admin,
         s.id            AS s_id,
         s.nome          AS s_nome,
         s.descricao     AS s_descricao,
         s.preco         AS s_preco,
         s.duracao_minutos AS s_duracao_minutos,
-        s.icone         AS s_icone
+        s.icone         AS s_icone,
+        $_colunasPagamento
       FROM agendamento a
       INNER JOIN cliente c ON c.id = a.id_cliente
       INNER JOIN servico s ON s.id = a.id_servico
+      $_juncaoPagamento
       WHERE a.id_barbeiro = ?
       ORDER BY a.data_hora DESC
       ''',
       [idBarbeiro],
     );
 
-    return linhas.map((linha) {
-      final cliente = Cliente.fromMap({
-        'id': linha['c_id'],
-        'nome': linha['c_nome'],
-        'email': linha['c_email'],
-        'telefone': linha['c_telefone'],
-        'senha_hash': linha['c_senha_hash'],
-        'criado_em': linha['c_criado_em'],
-        'admin': linha['c_admin'],
-      });
-      final servico = Servico.fromMap({
-        'id': linha['s_id'],
-        'nome': linha['s_nome'],
-        'descricao': linha['s_descricao'],
-        'preco': linha['s_preco'],
-        'duracao_minutos': linha['s_duracao_minutos'],
-        'icone': linha['s_icone'],
-      });
-      return Agendamento.fromMap(
-        linha,
-      ).copyWith(cliente: cliente, servico: servico);
-    }).toList();
+    return linhas
+        .map(
+          (linha) => _agendamentoDaLinha(
+            linha,
+            cliente: Cliente.fromMap({
+              'id': linha['c_id'],
+              'nome': linha['c_nome'],
+              'email': linha['c_email'],
+              'telefone': linha['c_telefone'],
+              'senha_hash': '',
+              'criado_em': linha['c_criado_em'],
+            }),
+          ),
+        )
+        .toList();
   }
 
   Future<int> atualizarStatusAgendamento(
     int id,
     StatusAgendamento status,
-  ) async {
-    final db = await database;
+  ) async =>
+      _atualizarStatusAgendamento(await database, id, status);
+
+  Future<int> _atualizarStatusAgendamento(
+    DatabaseExecutor db,
+    int id,
+    StatusAgendamento status,
+  ) {
     return db.update(
       'agendamento',
       {'status': status.dbValue},
@@ -762,46 +1084,296 @@ class DatabaseService {
 
   /// Horários da grade que continuam livres para o barbeiro naquela data.
   ///
-  /// Agendamentos cancelados não bloqueiam o horário (regra de negócio 2).
+  /// Um horário só é oferecido se o serviço inteiro ([duracaoMinutos]) cabe
+  /// sem invadir outro atendimento do barbeiro — e, com [idCliente], sem
+  /// conflitar com outro horário do próprio cliente. Agendamentos cancelados
+  /// não bloqueiam nada (regra de negócio 2), e um profissional indisponível
+  /// não oferece horário nenhum.
   Future<List<String>> horariosDisponiveis(
     int idBarbeiro,
-    DateTime data,
-  ) async {
-    final db = await database;
-    final dia = _formatarDia(data);
-    final linhas = await db.query(
-      'agendamento',
-      columns: ['data_hora'],
-      where: 'id_barbeiro = ? AND status != ? AND data_hora LIKE ?',
-      whereArgs: [idBarbeiro, StatusAgendamento.cancelado.dbValue, '$dia%'],
+    DateTime data, {
+    int? duracaoMinutos,
+    int? idCliente,
+  }) async => _horariosLivres(
+    await database,
+    idBarbeiro,
+    data,
+    duracaoMinutos: duracaoMinutos,
+    idCliente: idCliente,
+  );
+
+  Future<List<String>> _horariosLivres(
+    DatabaseExecutor db,
+    int idBarbeiro,
+    DateTime data, {
+    DateTime? agora,
+    int? duracaoMinutos,
+    int? idCliente,
+  }) async {
+    final barbeiro = await db.query(
+      'barbeiro',
+      columns: ['ativo'],
+      where: 'id = ?',
+      whereArgs: [idBarbeiro],
+      limit: 1,
     );
+    if (barbeiro.isEmpty || (barbeiro.first['ativo'] as num).toInt() != 1) {
+      return [];
+    }
 
-    final ocupados = linhas
-        .map((l) => DateTime.parse(l['data_hora'] as String))
-        .map((d) => '${_doisDigitos(d.hour)}:${_doisDigitos(d.minute)}')
-        .toSet();
+    final doBarbeiro = await _ocupacoes(db, data, idBarbeiro: idBarbeiro);
+    final doCliente = idCliente == null
+        ? const <_Intervalo>[]
+        : await _ocupacoes(db, data, idCliente: idCliente);
+    final duracao = Duration(minutes: duracaoMinutos ?? intervaloGrade);
 
-    // No dia corrente, horários que já passaram não podem ser oferecidos —
-    // sem isto o app aceita agendar para as 09:00 quando já são 15:00.
-    final agora = DateTime.now();
-    final ehHoje =
-        data.year == agora.year &&
-        data.month == agora.month &&
-        data.day == agora.day;
+    // Horários que já passaram não podem ser oferecidos — sem isto o app
+    // aceita agendar para as 09:00 quando já são 15:00.
+    final referencia = agora ?? DateTime.now();
 
     return horariosBase.where((h) {
-      if (ocupados.contains(h)) return false;
-      if (!ehHoje) return true;
-      final partes = h.split(':');
-      final horario = DateTime(
-        data.year,
-        data.month,
-        data.day,
-        int.parse(partes[0]),
-        int.parse(partes[1]),
-      );
-      return horario.isAfter(agora);
+      final inicio = _naGrade(data, h);
+      if (!inicio.isAfter(referencia)) return false;
+      final fim = inicio.add(duracao);
+      return !_sobrepoe(inicio, fim, doBarbeiro) &&
+          !_sobrepoe(inicio, fim, doCliente);
     }).toList();
+  }
+
+  /// Intervalos já ocupados no dia, do barbeiro ou do cliente.
+  Future<List<_Intervalo>> _ocupacoes(
+    DatabaseExecutor db,
+    DateTime dia, {
+    int? idBarbeiro,
+    int? idCliente,
+  }) async {
+    final coluna = idBarbeiro != null ? 'id_barbeiro' : 'id_cliente';
+    final linhas = await db.query(
+      'agendamento',
+      columns: ['data_hora', 'duracao_minutos'],
+      where: '$coluna = ? AND status != ? AND data_hora LIKE ?',
+      whereArgs: [
+        idBarbeiro ?? idCliente,
+        StatusAgendamento.cancelado.dbValue,
+        '${_formatarDia(dia)}%',
+      ],
+    );
+    return linhas.map((l) {
+      final inicio = DateTime.parse(l['data_hora'] as String);
+      final minutos =
+          (l['duracao_minutos'] as num?)?.toInt() ?? intervaloGrade;
+      return (inicio: inicio, fim: inicio.add(Duration(minutes: minutos)));
+    }).toList();
+  }
+
+  /// O intervalo `[inicio, fim)` cruza algum dos ocupados?
+  static bool _sobrepoe(
+    DateTime inicio,
+    DateTime fim,
+    List<_Intervalo> ocupados,
+  ) => ocupados.any((o) => inicio.isBefore(o.fim) && o.inicio.isBefore(fim));
+
+  static DateTime _naGrade(DateTime dia, String hora) {
+    final partes = hora.split(':');
+    return DateTime(
+      dia.year,
+      dia.month,
+      dia.day,
+      int.parse(partes[0]),
+      int.parse(partes[1]),
+    );
+  }
+
+  /// Confere, sem gravar nada, se o horário ainda pode ser reservado.
+  ///
+  /// Devolve a mensagem do impedimento ou `null` quando está tudo certo. A
+  /// tela usa isto para avisar cedo; [reservar] repete a checagem dentro da
+  /// transação, que é quem de fato garante a regra.
+  Future<String?> verificarReserva({
+    required int idBarbeiro,
+    required DateTime dataHora,
+    int? idServico,
+    int? idCliente,
+    DateTime? agora,
+  }) async {
+    final db = await database;
+    return _impedimentoReserva(
+      db,
+      idBarbeiro: idBarbeiro,
+      dataHora: dataHora,
+      duracaoMinutos: idServico == null
+          ? null
+          : (await _buscarServico(db, idServico))?.duracaoMinutos,
+      idCliente: idCliente,
+      agora: agora,
+    );
+  }
+
+  Future<String?> _impedimentoReserva(
+    DatabaseExecutor db, {
+    required int idBarbeiro,
+    required DateTime dataHora,
+    int? duracaoMinutos,
+    int? idCliente,
+    DateTime? agora,
+  }) async {
+    final barbeiro = await db.query(
+      'barbeiro',
+      columns: ['nome', 'ativo'],
+      where: 'id = ?',
+      whereArgs: [idBarbeiro],
+      limit: 1,
+    );
+    if (barbeiro.isEmpty) return 'Profissional não encontrado';
+    if ((barbeiro.first['ativo'] as num).toInt() != 1) {
+      return '${barbeiro.first['nome']} não está mais disponível para '
+          'agendamentos';
+    }
+
+    final referencia = agora ?? DateTime.now();
+    if (!dataHora.isAfter(referencia)) return 'Este horário já passou';
+
+    final hora =
+        '${_doisDigitos(dataHora.hour)}:${_doisDigitos(dataHora.minute)}';
+    if (!horariosBase.contains(hora)) {
+      return 'O horário $hora não faz parte da agenda';
+    }
+
+    final fim = dataHora.add(
+      Duration(minutes: duracaoMinutos ?? intervaloGrade),
+    );
+    final doBarbeiro = await _ocupacoes(db, dataHora, idBarbeiro: idBarbeiro);
+    if (_sobrepoe(dataHora, fim, doBarbeiro)) {
+      return 'O horário $hora não está mais livre';
+    }
+    if (idCliente != null) {
+      final doCliente = await _ocupacoes(db, dataHora, idCliente: idCliente);
+      if (_sobrepoe(dataHora, fim, doCliente)) {
+        return 'Você já tem outro atendimento nesse horário';
+      }
+    }
+    return null;
+  }
+
+  /// Fecha o agendamento **junto** com o pagamento, numa única transação.
+  ///
+  /// Antes o agendamento era gravado na tela de confirmação e o pagamento só
+  /// depois: quem voltava ou fechava o app deixava um horário ocupado sem
+  /// pagamento. Agora ou os dois registros nascem, ou nenhum nasce.
+  ///
+  /// O preço vem do banco (e não da tela), a disponibilidade é conferida de
+  /// novo aqui dentro e, no resgate, o saldo também. Qualquer impedimento
+  /// lança [RegraNegocioException] sem deixar rastro no banco.
+  Future<ResultadoReserva> reservar({
+    required int idCliente,
+    required int idBarbeiro,
+    required int idServico,
+    required DateTime dataHora,
+    required ModoReserva modo,
+    String? metodo,
+    String? cartaoFinal,
+    DateTime? agora,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final linhas = await txn.query(
+        'servico',
+        where: 'id = ?',
+        whereArgs: [idServico],
+        limit: 1,
+      );
+      if (linhas.isEmpty) {
+        throw const RegraNegocioException('Serviço não encontrado');
+      }
+      final servico = Servico.fromMap(linhas.first);
+
+      final impedimento = await _impedimentoReserva(
+        txn,
+        idBarbeiro: idBarbeiro,
+        dataHora: dataHora,
+        duracaoMinutos: servico.duracaoMinutos,
+        idCliente: idCliente,
+        agora: agora,
+      );
+      if (impedimento != null) throw RegraNegocioException(impedimento);
+
+      if (modo == ModoReserva.resgatarPontos &&
+          await _obterPontos(txn, idCliente) < pontosParaPremio) {
+        throw const RegraNegocioException(
+          'Saldo de pontos insuficiente para o resgate',
+        );
+      }
+
+      final idAgendamento = await txn.insert(
+        'agendamento',
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: idBarbeiro,
+          idServico: idServico,
+          dataHora: dataHora.toIso8601String(),
+          duracaoMinutos: servico.duracaoMinutos,
+          preco: servico.preco,
+        ).toMap()
+          ..remove('id'),
+      );
+
+      final criadoEm = DateTime.now().toIso8601String();
+      late final int idPagamento;
+      var creditados = 0;
+      var debitados = 0;
+
+      switch (modo) {
+        case ModoReserva.resgatarPontos:
+          idPagamento = await _registrarResgate(
+            txn,
+            idCliente: idCliente,
+            idAgendamento: idAgendamento,
+            nomeServico: servico.nome,
+          );
+          debitados = pontosParaPremio;
+        case ModoReserva.pagarAgora:
+          idPagamento = await _criarPagamento(
+            txn,
+            Pagamento(
+              idAgendamento: idAgendamento,
+              valor: servico.preco,
+              metodo: metodo ?? MetodoPagamento.pix.label,
+              status: Pagamento.statusConfirmado,
+              criadoEm: criadoEm,
+              tipo: TipoPagamento.antecipado.dbValue,
+              cartaoFinal: cartaoFinal,
+            ),
+          );
+          creditados = servico.preco.round();
+          await _movimentarPontos(
+            txn,
+            idCliente,
+            creditados,
+            'Pagamento — ${servico.nome}',
+          );
+        case ModoReserva.pagarNaBarbearia:
+          idPagamento = await _criarPagamento(
+            txn,
+            Pagamento(
+              idAgendamento: idAgendamento,
+              valor: servico.preco,
+              metodo: 'A combinar',
+              status: Pagamento.statusPendente,
+              criadoEm: criadoEm,
+              tipo: TipoPagamento.naHora.dbValue,
+            ),
+          );
+      }
+
+      return ResultadoReserva(
+        idAgendamento: idAgendamento,
+        idPagamento: idPagamento,
+        valor: modo == ModoReserva.resgatarPontos ? 0 : servico.preco,
+        pontosCreditados: creditados,
+        pontosDebitados: debitados,
+        saldoPontos: await _obterPontos(txn, idCliente),
+      );
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -810,15 +1382,45 @@ class DatabaseService {
 
   Future<int> criarPagamento(Pagamento p) async {
     final db = await database;
+    return db.transaction((txn) => _criarPagamento(txn, p));
+  }
+
+  /// Grava um lançamento. Um agendamento tem no máximo um pagamento de
+  /// serviço (ou resgate) valendo: um segundo seria cobrança em dobro.
+  Future<int> _criarPagamento(DatabaseExecutor db, Pagamento p) async {
+    if (p.natureza == NaturezaPagamento.servico ||
+        p.natureza == NaturezaPagamento.resgate) {
+      final existente = await db.query(
+        'pagamento',
+        columns: ['id'],
+        where:
+            "id_agendamento = ? AND natureza IN ('servico', 'resgate') "
+            'AND status != ?',
+        whereArgs: [p.idAgendamento, Pagamento.statusCancelado],
+        limit: 1,
+      );
+      if (existente.isNotEmpty) {
+        throw const RegraNegocioException(
+          'Este agendamento já tem um pagamento registrado',
+        );
+      }
+    }
     return db.insert('pagamento', p.toMap()..remove('id'));
   }
 
-  Future<Pagamento?> buscarPagamentoDoAgendamento(int idAgendamento) async {
-    final db = await database;
+  Future<Pagamento?> buscarPagamentoDoAgendamento(int idAgendamento) async =>
+      _buscarPagamentoDoAgendamento(await database, idAgendamento);
+
+  /// O pagamento do agendamento: serviço, resgate ou multa — nunca o
+  /// estorno, que é um lançamento complementar.
+  Future<Pagamento?> _buscarPagamentoDoAgendamento(
+    DatabaseExecutor db,
+    int idAgendamento,
+  ) async {
     final linhas = await db.query(
       'pagamento',
-      where: 'id_agendamento = ?',
-      whereArgs: [idAgendamento],
+      where: 'id_agendamento = ? AND natureza != ?',
+      whereArgs: [idAgendamento, NaturezaPagamento.estorno.dbValue],
       orderBy: 'id DESC',
       limit: 1,
     );
@@ -832,12 +1434,6 @@ class DatabaseService {
     return linhas.map(Pagamento.fromMap).toList();
   }
 
-  /// Efetiva um pagamento pendente e só então credita os pontos.
-  ///
-  /// Regra de negócio 4: fidelidade acompanha dinheiro que entrou. Um
-  /// pagamento marcado para "pagar na barbearia" não pontua enquanto não for
-  /// quitado. A operação é idempotente — confirmar duas vezes não duplica os
-  /// pontos.
   /// O cancelamento ainda está dentro do prazo sem multa?
   static bool dentroDoPrazo(DateTime dataHora, {DateTime? agora}) =>
       dataHora.difference(agora ?? DateTime.now()) >= prazoCancelamento;
@@ -858,17 +1454,84 @@ class DatabaseService {
   /// foi prestado; um serviço obtido por resgate devolve os pontos gastos.
   /// [porBarbeiro] isenta a multa: quando a falta é da barbearia, não faz
   /// sentido penalizar o cliente, que recebe o valor integral de volta.
+  ///
+  /// Tudo acontece numa única transação: ou o cancelamento inteiro (status,
+  /// estorno, multa e pontos) é gravado, ou nada é.
+  ///
+  /// Só um agendamento em aberto pode ser cancelado: cancelar um atendimento
+  /// já concluído estornaria um serviço prestado.
   Future<ResultadoCancelamento> cancelarAgendamento(
     int idAgendamento, {
     DateTime? agora,
     bool porBarbeiro = false,
   }) async {
     final db = await database;
+    return db.transaction(
+      (txn) => _encerrarSemAtendimento(
+        txn,
+        idAgendamento,
+        novoStatus: StatusAgendamento.cancelado,
+        agora: agora,
+        porBarbeiro: porBarbeiro,
+      ),
+    );
+  }
 
-    final linhas = await db.rawQuery(
+  /// Registra que o cliente não compareceu.
+  ///
+  /// Só é aceito depois do horário marcado e segue a política de
+  /// cancelamento fora do prazo: a multa é cobrada (ou retida, se já pagou) e
+  /// os pontos do serviço não prestado são revertidos.
+  Future<ResultadoCancelamento> registrarFalta(
+    int idAgendamento, {
+    DateTime? agora,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final a = await _buscarAgendamento(txn, idAgendamento);
+      if (a == null) {
+        throw const RegraNegocioException('Agendamento não encontrado');
+      }
+      if (!a.podeRegistrarFalta(agora ?? DateTime.now())) {
+        throw RegraNegocioException(
+          a.emAberto
+              ? 'A falta só pode ser registrada depois do horário marcado'
+              : 'Este atendimento já foi encerrado',
+        );
+      }
+      return _encerrarSemAtendimento(
+        txn,
+        idAgendamento,
+        novoStatus: StatusAgendamento.faltou,
+        agora: agora,
+      );
+    });
+  }
+
+  Future<Agendamento?> _buscarAgendamento(DatabaseExecutor db, int id) async {
+    final linhas = await db.query(
+      'agendamento',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (linhas.isEmpty) return null;
+    return Agendamento.fromMap(linhas.first);
+  }
+
+  /// Encerra um atendimento que não aconteceu (cancelamento ou falta) e faz
+  /// o acerto financeiro descrito em [cancelarAgendamento].
+  Future<ResultadoCancelamento> _encerrarSemAtendimento(
+    DatabaseExecutor txn,
+    int idAgendamento, {
+    required StatusAgendamento novoStatus,
+    DateTime? agora,
+    bool porBarbeiro = false,
+  }) async {
+    final linhas = await txn.rawQuery(
       '''
       SELECT a.id_cliente AS id_cliente, a.data_hora AS data_hora,
-             s.preco AS preco, s.nome AS nome
+             a.status AS status, a.preco AS preco, s.nome AS nome
       FROM agendamento a
       INNER JOIN servico s ON s.id = a.id_servico
       WHERE a.id = ?
@@ -877,28 +1540,44 @@ class DatabaseService {
     );
     if (linhas.isEmpty) return const ResultadoCancelamento(comMulta: false);
 
+    final status = StatusAgendamentoX.fromDb(
+      linhas.first['status'] as String,
+    );
+    if (status != StatusAgendamento.confirmado) {
+      throw const RegraNegocioException(
+        'Este agendamento já foi encerrado e não pode ser cancelado',
+      );
+    }
+    final motivo =
+        novoStatus == StatusAgendamento.faltou ? 'falta' : 'cancelamento';
+
     final idCliente = (linhas.first['id_cliente'] as num).toInt();
     final dataHora = DateTime.parse(linhas.first['data_hora'] as String);
     final preco = (linhas.first['preco'] as num).toDouble();
     final nomeServico = linhas.first['nome'] as String;
 
     final noPrazo = porBarbeiro || dentroDoPrazo(dataHora, agora: agora);
-    final multa = noPrazo ? 0.0 : preco * percentualMulta;
+    final multa = noPrazo ? 0.0 : _emCentavos(preco * percentualMulta);
 
-    await atualizarStatusAgendamento(idAgendamento, StatusAgendamento.cancelado);
+    await _atualizarStatusAgendamento(txn, idAgendamento, novoStatus);
 
-    final pagamento = await buscarPagamentoDoAgendamento(idAgendamento);
+    final pagamento = await _buscarPagamentoDoAgendamento(
+      txn,
+      idAgendamento,
+    );
     if (pagamento == null) {
       // Sem pagamento registrado, a multa nasce como pendência.
       if (multa > 0) {
-        await criarPagamento(
+        await _criarPagamento(
+          txn,
           Pagamento(
             idAgendamento: idAgendamento,
             valor: multa,
             metodo: metodoMulta,
-            status: 'Pendente',
+            status: Pagamento.statusPendente,
             criadoEm: DateTime.now().toIso8601String(),
             tipo: TipoPagamento.naHora.dbValue,
+            natureza: NaturezaPagamento.multa,
           ),
         );
       }
@@ -910,17 +1589,18 @@ class DatabaseService {
     }
 
     // Serviço obtido com pontos: devolve o que foi gasto no resgate.
-    if (pagamento.metodo == 'Pontos de fidelidade') {
-      await db.update(
+    if (pagamento.natureza == NaturezaPagamento.resgate) {
+      await txn.update(
         'pagamento',
-        {'status': 'Cancelado'},
+        {'status': Pagamento.statusCancelado},
         where: 'id = ?',
         whereArgs: [pagamento.id],
       );
-      await adicionarPontos(
+      await _movimentarPontos(
+        txn,
         idCliente,
         pontosParaPremio,
-        'Devolução por cancelamento — $nomeServico',
+        'Devolução por $motivo — $nomeServico',
       );
       return const ResultadoCancelamento(
         comMulta: false,
@@ -930,16 +1610,21 @@ class DatabaseService {
 
     if (pagamento.pendente) {
       if (multa > 0) {
-        await db.update(
+        // O que era cobrança do serviço passa a ser cobrança da multa.
+        await txn.update(
           'pagamento',
-          {'valor': multa, 'metodo': metodoMulta},
+          {
+            'valor': multa,
+            'metodo': metodoMulta,
+            'natureza': NaturezaPagamento.multa.dbValue,
+          },
           where: 'id = ?',
           whereArgs: [pagamento.id],
         );
       } else {
-        await db.update(
+        await txn.update(
           'pagamento',
-          {'status': 'Cancelado'},
+          {'status': Pagamento.statusCancelado},
           where: 'id = ?',
           whereArgs: [pagamento.id],
         );
@@ -952,29 +1637,35 @@ class DatabaseService {
     }
 
     // Pagamento já confirmado: devolve o que não for retido como multa.
-    final estorno = pagamento.valor - multa;
+    final estorno = _emCentavos(pagamento.valor - multa);
     if (estorno > 0) {
-      await criarPagamento(
+      await _criarPagamento(
+        txn,
         Pagamento(
           idAgendamento: idAgendamento,
           valor: -estorno,
-          metodo: multa > 0 ? '$metodoEstorno (multa retida)' : metodoEstorno,
-          status: 'Confirmado',
+          // Devolve pela mesma forma em que o cliente pagou: assim o
+          // relatório por forma de pagamento mostra o valor líquido.
+          metodo: pagamento.metodo,
+          status: Pagamento.statusConfirmado,
           criadoEm: DateTime.now().toIso8601String(),
           tipo: pagamento.tipo,
+          natureza: NaturezaPagamento.estorno,
         ),
       );
     }
 
-    // O serviço não foi prestado, então os pontos dele não se sustentam.
-    final creditados = pagamento.valor.round();
-    final saldo = await obterPontos(idCliente);
-    final aReverter = creditados > saldo ? saldo : creditados;
+    // O serviço não foi prestado, então os pontos dele não se sustentam — e
+    // são revertidos por inteiro, mesmo que o saldo fique negativo. Limitar
+    // ao saldo abria uma brecha: pagar, usar os pontos num prêmio e cancelar
+    // o serviço pago devolvia o dinheiro e deixava o prêmio de graça.
+    final aReverter = pagamento.valor.round();
     if (aReverter > 0) {
-      await adicionarPontos(
+      await _movimentarPontos(
+        txn,
         idCliente,
         -aReverter,
-        'Estorno por cancelamento — $nomeServico',
+        'Estorno por $motivo — $nomeServico',
       );
     }
 
@@ -989,64 +1680,100 @@ class DatabaseService {
   /// Marca o atendimento como concluído.
   ///
   /// Sem isto o status `finalizado` nunca seria atribuído e o indicador de
-  /// atendimentos concluídos dos relatórios ficaria sempre em zero.
-  Future<int> finalizarAgendamento(int id) =>
-      atualizarStatusAgendamento(id, StatusAgendamento.finalizado);
+  /// atendimentos concluídos dos relatórios ficaria sempre em zero. Só vale
+  /// para atendimento em aberto e a partir do dia marcado
+  /// ([Agendamento.podeFinalizar]).
+  Future<int> finalizarAgendamento(int id, {DateTime? agora}) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final a = await _buscarAgendamento(txn, id);
+      if (a == null) {
+        throw const RegraNegocioException('Agendamento não encontrado');
+      }
+      if (!a.emAberto) {
+        throw const RegraNegocioException('Este atendimento já foi encerrado');
+      }
+      if (!a.podeFinalizar(agora ?? DateTime.now())) {
+        throw const RegraNegocioException(
+          'O atendimento só pode ser concluído a partir do dia marcado',
+        );
+      }
+      return _atualizarStatusAgendamento(
+        txn,
+        id,
+        StatusAgendamento.finalizado,
+      );
+    });
+  }
 
+  /// Efetiva um pagamento **pendente** e só então credita os pontos.
+  ///
+  /// Regra de negócio 4: fidelidade acompanha dinheiro que entrou. Um
+  /// pagamento marcado para "pagar na barbearia" não pontua enquanto não for
+  /// quitado. A operação é idempotente — confirmar duas vezes não duplica os
+  /// pontos — e atômica: a leitura do status e o crédito acontecem na mesma
+  /// transação, então duas confirmações simultâneas não passam juntas.
+  ///
+  /// Pagamentos cancelados não podem ser recebidos, e a quitação de uma
+  /// multa é receita mas não gera pontos: pontos premiam serviço prestado.
   Future<bool> confirmarPagamento(int idPagamento, {String? metodo}) async {
     final db = await database;
-    final linhas = await db.query(
-      'pagamento',
-      where: 'id = ?',
-      whereArgs: [idPagamento],
-      limit: 1,
-    );
-    if (linhas.isEmpty) return false;
+    return db.transaction((txn) async {
+      final linhas = await txn.query(
+        'pagamento',
+        where: 'id = ?',
+        whereArgs: [idPagamento],
+        limit: 1,
+      );
+      if (linhas.isEmpty) return false;
 
-    final pagamento = Pagamento.fromMap(linhas.first);
-    if (pagamento.confirmado) return false;
+      final pagamento = Pagamento.fromMap(linhas.first);
+      if (!pagamento.pendente) return false;
 
-    final agendamentos = await db.query(
-      'agendamento',
-      columns: ['id_cliente'],
-      where: 'id = ?',
-      whereArgs: [pagamento.idAgendamento],
-      limit: 1,
-    );
-    if (agendamentos.isEmpty) return false;
-    final idCliente = (agendamentos.first['id_cliente'] as num).toInt();
+      final agendamentos = await txn.query(
+        'agendamento',
+        columns: ['id_cliente'],
+        where: 'id = ?',
+        whereArgs: [pagamento.idAgendamento],
+        limit: 1,
+      );
+      if (agendamentos.isEmpty) return false;
+      final idCliente = (agendamentos.first['id_cliente'] as num).toInt();
 
-    // O método só é conhecido no balcão: até aqui o registro fica como
-    // 'A combinar', o que sujaria o relatório por forma de pagamento.
-    await db.update(
-      'pagamento',
-      {
-        'status': 'Confirmado',
-        if (metodo != null) 'metodo': metodo,
-      },
-      where: 'id = ?',
-      whereArgs: [idPagamento],
-    );
+      // O método só é conhecido no balcão: até aqui o registro fica como
+      // 'A combinar', o que sujaria o relatório por forma de pagamento.
+      await txn.update(
+        'pagamento',
+        {
+          'status': Pagamento.statusConfirmado,
+          if (metodo != null) 'metodo': metodo,
+        },
+        where: 'id = ?',
+        whereArgs: [idPagamento],
+      );
 
-    final servico = await db.rawQuery(
-      '''
-      SELECT s.nome AS nome
-      FROM agendamento a
-      INNER JOIN servico s ON s.id = a.id_servico
-      WHERE a.id = ?
-      ''',
-      [pagamento.idAgendamento],
-    );
-    final nomeServico = servico.isEmpty
-        ? 'Serviço'
-        : servico.first['nome'] as String;
+      if (pagamento.natureza != NaturezaPagamento.servico) return true;
 
-    await adicionarPontos(
-      idCliente,
-      pagamento.valor.round(),
-      'Pagamento — $nomeServico',
-    );
-    return true;
+      final servico = await txn.rawQuery(
+        '''
+        SELECT s.nome AS nome
+        FROM agendamento a
+        INNER JOIN servico s ON s.id = a.id_servico
+        WHERE a.id = ?
+        ''',
+        [pagamento.idAgendamento],
+      );
+      final nomeServico =
+          servico.isEmpty ? 'Serviço' : servico.first['nome'] as String;
+
+      await _movimentarPontos(
+        txn,
+        idCliente,
+        pagamento.valor.round(),
+        'Pagamento — $nomeServico',
+      );
+      return true;
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -1100,83 +1827,115 @@ class DatabaseService {
   // -------------------------------------------------------------------------
 
   /// Indicadores consolidados para a tela de Relatórios.
-  Future<RelatorioGeral> gerarRelatorio() async {
+  ///
+  /// Com [inicio] e [fim] (fim exclusivo), os valores ficam restritos ao
+  /// período: pagamentos pela data do lançamento (regime de caixa) e
+  /// agendamentos pela data do atendimento. "A receber", clientes e pontos
+  /// são posições atuais e não dependem do período.
+  ///
+  /// Regras que mantêm os números honestos:
+  /// - **faturamento** é o líquido: pagamentos e multas menos estornos;
+  /// - **ticket médio** considera só pagamentos de serviços que de fato
+  ///   aconteceram (sem estornos, resgates de valor zero ou multas);
+  /// - **por forma de pagamento** mostra o líquido de cada forma — o estorno
+  ///   sai da mesma forma em que o cliente pagou — e deixa resgates de fora.
+  Future<RelatorioGeral> gerarRelatorio({
+    DateTime? inicio,
+    DateTime? fim,
+  }) async {
     final db = await database;
 
-    Future<double> soma(String sql, [List<Object?>? args]) async {
-      final r = await db.rawQuery(sql, args);
+    // Datas ISO-8601 locais comparam corretamente como texto.
+    String periodo(String coluna) => [
+      if (inicio != null) "$coluna >= '${inicio.toIso8601String()}'",
+      if (fim != null) "$coluna < '${fim.toIso8601String()}'",
+    ].map((c) => ' AND $c').join();
+    final noCaixa = periodo('p.criado_em');
+    final naAgenda = periodo('a.data_hora');
+
+    Future<double> soma(String sql) async {
+      final r = await db.rawQuery(sql);
       final v = r.isEmpty ? null : r.first.values.first;
       return (v as num?)?.toDouble() ?? 0;
     }
 
-    Future<int> conta(String sql, [List<Object?>? args]) async {
-      final r = await db.rawQuery(sql, args);
+    Future<int> conta(String sql) async {
+      final r = await db.rawQuery(sql);
       return Sqflite.firstIntValue(r) ?? 0;
     }
 
+    Future<int> agendamentos([String? status]) => conta(
+      'SELECT COUNT(*) FROM agendamento a WHERE 1 = 1'
+      '${status == null ? '' : " AND a.status = '$status'"}$naAgenda',
+    );
+
     final faturamento = await soma(
-      "SELECT SUM(valor) FROM pagamento WHERE status = 'Confirmado'",
+      "SELECT SUM(p.valor) FROM pagamento p "
+      "WHERE p.status = 'Confirmado'$noCaixa",
     );
     final aReceber = await soma(
-      "SELECT SUM(valor) FROM pagamento WHERE status = 'Pendente'",
+      "SELECT SUM(p.valor) FROM pagamento p WHERE p.status = 'Pendente'",
     );
-    final pagamentosConfirmados = await conta(
-      "SELECT COUNT(*) FROM pagamento WHERE status = 'Confirmado'",
-    );
+
+    final atendimentos = await db.rawQuery('''
+      SELECT COUNT(*) AS qtd, SUM(p.valor) AS total
+      FROM pagamento p
+      INNER JOIN agendamento a ON a.id = p.id_agendamento
+      WHERE p.status = 'Confirmado' AND p.natureza = 'servico'
+        AND a.status NOT IN ('cancelado', 'faltou')$noCaixa
+    ''');
+    final qtdAtendimentos = (atendimentos.first['qtd'] as num?)?.toInt() ?? 0;
+    final totalAtendimentos =
+        (atendimentos.first['total'] as num?)?.toDouble() ?? 0;
+
     final folha = await soma('SELECT SUM(salario) FROM barbeiro');
 
-    final porMetodo = await db.rawQuery(
-      '''
-      SELECT metodo, COUNT(*) AS qtd, SUM(valor) AS total
-      FROM pagamento WHERE status = 'Confirmado'
-      GROUP BY metodo ORDER BY total DESC
-      ''',
-    );
+    final porMetodo = await db.rawQuery('''
+      SELECT p.metodo AS metodo,
+             SUM(CASE WHEN p.natureza != 'estorno' THEN 1 ELSE 0 END) AS qtd,
+             SUM(p.valor) AS total
+      FROM pagamento p
+      WHERE p.status = 'Confirmado' AND p.natureza != 'resgate'$noCaixa
+      GROUP BY p.metodo ORDER BY total DESC
+    ''');
 
-    final porServico = await db.rawQuery(
-      '''
+    final porServico = await db.rawQuery('''
       SELECT s.nome AS nome, COUNT(*) AS qtd
       FROM agendamento a
       INNER JOIN servico s ON s.id = a.id_servico
-      WHERE a.status != 'cancelado'
+      WHERE a.status != 'cancelado'$naAgenda
       GROUP BY s.id ORDER BY qtd DESC LIMIT 5
-      ''',
-    );
+    ''');
 
-    final porBarbeiro = await db.rawQuery(
-      '''
+    final porBarbeiro = await db.rawQuery('''
       SELECT b.nome AS nome, COUNT(*) AS qtd
       FROM agendamento a
       INNER JOIN barbeiro b ON b.id = a.id_barbeiro
-      WHERE a.status != 'cancelado'
+      WHERE a.status != 'cancelado'$naAgenda
       GROUP BY b.id ORDER BY qtd DESC LIMIT 5
-      ''',
-    );
+    ''');
 
     return RelatorioGeral(
+      inicio: inicio,
+      fim: fim,
       faturamento: faturamento,
       aReceber: aReceber,
-      ticketMedio: pagamentosConfirmados == 0
+      ticketMedio: qtdAtendimentos == 0
           ? 0
-          : faturamento / pagamentosConfirmados,
+          : totalAtendimentos / qtdAtendimentos,
       folhaSalarial: folha,
-      totalAgendamentos: await conta('SELECT COUNT(*) FROM agendamento'),
-      confirmados: await conta(
-        "SELECT COUNT(*) FROM agendamento WHERE status = 'confirmado'",
-      ),
-      cancelados: await conta(
-        "SELECT COUNT(*) FROM agendamento WHERE status = 'cancelado'",
-      ),
-      finalizados: await conta(
-        "SELECT COUNT(*) FROM agendamento WHERE status = 'finalizado'",
-      ),
+      totalAgendamentos: await agendamentos(),
+      confirmados: await agendamentos('confirmado'),
+      cancelados: await agendamentos('cancelado'),
+      finalizados: await agendamentos('finalizado'),
+      faltas: await agendamentos('faltou'),
       totalClientes: await conta('SELECT COUNT(*) FROM cliente'),
       pontosEmCirculacao: await conta('SELECT SUM(pontos) FROM fidelidade'),
       porMetodo: porMetodo
           .map(
             (l) => ItemRelatorio(
               rotulo: l['metodo'] as String,
-              quantidade: (l['qtd'] as num).toInt(),
+              quantidade: (l['qtd'] as num?)?.toInt() ?? 0,
               valor: (l['total'] as num?)?.toDouble() ?? 0,
             ),
           )
@@ -1200,8 +1959,10 @@ class DatabaseService {
     );
   }
 
-  Future<int> obterPontos(int idCliente) async {
-    final db = await database;
+  Future<int> obterPontos(int idCliente) async =>
+      _obterPontos(await database, idCliente);
+
+  Future<int> _obterPontos(DatabaseExecutor db, int idCliente) async {
     final linhas = await db.query(
       'fidelidade',
       columns: ['pontos'],
@@ -1220,28 +1981,29 @@ class DatabaseService {
     String descricao,
   ) async {
     final db = await database;
-    final atual = await obterPontos(idCliente);
-    final existe = await db.query(
-      'fidelidade',
-      where: 'id_cliente = ?',
-      whereArgs: [idCliente],
-      limit: 1,
+    await db.transaction(
+      (txn) => _movimentarPontos(txn, idCliente, pontos, descricao),
     );
+  }
 
-    if (existe.isEmpty) {
-      await db.insert('fidelidade', {
-        'id_cliente': idCliente,
-        'pontos': pontos,
-      });
-    } else {
-      await db.update(
-        'fidelidade',
-        {'pontos': atual + pontos},
-        where: 'id_cliente = ?',
-        whereArgs: [idCliente],
-      );
-    }
-
+  /// Movimenta o saldo com um `UPDATE` relativo (`pontos = pontos + ?`).
+  ///
+  /// Ler o saldo, somar em Dart e gravar o resultado perde créditos quando
+  /// duas operações se cruzam — cada uma sobrescreve a outra.
+  Future<void> _movimentarPontos(
+    DatabaseExecutor db,
+    int idCliente,
+    int pontos,
+    String descricao,
+  ) async {
+    await db.rawInsert(
+      'INSERT OR IGNORE INTO fidelidade (id_cliente, pontos) VALUES (?, 0)',
+      [idCliente],
+    );
+    await db.rawUpdate(
+      'UPDATE fidelidade SET pontos = pontos + ? WHERE id_cliente = ?',
+      [pontos, idCliente],
+    );
     await db.insert('historico_ponto', {
       'id_cliente': idCliente,
       'descricao': descricao,
@@ -1251,16 +2013,19 @@ class DatabaseService {
   }
 
   /// Quantos prêmios o cliente consegue resgatar com o saldo atual.
+  ///
+  /// Saldo devedor (negativo, após um estorno) não libera prêmio nenhum.
   Future<int> premiosDisponiveis(int idCliente) async {
     final pontos = await obterPontos(idCliente);
-    return pontos ~/ pontosParaPremio;
+    return pontos <= 0 ? 0 : pontos ~/ pontosParaPremio;
   }
 
   /// Troca [pontosParaPremio] pontos por um serviço gratuito
   /// (regra de negócio 5).
   ///
-  /// Debita os pontos e registra o pagamento com valor zero numa única
-  /// operação, evitando que sobre um resgate sem pagamento — ou o contrário.
+  /// A conferência do saldo, o débito e o pagamento de valor zero acontecem
+  /// numa única transação: dois resgates simultâneos não conseguem gastar o
+  /// mesmo saldo, e nunca sobra um resgate sem pagamento — ou o contrário.
   /// O valor zero mantém o faturamento dos relatórios honesto: o serviço foi
   /// prestado, mas não entrou dinheiro.
   ///
@@ -1270,26 +2035,44 @@ class DatabaseService {
     required int idAgendamento,
     required String nomeServico,
   }) async {
-    final saldo = await obterPontos(idCliente);
-    if (saldo < pontosParaPremio) return null;
-
     final db = await database;
-    final idPagamento = await db.insert('pagamento', {
-      'id_agendamento': idAgendamento,
-      'valor': 0.0,
-      'metodo': 'Pontos de fidelidade',
-      'status': 'Confirmado',
-      'criado_em': DateTime.now().toIso8601String(),
-      'tipo': TipoPagamento.antecipado.dbValue,
-      'cartao_final': null,
-    });
+    return db.transaction((txn) async {
+      final saldo = await _obterPontos(txn, idCliente);
+      if (saldo < pontosParaPremio) return null;
 
-    await adicionarPontos(
+      return _registrarResgate(
+        txn,
+        idCliente: idCliente,
+        idAgendamento: idAgendamento,
+        nomeServico: nomeServico,
+      );
+    });
+  }
+
+  /// Pagamento de valor zero + débito dos pontos do prêmio.
+  Future<int> _registrarResgate(
+    DatabaseExecutor db, {
+    required int idCliente,
+    required int idAgendamento,
+    required String nomeServico,
+  }) async {
+    final idPagamento = await _criarPagamento(
+      db,
+      Pagamento(
+        idAgendamento: idAgendamento,
+        valor: 0,
+        metodo: metodoResgate,
+        criadoEm: DateTime.now().toIso8601String(),
+        natureza: NaturezaPagamento.resgate,
+      ),
+    );
+
+    await _movimentarPontos(
+      db,
       idCliente,
       -pontosParaPremio,
       'Resgate — $nomeServico',
     );
-
     return idPagamento;
   }
 
@@ -1310,6 +2093,13 @@ class DatabaseService {
 
   static String _doisDigitos(int n) => n.toString().padLeft(2, '0');
 
+  /// Arredonda para centavos: 50% de R$ 35,55 é 17,775, e o que se cobra é
+  /// 17,77 — com o estorno de 17,78 fechando exatamente o valor pago.
+  static double _emCentavos(double valor) => (valor * 100).round() / 100;
+
   static String _formatarDia(DateTime d) =>
       '${d.year}-${_doisDigitos(d.month)}-${_doisDigitos(d.day)}';
 }
+
+/// Trecho da agenda já ocupado, com início e fim.
+typedef _Intervalo = ({DateTime inicio, DateTime fim});

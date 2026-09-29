@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -20,6 +21,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
   int _pontos = 0;
   List<HistoricoPonto> _historico = [];
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -33,15 +35,29 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
       if (mounted) setState(() => _carregando = false);
       return;
     }
-    final db = DatabaseService.instance;
-    final pontos = await db.obterPontos(usuario!.id!);
-    final historico = await db.listarHistoricoPontos(usuario.id!);
-    if (!mounted) return;
-    setState(() {
-      _pontos = pontos;
-      _historico = historico;
-      _carregando = false;
-    });
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
+    try {
+      final db = DatabaseService.instance;
+      final pontos = await db.obterPontos(usuario!.id!);
+      final historico = await db.listarHistoricoPontos(usuario.id!);
+      if (!mounted) return;
+      setState(() {
+        _pontos = pontos;
+        _historico = historico;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar seus pontos');
+      });
+    }
   }
 
   @override
@@ -56,6 +72,8 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
+                : _erro != null
+                ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : RefreshIndicator(
                     color: AppColors.gold,
                     backgroundColor: AppColors.card,
@@ -155,6 +173,16 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
             'Meta: $metaPontos pontos = 1 serviço grátis',
             style: AppTheme.sans(size: 11, color: AppColors.muted),
           ),
+          if (_pontos < 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Saldo negativo: um serviço pago foi estornado depois que os '
+              'pontos dele já tinham sido usados. Os próximos pontos '
+              'quitam a diferença.',
+              textAlign: TextAlign.center,
+              style: AppTheme.sans(size: 11, color: AppColors.red, height: 1.4),
+            ),
+          ],
           // Sem esta indicação o cliente vê "prêmio disponível" e não
           // descobre onde usá-lo.
           if (premios > 0) ...[

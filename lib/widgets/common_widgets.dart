@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 
 /// Botão principal: preenchido em dourado com texto preto.
@@ -311,6 +312,91 @@ class EstadoVazio extends StatelessWidget {
   }
 }
 
+/// Duas colunas cujas linhas crescem com o conteúdo.
+///
+/// Substitui `GridView.count` com proporção fixa: com a fonte do sistema
+/// aumentada (acessibilidade), o conteúdo não cabia na célula de altura
+/// fixa e estourava. Aqui cada linha tem a altura do card mais alto.
+class GradeDuasColunas extends StatelessWidget {
+  final List<Widget> filhos;
+  final double espaco;
+
+  const GradeDuasColunas({super.key, required this.filhos, this.espaco = 12});
+
+  @override
+  Widget build(BuildContext context) {
+    final linhas = <Widget>[];
+    for (var i = 0; i < filhos.length; i += 2) {
+      if (i > 0) linhas.add(SizedBox(height: espaco));
+      linhas.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: filhos[i]),
+              SizedBox(width: espaco),
+              Expanded(
+                child: i + 1 < filhos.length
+                    ? filhos[i + 1]
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: linhas,
+    );
+  }
+}
+
+/// Estado de erro de uma tela que não conseguiu carregar os dados.
+///
+/// Substitui o carregamento eterno: diz o que houve e oferece tentar de novo.
+class EstadoErro extends StatelessWidget {
+  final String mensagem;
+  final VoidCallback onTentarNovamente;
+
+  const EstadoErro({
+    super.key,
+    required this.mensagem,
+    required this.onTentarNovamente,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('⚠️', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text('Algo deu errado', style: AppTheme.serif(size: 18)),
+            const SizedBox(height: 8),
+            Text(
+              mensagem,
+              textAlign: TextAlign.center,
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: 240,
+              child: GoldOutlineButton(
+                texto: 'TENTAR NOVAMENTE',
+                onPressed: onTentarNovamente,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Mensagens padronizadas de feedback.
 void mostrarErro(BuildContext context, String mensagem) {
   ScaffoldMessenger.of(context)
@@ -376,9 +462,15 @@ void mostrarInfo(BuildContext context, String mensagem) {
     );
 }
 
-/// Formata valores no padrão brasileiro: `R$ 55,00`.
-String formatarReal(double valor) =>
-    'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+/// Formata valores no padrão brasileiro: `R$ 2.800,00`, `-R$ 27,50`.
+///
+/// Usa a mesma formatação dos campos de valor (com separador de milhar) e
+/// arredonda pelos centavos, evitando resíduos de ponto flutuante.
+String formatarReal(double valor) {
+  final centavos = (valor * 100).round();
+  final texto = 'R\$ ${formatarMoedaDeCentavos(centavos.abs())}';
+  return centavos < 0 ? '-$texto' : texto;
+}
 
 String _doisDigitos(int n) => n.toString().padLeft(2, '0');
 
