@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
@@ -40,10 +41,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (resultado.sucesso) {
       // Profissional entra direto na própria agenda: a Home é a área do
       // cliente e depende de um cadastro de cliente, que ele não tem.
-      final destino = AuthService.instance.ehBarbeiro
-          ? '/agendamentos'
-          : '/home';
-      Navigator.of(context).pushNamedAndRemoveUntil(destino, (_) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AuthService.instance.rotaInicial,
+        (_) => false,
+      );
     } else {
       mostrarErro(context, resultado.erro ?? 'Não foi possível entrar');
     }
@@ -64,8 +65,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   _cabecalho(),
                   const SizedBox(height: 28),
-                  _dicaDemo(),
-                  const SizedBox(height: 24),
+                  // As credenciais de demonstração só aparecem em build de
+                  // desenvolvimento — um APK de release não as expõe.
+                  if (kDebugMode) ...[
+                    _dicaDemo(),
+                    const SizedBox(height: 24),
+                  ],
                   const SectionLabel('E-mail'),
                   const SizedBox(height: 8),
                   TextField(
@@ -126,9 +131,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Não tem conta? ',
                         style: AppTheme.sans(size: 13, color: AppColors.muted),
                       ),
-                      GestureDetector(
-                        onTap: () =>
+                      // Botão de verdade (foco, leitor de tela e área de toque),
+                      // e não um texto com GestureDetector.
+                      TextButton(
+                        onPressed: () =>
                             Navigator.of(context).pushNamed('/cadastro'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          minimumSize: const Size(48, 48),
+                        ),
                         child: Text(
                           'Criar conta',
                           style: AppTheme.sans(

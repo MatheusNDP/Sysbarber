@@ -11,7 +11,6 @@ class BookingFlow {
   static Barbeiro? barbeiroSelecionado;
   static DateTime? dataSelecionada;
   static String? horaSelecionada;
-  static int? agendamentoCriadoId;
 
   /// Data e hora combinadas, prontas para persistir no banco.
   static DateTime? get dataHoraCompleta {
@@ -28,11 +27,17 @@ class BookingFlow {
     );
   }
 
+  /// Começa um agendamento novo a partir do serviço escolhido. Profissional
+  /// e horário de um fluxo anterior não podem vazar para este.
+  static void iniciar(Servico servico) {
+    limpar();
+    servicoSelecionado = servico;
+  }
+
   static void limpar() {
     servicoSelecionado = null;
     barbeiroSelecionado = null;
     dataSelecionada = null;
     horaSelecionada = null;
-    agendamentoCriadoId = null;
   }
 }

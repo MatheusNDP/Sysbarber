@@ -131,8 +131,14 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         'Já tem conta? ',
                         style: AppTheme.sans(size: 13, color: AppColors.muted),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
+                      // Botão de verdade (foco, leitor de tela e área de toque),
+                      // e não um texto com GestureDetector.
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          minimumSize: const Size(48, 48),
+                        ),
                         child: Text(
                           'Entrar',
                           style: AppTheme.sans(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -18,6 +19,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
   List<Barbeiro> _barbeiros = [];
   Barbeiro? _selecionado;
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -26,17 +28,31 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
   }
 
   Future<void> _carregar() async {
-    final barbeiros = await DatabaseService.instance.listarBarbeiros();
-    if (!mounted) return;
-    final anterior = BookingFlow.barbeiroSelecionado;
-    setState(() {
-      _barbeiros = barbeiros;
-      // Uma escolha anterior pode ter ficado indisponível nesse meio-tempo.
-      _selecionado = barbeiros.any((b) => b.id == anterior?.id && b.ativo)
-          ? anterior
-          : null;
-      _carregando = false;
-    });
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
+    try {
+      final barbeiros = await DatabaseService.instance.listarBarbeiros();
+      if (!mounted) return;
+      final anterior = BookingFlow.barbeiroSelecionado;
+      setState(() {
+        _barbeiros = barbeiros;
+        // Uma escolha anterior pode ter ficado indisponível nesse meio-tempo.
+        _selecionado = barbeiros.any((b) => b.id == anterior?.id && b.ativo)
+            ? anterior
+            : null;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar os profissionais');
+      });
+    }
   }
 
   void _continuar() {
@@ -59,6 +75,8 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
+                : _erro != null
+                ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,

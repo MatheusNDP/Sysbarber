@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
@@ -37,7 +38,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      mostrarErro(context, 'Erro ao carregar serviços: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar serviços'));
     }
   }
 
@@ -110,7 +111,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
       await _carregar();
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, 'Erro ao excluir: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao excluir'));
     }
   }
 
@@ -298,7 +299,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
-      mostrarErro(context, 'Erro ao salvar: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao salvar'));
     }
   }
 

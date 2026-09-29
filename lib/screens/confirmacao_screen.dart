@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -16,9 +16,12 @@ class ConfirmacaoScreen extends StatefulWidget {
 }
 
 class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
-  bool _salvando = false;
+  bool _verificando = false;
 
-  Future<void> _confirmar() async {
+  /// Nada é gravado aqui: o agendamento só nasce junto com o pagamento, na
+  /// próxima tela. Esta checagem apenas avisa cedo se o horário foi ocupado
+  /// (ou o profissional ficou indisponível) com a tela aberta.
+  Future<void> _continuar() async {
     final usuario = AuthService.instance.usuarioAtual;
     final servico = BookingFlow.servicoSelecionado;
     final barbeiro = BookingFlow.barbeiroSelecionado;
@@ -32,55 +35,27 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
       return;
     }
 
-    setState(() => _salvando = true);
+    setState(() => _verificando = true);
 
     try {
-      // O profissional pode ter ficado indisponível com a tela aberta.
-      final atual = await DatabaseService.instance.listarBarbeiros();
-      final aindaAtivo = atual.any((x) => x.id == barbeiro!.id && x.ativo);
-      if (!aindaAtivo) {
-        if (!mounted) return;
-        setState(() => _salvando = false);
-        mostrarErro(
-          context,
-          '${barbeiro!.nome} não está mais disponível para agendamentos',
-        );
-        return;
-      }
-
-      // Reconfere a disponibilidade: outro cliente pode ter pego o horário
-      // enquanto esta tela estava aberta.
-      final livres = await DatabaseService.instance.horariosDisponiveis(
-        barbeiro!.id!,
-        dataHora,
+      final impedimento = await DatabaseService.instance.verificarReserva(
+        idBarbeiro: barbeiro!.id!,
+        dataHora: dataHora,
+        idServico: servico!.id,
+        idCliente: usuario!.id,
       );
-      final hora = formatarHora(dataHora);
-      if (!livres.contains(hora)) {
-        if (!mounted) return;
-        setState(() => _salvando = false);
-        mostrarErro(context, 'O horário $hora acabou de ser ocupado');
-        return;
-      }
-
-      final id = await DatabaseService.instance.criarAgendamento(
-        Agendamento(
-          idCliente: usuario!.id!,
-          idBarbeiro: barbeiro.id!,
-          idServico: servico!.id!,
-          dataHora: dataHora.toIso8601String(),
-          status: StatusAgendamento.confirmado,
-        ),
-      );
-
       if (!mounted) return;
-      setState(() => _salvando = false);
+      setState(() => _verificando = false);
 
-      BookingFlow.agendamentoCriadoId = id;
+      if (impedimento != null) {
+        mostrarErro(context, impedimento);
+        return;
+      }
       Navigator.of(context).pushNamed('/pagamento');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _salvando = false);
-      mostrarErro(context, 'Não foi possível criar o agendamento: $e');
+      setState(() => _verificando = false);
+      mostrarErro(context, mensagemDeErro(e, 'Não foi possível verificar o horário'));
     }
   }
 
@@ -183,15 +158,15 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
             child: Column(
               children: [
                 GoldButton(
-                  texto: _salvando
-                      ? 'CONFIRMANDO...'
-                      : 'CONFIRMAR AGENDAMENTO',
-                  onPressed: _salvando ? null : _confirmar,
+                  texto: _verificando
+                      ? 'VERIFICANDO...'
+                      : 'CONTINUAR PARA O PAGAMENTO',
+                  onPressed: _verificando ? null : _continuar,
                 ),
                 const SizedBox(height: 10),
                 GoldOutlineButton(
                   texto: 'CANCELAR',
-                  onPressed: _salvando ? null : _cancelar,
+                  onPressed: _verificando ? null : _cancelar,
                 ),
               ],
             ),

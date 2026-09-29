@@ -8,7 +8,14 @@ library;
 // ENUMS
 // ---------------------------------------------------------------------------
 
-enum StatusAgendamento { confirmado, cancelado, finalizado }
+enum StatusAgendamento {
+  confirmado,
+  cancelado,
+  finalizado,
+
+  /// O cliente não compareceu ao horário marcado.
+  faltou,
+}
 
 extension StatusAgendamentoX on StatusAgendamento {
   /// Rótulo exibido na interface (português).
@@ -20,6 +27,8 @@ extension StatusAgendamentoX on StatusAgendamento {
         return 'Cancelado';
       case StatusAgendamento.finalizado:
         return 'Finalizado';
+      case StatusAgendamento.faltou:
+        return 'Não compareceu';
     }
   }
 
@@ -32,6 +41,8 @@ extension StatusAgendamentoX on StatusAgendamento {
         return 'cancelado';
       case StatusAgendamento.finalizado:
         return 'finalizado';
+      case StatusAgendamento.faltou:
+        return 'faltou';
     }
   }
 
@@ -43,6 +54,8 @@ extension StatusAgendamentoX on StatusAgendamento {
         return StatusAgendamento.cancelado;
       case 'finalizado':
         return StatusAgendamento.finalizado;
+      case 'faltou':
+        return StatusAgendamento.faltou;
       case 'confirmado':
       default:
         return StatusAgendamento.confirmado;
@@ -61,18 +74,6 @@ extension MetodoPagamentoX on MetodoPagamento {
         return 'Cartão';
       case MetodoPagamento.dinheiro:
         return 'Dinheiro';
-    }
-  }
-
-  static MetodoPagamento fromLabel(String valor) {
-    switch (valor) {
-      case 'Cartão':
-        return MetodoPagamento.cartao;
-      case 'Dinheiro':
-        return MetodoPagamento.dinheiro;
-      case 'Pix':
-      default:
-        return MetodoPagamento.pix;
     }
   }
 }
@@ -318,12 +319,28 @@ class Agendamento {
   final String dataHora;
   final StatusAgendamento status;
 
+  /// Duração registrada no momento do agendamento. Fica gravada no próprio
+  /// agendamento para que alterar o serviço depois não mude o que já foi
+  /// marcado. `null` só antes de ir para o banco, que a preenche pelo serviço.
+  final int? duracaoMinutos;
+
+  /// Preço do serviço no momento do agendamento, pelo mesmo motivo: um
+  /// reajuste depois não pode mudar a multa nem o histórico de quem já marcou.
+  final double? preco;
+
   /// Populados pelo INNER JOIN em [DatabaseService.listarAgendamentosCliente].
   final Barbeiro? barbeiro;
   final Servico? servico;
 
   /// Populado na agenda do profissional, para saber quem será atendido.
   final Cliente? cliente;
+
+  /// Lançamento principal (serviço, resgate ou multa), trazido pelas
+  /// listagens junto com o agendamento.
+  final Pagamento? pagamento;
+
+  /// Quanto já foi devolvido ao cliente em estornos.
+  final double valorEstornado;
 
   const Agendamento({
     this.id,
@@ -332,9 +349,13 @@ class Agendamento {
     required this.idServico,
     required this.dataHora,
     this.status = StatusAgendamento.confirmado,
+    this.duracaoMinutos,
+    this.preco,
     this.barbeiro,
     this.servico,
     this.cliente,
+    this.pagamento,
+    this.valorEstornado = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -344,6 +365,8 @@ class Agendamento {
     'id_servico': idServico,
     'data_hora': dataHora,
     'status': status.dbValue,
+    if (duracaoMinutos != null) 'duracao_minutos': duracaoMinutos,
+    if (preco != null) 'preco': preco,
   };
 
   factory Agendamento.fromMap(Map<String, dynamic> map) => Agendamento(
@@ -353,6 +376,8 @@ class Agendamento {
     idServico: (map['id_servico'] as num).toInt(),
     dataHora: map['data_hora'] as String,
     status: StatusAgendamentoX.fromDb(map['status'] as String),
+    duracaoMinutos: (map['duracao_minutos'] as num?)?.toInt(),
+    preco: (map['preco'] as num?)?.toDouble(),
   );
 
   Agendamento copyWith({
@@ -360,6 +385,8 @@ class Agendamento {
     Barbeiro? barbeiro,
     Servico? servico,
     Cliente? cliente,
+    Pagamento? pagamento,
+    double? valorEstornado,
   }) => Agendamento(
     id: id,
     idCliente: idCliente,
@@ -367,19 +394,93 @@ class Agendamento {
     idServico: idServico,
     dataHora: dataHora,
     status: status ?? this.status,
+    duracaoMinutos: duracaoMinutos,
+    preco: preco,
     barbeiro: barbeiro ?? this.barbeiro,
     servico: servico ?? this.servico,
     cliente: cliente ?? this.cliente,
+    pagamento: pagamento ?? this.pagamento,
+    valorEstornado: valorEstornado ?? this.valorEstornado,
   );
 
   DateTime get data => DateTime.parse(dataHora);
+
+  /// Valor do atendimento: o registrado no agendamento (ou, em objetos ainda
+  /// não gravados, o preço atual do serviço).
+  double get valor => preco ?? servico?.preco ?? 0;
+
+  // -------------------------------------------------------------------------
+  // Regras de estado — valem para a tela e para o banco.
+  //
+  // Um atendimento em aberto termina de um destes jeitos: cancelado (antes do
+  // horário), concluído (a partir do dia marcado) ou falta (depois do
+  // horário). Encerrado, não aceita mais nenhuma ação.
+  // -------------------------------------------------------------------------
+
+  /// Ainda não teve desfecho.
+  bool get emAberto => status == StatusAgendamento.confirmado;
+
+  /// O horário marcado já chegou.
+  bool jaComecou(DateTime agora) => !data.isAfter(agora);
+
+  /// Cancelar só faz sentido antes do horário; depois dele o desfecho é
+  /// concluir ou registrar a falta.
+  bool podeCancelar(DateTime agora) => emAberto && !jaComecou(agora);
+
+  /// Conclui a partir do dia do atendimento (o cliente pode chegar adiantado),
+  /// mas nunca dias antes — e continua possível depois do horário.
+  bool podeFinalizar(DateTime agora) {
+    if (!emAberto) return false;
+    final dia = DateTime(data.year, data.month, data.day);
+    final hoje = DateTime(agora.year, agora.month, agora.day);
+    return !dia.isAfter(hoje);
+  }
+
+  /// Falta só pode ser registrada depois do horário marcado.
+  bool podeRegistrarFalta(DateTime agora) => emAberto && jaComecou(agora);
+
+  /// Horário já passou e o profissional ainda não deu o desfecho.
+  bool aguardandoConclusao(DateTime agora) => emAberto && jaComecou(agora);
 }
 
 // ---------------------------------------------------------------------------
 // PAGAMENTO
 // ---------------------------------------------------------------------------
 
+/// O que um lançamento financeiro representa.
+///
+/// Sem esta marca a única pista era o texto do método ("Multa por
+/// cancelamento", "Estorno"...), que se perdia assim que o balcão registrava
+/// como a multa foi paga — e a multa passava a ser tratada como serviço.
+enum NaturezaPagamento {
+  /// Pagamento de um serviço agendado. É o único que gera pontos.
+  servico,
+
+  /// Multa por cancelamento fora do prazo.
+  multa,
+
+  /// Devolução (valor negativo) ao cliente.
+  estorno,
+
+  /// Serviço trocado por pontos de fidelidade (valor zero).
+  resgate,
+}
+
+extension NaturezaPagamentoX on NaturezaPagamento {
+  /// Valor persistido na coluna `natureza`.
+  String get dbValue => name;
+
+  /// Registros anteriores à coluna são tratados como serviço.
+  static NaturezaPagamento fromDb(String? valor) => NaturezaPagamento.values
+      .firstWhere((n) => n.name == valor, orElse: () => NaturezaPagamento.servico);
+}
+
 class Pagamento {
+  /// Valores da coluna `status`.
+  static const String statusPendente = 'Pendente';
+  static const String statusConfirmado = 'Confirmado';
+  static const String statusCancelado = 'Cancelado';
+
   final int? id;
   final int idAgendamento;
   final double valor;
@@ -394,19 +495,23 @@ class Pagamento {
   /// é armazenado.
   final String? cartaoFinal;
 
+  final NaturezaPagamento natureza;
+
   const Pagamento({
     this.id,
     required this.idAgendamento,
     required this.valor,
     required this.metodo,
-    this.status = 'Confirmado',
+    this.status = statusConfirmado,
     required this.criadoEm,
     this.tipo = 'antecipado',
     this.cartaoFinal,
+    this.natureza = NaturezaPagamento.servico,
   });
 
-  bool get confirmado => status == 'Confirmado';
-  bool get pendente => status == 'Pendente';
+  bool get confirmado => status == statusConfirmado;
+  bool get pendente => status == statusPendente;
+  bool get cancelado => status == statusCancelado;
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -417,6 +522,7 @@ class Pagamento {
     'criado_em': criadoEm,
     'tipo': tipo,
     'cartao_final': cartaoFinal,
+    'natureza': natureza.dbValue,
   };
 
   factory Pagamento.fromMap(Map<String, dynamic> map) => Pagamento(
@@ -428,6 +534,7 @@ class Pagamento {
     criadoEm: map['criado_em'] as String,
     tipo: (map['tipo'] as String?) ?? 'antecipado',
     cartaoFinal: map['cartao_final'] as String?,
+    natureza: NaturezaPagamentoX.fromDb(map['natureza'] as String?),
   );
 }
 
@@ -451,9 +558,6 @@ extension TipoPagamentoX on TipoPagamento {
     TipoPagamento.antecipado => 'antecipado',
     TipoPagamento.naHora => 'na_hora',
   };
-
-  static TipoPagamento fromDb(String valor) =>
-      valor == 'na_hora' ? TipoPagamento.naHora : TipoPagamento.antecipado;
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +582,44 @@ class Fidelidade {
     idCliente: (map['id_cliente'] as num).toInt(),
     pontos: (map['pontos'] as num).toInt(),
   );
+}
+
+// ---------------------------------------------------------------------------
+// RESERVA
+// ---------------------------------------------------------------------------
+
+/// Violação de uma regra de negócio, com mensagem pronta para o usuário.
+class RegraNegocioException implements Exception {
+  final String mensagem;
+
+  const RegraNegocioException(this.mensagem);
+
+  @override
+  String toString() => mensagem;
+}
+
+/// Como o cliente fecha o agendamento na etapa de pagamento.
+enum ModoReserva { pagarAgora, pagarNaBarbearia, resgatarPontos }
+
+/// O que a reserva gravou, para a tela explicar o resultado ao cliente.
+class ResultadoReserva {
+  final int idAgendamento;
+  final int idPagamento;
+
+  /// Valor cobrado — sempre o preço do banco no momento da reserva.
+  final double valor;
+  final int pontosCreditados;
+  final int pontosDebitados;
+  final int saldoPontos;
+
+  const ResultadoReserva({
+    required this.idAgendamento,
+    required this.idPagamento,
+    required this.valor,
+    this.pontosCreditados = 0,
+    this.pontosDebitados = 0,
+    required this.saldoPontos,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -553,6 +695,11 @@ class ItemRelatorio {
 
 /// Indicadores consolidados apresentados na área administrativa.
 class RelatorioGeral {
+  /// Período coberto (fim exclusivo). `null` nos dois = desde o início.
+  final DateTime? inicio;
+  final DateTime? fim;
+
+  /// Receita líquida: pagamentos e multas menos estornos.
   final double faturamento;
   final double aReceber;
   final double ticketMedio;
@@ -561,6 +708,9 @@ class RelatorioGeral {
   final int confirmados;
   final int cancelados;
   final int finalizados;
+
+  /// Atendimentos em que o cliente não compareceu.
+  final int faltas;
   final int totalClientes;
   final int pontosEmCirculacao;
   final List<ItemRelatorio> porMetodo;
@@ -568,6 +718,8 @@ class RelatorioGeral {
   final List<ItemRelatorio> porBarbeiro;
 
   const RelatorioGeral({
+    this.inicio,
+    this.fim,
     required this.faturamento,
     required this.aReceber,
     required this.ticketMedio,
@@ -576,6 +728,7 @@ class RelatorioGeral {
     required this.confirmados,
     required this.cancelados,
     required this.finalizados,
+    this.faltas = 0,
     required this.totalClientes,
     required this.pontosEmCirculacao,
     required this.porMetodo,

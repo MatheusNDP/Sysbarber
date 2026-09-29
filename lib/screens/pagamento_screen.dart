@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../services/formatters.dart';
 import '../services/validators.dart';
 import '../theme/app_theme.dart';
@@ -67,53 +68,48 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   }
 
   /// Payload do QR. É uma simulação identificada — não é um código Pix real.
+  ///
+  /// O agendamento ainda não existe nesta etapa (ele nasce junto com o
+  /// pagamento), então a referência é o profissional e o horário escolhidos.
   String get _payloadPix {
     final valor = (BookingFlow.servicoSelecionado?.preco ?? 0).toStringAsFixed(
       2,
     );
-    final id = BookingFlow.agendamentoCriadoId ?? 0;
-    return 'SYSBARBER|SIMULACAO|AGENDAMENTO=$id|VALOR=$valor|TCC';
+    final barbeiro = BookingFlow.barbeiroSelecionado?.id ?? 0;
+    final horario =
+        BookingFlow.dataHoraCompleta?.toIso8601String().substring(0, 16) ??
+        '-';
+    return 'SYSBARBER|SIMULACAO|BARBEIRO=$barbeiro|HORARIO=$horario|'
+        'VALOR=$valor|TCC';
   }
 
+  /// Grava agendamento e pagamento juntos via [DatabaseService.reservar].
+  ///
+  /// Se o cliente voltar ou fechar o app antes daqui, nada fica gravado —
+  /// não sobra horário ocupado sem pagamento.
   Future<void> _confirmar() async {
     final usuario = AuthService.instance.usuarioAtual;
     final servico = BookingFlow.servicoSelecionado;
-    final idAgendamento = BookingFlow.agendamentoCriadoId;
+    final barbeiro = BookingFlow.barbeiroSelecionado;
+    final dataHora = BookingFlow.dataHoraCompleta;
 
-    if (usuario?.id == null || servico == null || idAgendamento == null) {
+    if (usuario?.id == null ||
+        servico?.id == null ||
+        barbeiro?.id == null ||
+        dataHora == null) {
       mostrarErro(context, 'Não há agendamento para pagar');
       return;
     }
 
-    // Resgate por pontos: troca o saldo pelo serviço, sem cobrança.
-    if (_usarPontos && _podeResgatar) {
-      setState(() => _processando = true);
-      try {
-        final id = await DatabaseService.instance.resgatarPremio(
-          idCliente: usuario!.id!,
-          idAgendamento: idAgendamento,
-          nomeServico: servico.nome,
-        );
-        if (!mounted) return;
-        setState(() => _processando = false);
-
-        if (id == null) {
-          mostrarErro(context, 'Saldo insuficiente para o resgate');
-          return;
-        }
-        await _mostrarResgate(servico.nome);
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _processando = false);
-        mostrarErro(context, 'Não foi possível resgatar: $e');
-      }
-      return;
-    }
+    final modo = _usarPontos && _podeResgatar
+        ? ModoReserva.resgatarPontos
+        : _tipo == TipoPagamento.antecipado
+        ? ModoReserva.pagarAgora
+        : ModoReserva.pagarNaBarbearia;
 
     // Cartão só é exigido quando o pagamento é antecipado por cartão.
     final pagaAgoraNoCartao =
-        _tipo == TipoPagamento.antecipado &&
-        _metodo == MetodoPagamento.cartao;
+        modo == ModoReserva.pagarAgora && _metodo == MetodoPagamento.cartao;
 
     if (pagaAgoraNoCartao) {
       final erro = Validators.validarCartao(
@@ -131,43 +127,92 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     setState(() => _processando = true);
 
     try {
-      final db = DatabaseService.instance;
-      final antecipado = _tipo == TipoPagamento.antecipado;
       final digitos = somenteDigitos(_numeroCtrl.text);
-
-      final idPagamento = await db.criarPagamento(
-        Pagamento(
-          idAgendamento: idAgendamento,
-          valor: servico.preco,
-          metodo: antecipado ? _metodo.label : 'A combinar',
-          status: 'Pendente',
-          criadoEm: DateTime.now().toIso8601String(),
-          tipo: _tipo.dbValue,
-          cartaoFinal: pagaAgoraNoCartao && digitos.length >= 4
-              ? digitos.substring(digitos.length - 4)
-              : null,
-        ),
+      final resultado = await DatabaseService.instance.reservar(
+        idCliente: usuario!.id!,
+        idBarbeiro: barbeiro!.id!,
+        idServico: servico!.id!,
+        dataHora: dataHora,
+        modo: modo,
+        metodo: _metodo.label,
+        cartaoFinal: pagaAgoraNoCartao && digitos.length >= 4
+            ? digitos.substring(digitos.length - 4)
+            : null,
       );
-
-      // Só o pagamento antecipado é efetivado agora — e é a confirmação que
-      // credita os pontos.
-      if (antecipado) {
-        await db.confirmarPagamento(idPagamento);
-      }
 
       if (!mounted) return;
       setState(() => _processando = false);
-      await _mostrarResultado(antecipado, servico.preco.round());
+
+      if (modo == ModoReserva.resgatarPontos) {
+        await _mostrarResgate(servico.nome, resultado);
+      } else {
+        await _mostrarResultado(modo == ModoReserva.pagarAgora, resultado);
+      }
+    } on RegraNegocioException catch (e) {
+      if (!mounted) return;
+      setState(() => _processando = false);
+      await _mostrarImpedimento(e.mensagem);
     } catch (e) {
       // Sem isto o botão ficaria travado em "PROCESSANDO..." para sempre.
       if (!mounted) return;
       setState(() => _processando = false);
-      mostrarErro(context, 'Não foi possível registrar o pagamento: $e');
+      mostrarErro(context, mensagemDeErro(e, 'Não foi possível concluir o agendamento'));
     }
   }
 
+  /// A reserva foi recusada (horário ocupado, profissional indisponível,
+  /// saldo insuficiente): nada foi gravado e o cliente escolhe o que fazer.
+  Future<void> _mostrarImpedimento(String mensagem) async {
+    final voltar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          'Não foi possível agendar',
+          style: AppTheme.serif(size: 18),
+        ),
+        content: Text(
+          '$mensagem. Nenhuma cobrança foi feita.',
+          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'FECHAR',
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'ESCOLHER OUTRO HORÁRIO',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (voltar != true || !mounted) return;
+    Navigator.of(
+      context,
+    ).popUntil((r) => r.settings.name == '/horario' || r.isFirst);
+  }
+
   /// Confirmação do resgate: o serviço saiu de graça.
-  Future<void> _mostrarResgate(String nomeServico) async {
+  Future<void> _mostrarResgate(
+    String nomeServico,
+    ResultadoReserva resultado,
+  ) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -190,8 +235,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         ),
         content: Text(
           '$nomeServico saiu de graça. Foram debitados '
-          '${DatabaseService.pontosParaPremio} pontos do seu saldo, que agora '
-          'é de ${_pontos - DatabaseService.pontosParaPremio} pontos.',
+          '${resultado.pontosDebitados} pontos do seu saldo, que agora '
+          'é de ${resultado.saldoPontos} pontos.',
           textAlign: TextAlign.center,
           style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
         ),
@@ -211,7 +256,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
 
-  Future<void> _mostrarResultado(bool antecipado, int pontos) async {
+  Future<void> _mostrarResultado(
+    bool antecipado,
+    ResultadoReserva resultado,
+  ) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -274,8 +322,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               ),
               child: Text(
                 antecipado
-                    ? '⭐ Você ganhou $pontos pontos'
-                    : '⭐ $pontos pontos liberados após o pagamento',
+                    ? '⭐ Você ganhou ${resultado.pontosCreditados} pontos'
+                    : '⭐ ${resultado.valor.round()} pontos liberados após '
+                          'o pagamento',
                 textAlign: TextAlign.center,
                 style: AppTheme.sans(
                   size: 13,

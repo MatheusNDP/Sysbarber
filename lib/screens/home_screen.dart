@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Agendamento? _proximo;
   int _pontos = 0;
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -33,28 +35,42 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _carregando = false);
       return;
     }
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
 
-    final agendamentos = await _db.listarAgendamentosCliente(usuario!.id!);
-    final pontos = await _db.obterPontos(usuario.id!);
-    final agora = DateTime.now();
+    try {
+      final agendamentos = await _db.listarAgendamentosCliente(usuario!.id!);
+      final pontos = await _db.obterPontos(usuario.id!);
+      final agora = DateTime.now();
 
-    // O próximo horário é o confirmado mais próximo ainda no futuro.
-    final futuros =
-        agendamentos
-            .where(
-              (a) =>
-                  a.status == StatusAgendamento.confirmado &&
-                  a.data.isAfter(agora),
-            )
-            .toList()
-          ..sort((a, b) => a.data.compareTo(b.data));
+      // O próximo horário é o confirmado mais próximo ainda no futuro.
+      final futuros =
+          agendamentos
+              .where(
+                (a) =>
+                    a.status == StatusAgendamento.confirmado &&
+                    a.data.isAfter(agora),
+              )
+              .toList()
+            ..sort((a, b) => a.data.compareTo(b.data));
 
-    if (!mounted) return;
-    setState(() {
-      _proximo = futuros.isEmpty ? null : futuros.first;
-      _pontos = pontos;
-      _carregando = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        _proximo = futuros.isEmpty ? null : futuros.first;
+        _pontos = pontos;
+        _carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar o início');
+      });
+    }
   }
 
   /// Navega e recarrega os dados ao voltar.
@@ -104,6 +120,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(color: AppColors.gold),
                   ),
                 )
+              else if (_erro != null)
+                EstadoErro(mensagem: _erro!, onTentarNovamente: _carregarDados)
               else ...[
                 _cardProximoHorario(),
                 const SizedBox(height: 16),
@@ -143,12 +161,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        GestureDetector(
-          onTap: () => _irPara('/perfil'),
-          child: GoldAvatar(
-            texto: usuario?.iniciais ?? '?',
-            tamanho: 48,
-            large: true,
+        Semantics(
+          button: true,
+          label: 'Abrir perfil',
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: () => _irPara('/perfil'),
+            child: GoldAvatar(
+              texto: usuario?.iniciais ?? '?',
+              tamanho: 48,
+              large: true,
+            ),
           ),
         ),
       ],
@@ -282,17 +305,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ('👤', 'Meu Perfil', '/perfil'),
     ];
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.45,
-      children: itens
+    return GradeDuasColunas(
+      filhos: itens
           .map(
             (item) => GoldCard(
               onTap: () => _irPara(item.$3),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
