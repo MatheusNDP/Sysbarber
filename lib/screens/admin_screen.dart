@@ -9,6 +9,7 @@ import 'admin_barbeiros_screen.dart';
 import 'admin_clientes_screen.dart';
 import 'admin_relatorios_screen.dart';
 import 'admin_servicos_screen.dart';
+import 'agendamentos_screen.dart';
 
 /// Painel administrativo (`/admin`) com estatísticas vindas do banco.
 class AdminScreen extends StatefulWidget {
@@ -153,6 +154,14 @@ class _AdminScreenState extends State<AdminScreen> {
                         const SizedBox(height: 28),
                         const SectionLabel('Gerenciamento'),
                         const SizedBox(height: 12),
+                        _itemGerenciar(
+                          '📅',
+                          'Agenda geral',
+                          'Todos os atendimentos: receber, concluir e faltas',
+                          () => _abrir(
+                            const AgendamentosScreen(agendaGeral: true),
+                          ),
+                        ),
                         _itemGerenciar(
                           '💈',
                           'Gerenciar Serviços',

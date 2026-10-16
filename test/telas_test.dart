@@ -527,4 +527,151 @@ void main() {
     final ultimo = DatabaseService.diasDisponiveis().last;
     expect(find.text('${ultimo.day}'), findsOneWidget);
   });
+
+  // -------------------------------------------------------------------------
+  // P17 — agenda geral do administrador
+  // -------------------------------------------------------------------------
+
+  /// Banco com o seed e o administrador logado.
+  Future<void> adminLogado(WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        DatabaseService.emailAdmin,
+        DatabaseService.senhaAdmin,
+      ),
+    );
+  }
+
+  /// Pagamento "na barbearia", ainda pendente, do agendamento [id] (R$ 35).
+  Future<int> pagamentoPendente(int id) => service.criarPagamento(
+    Pagamento(
+      idAgendamento: id,
+      valor: 35,
+      metodo: 'A combinar',
+      status: Pagamento.statusPendente,
+      criadoEm: DateTime.now().toIso8601String(),
+      tipo: TipoPagamento.naHora.dbValue,
+    ),
+  );
+
+  testWidgets('o painel administrativo abre a agenda geral', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminScreen());
+
+    await tester.scrollUntilVisible(
+      find.text('Agenda geral'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Agenda geral'));
+    await tester.pump(); // monta a rota
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump(const Duration(milliseconds: 500)); // fim da transição
+
+    expect(find.text('AGENDA GERAL'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('a agenda geral mostra os atendimentos de todos os barbeiros, '
+      'com as ações da barbearia', (tester) async {
+    await adminLogado(tester);
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      // Com o Carlos (barbeiro 1), já passou do horário e falta receber.
+      final passado = await marcarCorte(
+        idCliente,
+        DateTime.now().subtract(const Duration(hours: 2)),
+      );
+      await pagamentoPendente(passado);
+      // Com o Rafael (barbeiro 2), amanhã.
+      final amanha = DateTime.now().add(const Duration(days: 1));
+      await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 2,
+          idServico: 1,
+          dataHora: DateTime(
+            amanha.year,
+            amanha.month,
+            amanha.day,
+            9,
+          ).toIso8601String(),
+        ),
+      );
+    });
+
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+
+    expect(find.text('AGENDA GERAL'), findsOneWidget);
+    expect(find.text('com Carlos Eduardo'), findsOneWidget);
+    expect(find.text('com Rafael Souza'), findsOneWidget);
+    expect(find.text('RECEBER'), findsOneWidget);
+    expect(find.text('Concluir'), findsOneWidget);
+    expect(find.text('Não compareceu'), findsOneWidget);
+    expect(find.text('Cancelar'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('cancelar pela agenda geral não cobra multa', (tester) async {
+    await adminLogado(tester);
+    late int id;
+    await tester.runAsync(() async {
+      // Em 30 minutos: se fosse o cliente cancelando, haveria multa.
+      id = await marcarCorte(
+        await cadastrarClienteTeste(),
+        DateTime.now().add(const Duration(minutes: 30)),
+      );
+      await pagamentoPendente(id);
+    });
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+
+    await tester.runAsync(() => tester.tap(find.text('Cancelar')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('parte da barbearia'), findsOneWidget);
+    expect(find.textContaining('Será cobrada multa'), findsNothing);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('CANCELAR AGENDAMENTO'));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pump();
+
+    late Pagamento? pagamento;
+    late RelatorioGeral relatorio;
+    await tester.runAsync(() async {
+      pagamento = await service.buscarPagamentoDoAgendamento(id);
+      relatorio = await service.gerarRelatorio();
+    });
+    expect(pagamento!.cancelado, isTrue);
+    expect(pagamento!.natureza, NaturezaPagamento.servico);
+    expect(relatorio.cancelados, 1);
+    expect(relatorio.aReceber, 0);
+
+    // Deixa o aviso "Agendamento cancelado" sumir antes de encerrar.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o barbeiro não abre a agenda geral', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+
+    expect(find.text('Acesso restrito'), findsOneWidget);
+    expect(find.text('AGENDA GERAL'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
 }

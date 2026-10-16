@@ -2910,4 +2910,45 @@ void main() {
       );
     });
   });
+
+  group('P17 — agenda geral do administrador', () {
+    test('lista os agendamentos de todos os barbeiros, com cliente, barbeiro, '
+        'serviço e pagamento', () async {
+      final ana = await criarClienteTeste(email: 'ana@teste.com');
+      final bia = await criarClienteTeste(email: 'bia@teste.com');
+      await service.reservar(
+        idCliente: ana,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      await service.reservar(
+        idCliente: bia,
+        idBarbeiro: 2,
+        idServico: 3,
+        dataHora: proximoDiaAs(14),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      final todos = await service.listarTodosAgendamentos();
+
+      expect(todos.length, 2);
+      // Mais recente primeiro, como nas outras listagens.
+      expect(todos.first.data.hour, 14);
+      expect(
+        todos.map((a) => a.barbeiro!.nome),
+        containsAll(['Carlos Eduardo', 'Rafael Souza']),
+      );
+      expect(
+        todos.map((a) => a.cliente!.email),
+        containsAll(['ana@teste.com', 'bia@teste.com']),
+      );
+      expect(todos.every((a) => a.servico != null), isTrue);
+      expect(todos.every((a) => a.pagamento != null), isTrue);
+      // O hash da senha dos clientes não sai do banco.
+      expect(todos.every((a) => a.cliente!.senhaHash.isEmpty), isTrue);
+    });
+  });
 }

@@ -50,7 +50,7 @@ para a apresentação.
 flutter test
 ```
 
-São **207 testes** no total:
+São **212 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -58,8 +58,8 @@ São **207 testes** no total:
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 22 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído" e a régua de dias |
-| `integration_test/database_integration_test.dart` | 128 | CRUD, agenda (dias, turnos e janela de 14 dias), reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
+| `test/telas_test.dart` | 26 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias e a agenda geral do administrador |
+| `integration_test/database_integration_test.dart` | 129 | CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -68,7 +68,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 207 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 212 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -183,9 +183,17 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
    ação.
 9. Preço e duração ficam registrados no agendamento: reajustar um serviço não
    muda multa nem histórico de quem já marcou.
-10. O administrador pode cadastrar, editar e excluir serviços e barbeiros.
+10. O administrador cadastra, edita e exclui serviços e barbeiros, liga e
+    desliga a disponibilidade dos barbeiros e consulta os clientes (sem
+    editá-los). Serviço ou barbeiro com agendamentos não pode ser excluído:
+    os atendimentos sumiriam do histórico dos clientes.
 11. Senhas nunca são armazenadas em texto puro — PBKDF2 com salt individual.
 12. E-mail é único no sistema (clientes e barbeiros).
+13. Confirmar o recebimento (informando Pix, Cartão ou Dinheiro), concluir o
+    atendimento e registrar falta são ações da barbearia: o barbeiro faz isso
+    na própria agenda, e o administrador, na agenda geral, para qualquer
+    barbeiro. O cancelamento feito por um dos dois é sempre sem multa; o
+    cliente cancela os próprios agendamentos, seguindo a regra 7.
 
 ---
 
@@ -197,12 +205,13 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
   ainda entram e são **regravados no formato novo no primeiro login**.
 - **Permissões:** toda rota passa por `AuthService.podeAcessar` antes de ser
   construída. `/admin` só abre para o administrador; o barbeiro só acessa a
-  própria agenda; o resto mostra "Acesso restrito".
+  própria agenda; o resto mostra "Acesso restrito". A agenda geral, aberta a
+  partir do painel, confere de novo se quem está logado é o administrador.
 - **Sessão:** guarda só o id e o tipo de conta (cliente ou barbeiro); os dados
   são sempre relidos do banco, e uma conta excluída perde a sessão salva.
 - **Dados sensíveis:** do cartão só ficam os 4 últimos dígitos; a agenda do
-  barbeiro não carrega o hash da senha dos clientes; mensagens de erro não
-  mostram detalhes técnicos (esses vão só para o log).
+  barbeiro e a agenda geral não carregam o hash da senha dos clientes;
+  mensagens de erro não mostram detalhes técnicos (esses vão só para o log).
 
 ---
 
@@ -222,7 +231,22 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro) | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
 | `/perfil` | Dados do usuário, editar dados, alterar senha e sair | cliente |
-| `/admin` | Painel administrativo, CRUDs e relatórios por período | administrador |
+| `/admin` | Painel administrativo: movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
+
+Telas abertas a partir do painel administrativo (só o administrador chega a
+elas):
+
+| Tela | O que faz |
+|---|---|
+| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa) |
+| Gerenciar Serviços | Cadastrar, editar e excluir serviços |
+| Gerenciar Barbeiros | Cadastrar, editar e excluir barbeiros e ligar ou desligar a disponibilidade |
+| Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos |
+| Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e rankings: formas de pagamento, 5 serviços mais procurados e 5 barbeiros mais requisitados. Recortes: este mês, mês passado ou tudo |
+
+Outras telas: **Acesso restrito**, mostrada no lugar de qualquer tela que o
+perfil logado não pode abrir; e a tela de **falha ao abrir o banco** na
+inicialização, com "Tentar novamente".
 
 Toda tela que carrega dados mostra um estado de erro com
 **"Tentar novamente"** quando o banco falha, em vez de um carregamento eterno.
