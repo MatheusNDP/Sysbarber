@@ -57,20 +57,53 @@ class DatabaseService {
   /// Passo da grade, usado como duração quando nenhuma é informada.
   static const int intervaloGrade = 30;
 
-  /// Grade de horários atendidos pela barbearia.
+  /// Turnos de atendimento: das 09:00 às 12:00 e das 13:00 às 18:00. O
+  /// serviço inteiro precisa terminar dentro do turno em que começa.
+  static const List<({String inicio, String fim})> turnos = [
+    (inicio: '09:00', fim: '12:00'),
+    (inicio: '13:00', fim: '18:00'),
+  ];
+
+  /// Grade de horários: de 30 em 30 minutos dentro de cada turno.
   static const List<String> horariosBase = [
     '09:00',
     '09:30',
     '10:00',
     '10:30',
     '11:00',
+    '11:30',
+    '13:00',
+    '13:30',
     '14:00',
     '14:30',
     '15:00',
     '15:30',
     '16:00',
     '16:30',
+    '17:00',
+    '17:30',
   ];
+
+  /// Até quantos dias à frente o cliente pode agendar, contando hoje: de hoje
+  /// até 13 dias depois.
+  static const int diasDeAgenda = 14;
+
+  /// A barbearia atende de segunda a sábado; domingo não abre.
+  static bool atendeNoDia(DateTime dia) => dia.weekday != DateTime.sunday;
+
+  /// Último dia que aceita reserva, contando a partir de [hoje].
+  static DateTime ultimoDiaDaAgenda(DateTime hoje) =>
+      DateTime(hoje.year, hoje.month, hoje.day + diasDeAgenda - 1);
+
+  /// Dias oferecidos na agenda: de hoje até [ultimoDiaDaAgenda], sem os
+  /// domingos. A tela de horário usa esta mesma lista.
+  static List<DateTime> diasDisponiveis([DateTime? hoje]) {
+    final h = hoje ?? DateTime.now();
+    return [
+      for (var i = 0; i < diasDeAgenda; i++)
+        DateTime(h.year, h.month, h.day + i),
+    ].where(atendeNoDia).toList();
+  }
 
   Database? _db;
 
@@ -1085,21 +1118,24 @@ class DatabaseService {
   /// Horários da grade que continuam livres para o barbeiro naquela data.
   ///
   /// Um horário só é oferecido se o serviço inteiro ([duracaoMinutos]) cabe
-  /// sem invadir outro atendimento do barbeiro — e, com [idCliente], sem
-  /// conflitar com outro horário do próprio cliente. Agendamentos cancelados
-  /// não bloqueiam nada (regra de negócio 2), e um profissional indisponível
-  /// não oferece horário nenhum.
+  /// no turno e sem invadir outro atendimento do barbeiro — e, com
+  /// [idCliente], sem conflitar com outro horário do próprio cliente.
+  /// Agendamentos cancelados não bloqueiam nada (regra de negócio 2). Domingo,
+  /// dias além da janela de agendamento e profissional indisponível não
+  /// oferecem horário nenhum.
   Future<List<String>> horariosDisponiveis(
     int idBarbeiro,
     DateTime data, {
     int? duracaoMinutos,
     int? idCliente,
+    DateTime? agora,
   }) async => _horariosLivres(
     await database,
     idBarbeiro,
     data,
     duracaoMinutos: duracaoMinutos,
     idCliente: idCliente,
+    agora: agora,
   );
 
   Future<List<String>> _horariosLivres(
@@ -1121,20 +1157,22 @@ class DatabaseService {
       return [];
     }
 
+    final referencia = agora ?? DateTime.now();
+    if (!atendeNoDia(data) || _depoisDaJanela(data, referencia)) return [];
+
     final doBarbeiro = await _ocupacoes(db, data, idBarbeiro: idBarbeiro);
     final doCliente = idCliente == null
         ? const <_Intervalo>[]
         : await _ocupacoes(db, data, idCliente: idCliente);
     final duracao = Duration(minutes: duracaoMinutos ?? intervaloGrade);
 
-    // Horários que já passaram não podem ser oferecidos — sem isto o app
-    // aceita agendar para as 09:00 quando já são 15:00.
-    final referencia = agora ?? DateTime.now();
-
     return horariosBase.where((h) {
       final inicio = _naGrade(data, h);
+      // Horários que já passaram não podem ser oferecidos — sem isto o app
+      // aceita agendar para as 09:00 quando já são 15:00.
       if (!inicio.isAfter(referencia)) return false;
       final fim = inicio.add(duracao);
+      if (_passaDoTurno(inicio, fim)) return false;
       return !_sobrepoe(inicio, fim, doBarbeiro) &&
           !_sobrepoe(inicio, fim, doCliente);
     }).toList();
@@ -1184,6 +1222,27 @@ class DatabaseService {
     );
   }
 
+  /// Fim do turno em que [inicio] cai, ou `null` se estiver fora dos turnos.
+  static DateTime? _fimDoTurno(DateTime inicio) {
+    for (final t in turnos) {
+      final abre = _naGrade(inicio, t.inicio);
+      final fecha = _naGrade(inicio, t.fim);
+      if (!inicio.isBefore(abre) && inicio.isBefore(fecha)) return fecha;
+    }
+    return null;
+  }
+
+  /// O atendimento de [inicio] a [fim] passa do fim do turno em que começa?
+  static bool _passaDoTurno(DateTime inicio, DateTime fim) {
+    final fecha = _fimDoTurno(inicio);
+    return fecha == null || fim.isAfter(fecha);
+  }
+
+  /// [dia] fica depois do último dia da janela de agendamento?
+  static bool _depoisDaJanela(DateTime dia, DateTime referencia) =>
+      DateTime(dia.year, dia.month, dia.day)
+          .isAfter(ultimoDiaDaAgenda(referencia));
+
   /// Confere, sem gravar nada, se o horário ainda pode ser reservado.
   ///
   /// Devolve a mensagem do impedimento ou `null` quando está tudo certo. A
@@ -1232,6 +1291,10 @@ class DatabaseService {
 
     final referencia = agora ?? DateTime.now();
     if (!dataHora.isAfter(referencia)) return 'Este horário já passou';
+    if (!atendeNoDia(dataHora)) return 'A barbearia não abre aos domingos';
+    if (_depoisDaJanela(dataHora, referencia)) {
+      return 'Só é possível agendar até $diasDeAgenda dias à frente';
+    }
 
     final hora =
         '${_doisDigitos(dataHora.hour)}:${_doisDigitos(dataHora.minute)}';
@@ -1242,6 +1305,9 @@ class DatabaseService {
     final fim = dataHora.add(
       Duration(minutes: duracaoMinutos ?? intervaloGrade),
     );
+    if (_passaDoTurno(dataHora, fim)) {
+      return 'Começando às $hora, o serviço passaria do fim do turno';
+    }
     final doBarbeiro = await _ocupacoes(db, dataHora, idBarbeiro: idBarbeiro);
     if (_sobrepoe(dataHora, fim, doBarbeiro)) {
       return 'O horário $hora não está mais livre';

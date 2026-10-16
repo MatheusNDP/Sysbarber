@@ -9,8 +9,10 @@ import '../widgets/common_widgets.dart';
 
 /// Escolha de data e horário (`/horario`).
 ///
-/// Os horários vêm de [DatabaseService.horariosDisponiveis] — os já ocupados
-/// pelo barbeiro naquele dia simplesmente não aparecem.
+/// A régua mostra os dias de [DatabaseService.diasDisponiveis] (de hoje até 13
+/// dias depois, sem os domingos), e os horários vêm de
+/// [DatabaseService.horariosDisponiveis] — os já ocupados pelo barbeiro
+/// naquele dia simplesmente não aparecem.
 class HorarioScreen extends StatefulWidget {
   const HorarioScreen({super.key});
 
@@ -35,11 +37,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
   @override
   void initState() {
     super.initState();
-    final hoje = DateTime.now();
-    _dias = List.generate(
-      7,
-      (i) => DateTime(hoje.year, hoje.month, hoje.day).add(Duration(days: i)),
-    );
+    _dias = DatabaseService.diasDisponiveis();
     _dataSelecionada = _dias.first;
     _carregarHorarios();
   }
