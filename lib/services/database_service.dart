@@ -1017,20 +1017,33 @@ class DatabaseService {
 
     return linhas
         .map(
-          (linha) => _agendamentoDaLinha(
-            linha,
-            barbeiro: Barbeiro.fromMap({
-              'id': linha['b_id'],
-              'nome': linha['b_nome'],
-              'especialidade': linha['b_especialidade'],
-              'avaliacao': linha['b_avaliacao'],
-              'avaliacoes': linha['b_avaliacoes'],
-              'iniciais': linha['b_iniciais'],
-            }),
-          ),
+          (linha) =>
+              _agendamentoDaLinha(linha, barbeiro: _barbeiroDaLinha(linha)),
         )
         .toList();
   }
+
+  /// Barbeiro trazido pelas listagens (colunas `b_*`).
+  static Barbeiro _barbeiroDaLinha(Map<String, Object?> linha) =>
+      Barbeiro.fromMap({
+        'id': linha['b_id'],
+        'nome': linha['b_nome'],
+        'especialidade': linha['b_especialidade'],
+        'avaliacao': linha['b_avaliacao'],
+        'avaliacoes': linha['b_avaliacoes'],
+        'iniciais': linha['b_iniciais'],
+      });
+
+  /// Cliente trazido pelas listagens (colunas `c_*`), só com os dados de
+  /// contato: o hash da senha não sai do banco.
+  static Cliente _clienteDaLinha(Map<String, Object?> linha) => Cliente.fromMap({
+    'id': linha['c_id'],
+    'nome': linha['c_nome'],
+    'email': linha['c_email'],
+    'telefone': linha['c_telefone'],
+    'senha_hash': '',
+    'criado_em': linha['c_criado_em'],
+  });
 
   /// Agenda de um profissional, com o cliente, o serviço e o pagamento já
   /// carregados.
@@ -1075,16 +1088,59 @@ class DatabaseService {
 
     return linhas
         .map(
+          (linha) =>
+              _agendamentoDaLinha(linha, cliente: _clienteDaLinha(linha)),
+        )
+        .toList();
+  }
+
+  /// Agenda geral do administrador: todos os agendamentos, de todos os
+  /// barbeiros, com barbeiro, cliente, serviço e pagamento numa consulta só.
+  /// Como na agenda do barbeiro, do cliente vêm só os dados de contato.
+  Future<List<Agendamento>> listarTodosAgendamentos() async {
+    final db = await database;
+    final linhas = await db.rawQuery('''
+      SELECT
+        a.id            AS id,
+        a.id_cliente    AS id_cliente,
+        a.id_barbeiro   AS id_barbeiro,
+        a.id_servico    AS id_servico,
+        a.data_hora     AS data_hora,
+        a.status        AS status,
+        a.duracao_minutos AS duracao_minutos,
+        a.preco         AS preco,
+        b.id            AS b_id,
+        b.nome          AS b_nome,
+        b.especialidade AS b_especialidade,
+        b.avaliacao     AS b_avaliacao,
+        b.avaliacoes    AS b_avaliacoes,
+        b.iniciais      AS b_iniciais,
+        c.id            AS c_id,
+        c.nome          AS c_nome,
+        c.email         AS c_email,
+        c.telefone      AS c_telefone,
+        c.criado_em     AS c_criado_em,
+        s.id            AS s_id,
+        s.nome          AS s_nome,
+        s.descricao     AS s_descricao,
+        s.preco         AS s_preco,
+        s.duracao_minutos AS s_duracao_minutos,
+        s.icone         AS s_icone,
+        $_colunasPagamento
+      FROM agendamento a
+      INNER JOIN barbeiro b ON b.id = a.id_barbeiro
+      INNER JOIN cliente  c ON c.id = a.id_cliente
+      INNER JOIN servico  s ON s.id = a.id_servico
+      $_juncaoPagamento
+      ORDER BY a.data_hora DESC
+    ''');
+
+    return linhas
+        .map(
           (linha) => _agendamentoDaLinha(
             linha,
-            cliente: Cliente.fromMap({
-              'id': linha['c_id'],
-              'nome': linha['c_nome'],
-              'email': linha['c_email'],
-              'telefone': linha['c_telefone'],
-              'senha_hash': '',
-              'criado_em': linha['c_criado_em'],
-            }),
+            barbeiro: _barbeiroDaLinha(linha),
+            cliente: _clienteDaLinha(linha),
           ),
         )
         .toList();

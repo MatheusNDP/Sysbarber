@@ -6,10 +6,19 @@ import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'acesso_negado_screen.dart';
 
-/// Meus agendamentos (`/agendamentos`), separados em Próximos e Histórico.
+/// Agendamentos, separados em duas abas: em aberto (ou próximos) e histórico.
+///
+/// A mesma tela tem três modos: os agendamentos do cliente e a agenda do
+/// barbeiro logado (ambos em `/agendamentos`) e, com [agendaGeral], a agenda
+/// de todos os barbeiros, aberta pelo administrador a partir do painel.
 class AgendamentosScreen extends StatefulWidget {
-  const AgendamentosScreen({super.key});
+  const AgendamentosScreen({super.key, this.agendaGeral = false});
+
+  /// Agenda geral do administrador: todos os atendimentos, de todos os
+  /// barbeiros, com as mesmas ações do barbeiro.
+  final bool agendaGeral;
 
   @override
   State<AgendamentosScreen> createState() => _AgendamentosScreenState();
@@ -36,16 +45,28 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     super.dispose();
   }
 
-  /// A mesma tela serve o cliente e o profissional; só muda a origem dos
-  /// dados e os rótulos.
+  /// A mesma tela serve o cliente, o profissional e o administrador; muda a
+  /// origem dos dados, os rótulos e as ações.
   bool get _modoBarbeiro => AuthService.instance.ehBarbeiro;
+
+  bool get _agendaGeral => widget.agendaGeral;
+
+  /// Quem usa a tela fala pela barbearia — o barbeiro ou o administrador na
+  /// agenda geral: recebe pagamentos, conclui, registra falta e cancela sem
+  /// multa.
+  bool get _pelaBarbearia => _modoBarbeiro || _agendaGeral;
 
   Future<void> _carregar() async {
     final auth = AuthService.instance;
     final idBarbeiro = auth.barbeiroAtual?.id;
     final usuario = auth.usuarioAtual;
 
-    if (_modoBarbeiro ? idBarbeiro == null : usuario?.id == null) {
+    final semConta = _agendaGeral
+        ? !auth.podeAdministrar
+        : _modoBarbeiro
+        ? idBarbeiro == null
+        : usuario?.id == null;
+    if (semConta) {
       if (mounted) setState(() => _carregando = false);
       return;
     }
@@ -58,7 +79,9 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
     try {
       final db = DatabaseService.instance;
-      final lista = _modoBarbeiro
+      final lista = _agendaGeral
+          ? await db.listarTodosAgendamentos()
+          : _modoBarbeiro
           ? await db.listarAgendamentosBarbeiro(idBarbeiro!)
           : await db.listarAgendamentosCliente(usuario!.id!);
 
@@ -80,9 +103,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   /// Confirma o recebimento de um pagamento pendente ("pagar na barbearia").
   ///
-  /// Exclusivo do profissional: é quem está no caixa que dá a baixa.
+  /// Exclusivo da barbearia (barbeiro ou administrador): é quem está no caixa
+  /// que dá a baixa.
   Future<void> _quitar(Agendamento a) async {
-    if (!_modoBarbeiro) return;
+    if (!_pelaBarbearia) return;
 
     final pagamento = a.pagamento;
     final idPagamento = pagamento?.id;
@@ -198,12 +222,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   /// Primeira aba.
   ///
-  /// Para o cliente, o que ainda vai acontecer. Para o profissional, tudo o
-  /// que ainda não teve desfecho — inclusive o que já passou do horário e
-  /// precisa ser concluído ou marcado como falta. Antes esses atendimentos
-  /// caíam no histórico sem nenhuma ação e ficavam "confirmados" para sempre.
+  /// Para o cliente, o que ainda vai acontecer. Para a barbearia, tudo o que
+  /// ainda não teve desfecho — inclusive o que já passou do horário e precisa
+  /// ser concluído ou marcado como falta. Antes esses atendimentos caíam no
+  /// histórico sem nenhuma ação e ficavam "confirmados" para sempre.
   bool _naPrimeiraAba(Agendamento a, DateTime agora) =>
-      _modoBarbeiro ? a.emAberto : a.emAberto && !a.jaComecou(agora);
+      _pelaBarbearia ? a.emAberto : a.emAberto && !a.jaComecou(agora);
 
   List<Agendamento> get _proximos {
     final agora = DateTime.now();
@@ -237,7 +261,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _modoBarbeiro
+              _pelaBarbearia
                   ? 'O horário voltará a ficar disponível. Como o '
                         'cancelamento parte da barbearia, o cliente não paga '
                         'multa e recebe de volta o que já tiver pago.'
@@ -250,8 +274,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ),
             ),
             // O cliente precisa saber da penalidade antes de decidir, não
-            // depois. O barbeiro é isento: a falta é da barbearia.
-            if (!_modoBarbeiro && !DatabaseService.dentroDoPrazo(a.data)) ...[
+            // depois. A barbearia é isenta: a falta é dela.
+            if (!_pelaBarbearia && !DatabaseService.dentroDoPrazo(a.data)) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -320,7 +344,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     try {
       final r = await DatabaseService.instance.cancelarAgendamento(
         a.id!,
-        porBarbeiro: _modoBarbeiro,
+        porBarbeiro: _pelaBarbearia,
       );
       if (!mounted) return;
       await _mostrarDesfecho(r);
@@ -416,9 +440,19 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   @override
   Widget build(BuildContext context) {
+    // A agenda geral abre por navegação direta a partir do painel, sem passar
+    // pelas rotas nomeadas: a permissão é conferida aqui também.
+    if (_agendaGeral && !AuthService.instance.podeAdministrar) {
+      return const AcessoNegadoScreen();
+    }
+
     return Scaffold(
       appBar: BarberAppBar(
-        titulo: _modoBarbeiro ? 'MINHA AGENDA' : 'MEUS AGENDAMENTOS',
+        titulo: _agendaGeral
+            ? 'AGENDA GERAL'
+            : _modoBarbeiro
+            ? 'MINHA AGENDA'
+            : 'MEUS AGENDAMENTOS',
         acoes: _modoBarbeiro
             ? [
                 IconButton(
@@ -441,7 +475,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             labelStyle: AppTheme.sans(size: 13, weight: FontWeight.w700),
             unselectedLabelStyle: AppTheme.sans(size: 13),
             tabs: [
-              Tab(text: _modoBarbeiro ? 'Em aberto' : 'Próximos'),
+              Tab(text: _pelaBarbearia ? 'Em aberto' : 'Próximos'),
               const Tab(text: 'Histórico'),
             ],
           ),
@@ -470,12 +504,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       return EstadoVazio(
         icone: primeiraAba ? '📅' : '🗂️',
         titulo: primeiraAba
-            ? (_modoBarbeiro
+            ? (_pelaBarbearia
                   ? 'Nenhum atendimento marcado'
                   : 'Nenhum agendamento futuro')
             : 'Histórico vazio',
         descricao: primeiraAba
-            ? (_modoBarbeiro
+            ? (_agendaGeral
+                  ? 'Os agendamentos de todos os barbeiros aparecem aqui.'
+                  : _modoBarbeiro
                   ? 'Quando um cliente agendar com você, aparece aqui.'
                   : 'Agende um horário na aba de serviços.')
             : 'Atendimentos concluídos, cancelados ou com falta aparecem '
@@ -511,15 +547,15 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     // As ações vêm das regras do próprio agendamento, não da aba em que ele
     // está — assim nada some da tela no minuto em que o horário chega.
     final acoes = <Widget>[
-      // Concluir e registrar falta são atribuições do profissional.
-      if (_modoBarbeiro && a.podeFinalizar(agora))
+      // Concluir e registrar falta são atribuições da barbearia.
+      if (_pelaBarbearia && a.podeFinalizar(agora))
         _acao(
           'Concluir',
           Icons.check_circle_outline,
           AppColors.gold,
           () => _finalizar(a),
         ),
-      if (_modoBarbeiro && a.podeRegistrarFalta(agora))
+      if (_pelaBarbearia && a.podeRegistrarFalta(agora))
         _acao(
           'Não compareceu',
           Icons.person_off_outlined,
@@ -528,7 +564,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         ),
       if (a.podeCancelar(agora))
         _acao(
-          _modoBarbeiro ? 'Cancelar' : 'Cancelar agendamento',
+          _pelaBarbearia ? 'Cancelar' : 'Cancelar agendamento',
           Icons.close,
           AppColors.red,
           () => _cancelar(a),
@@ -559,15 +595,24 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             ],
           ),
           const SizedBox(height: 14),
+          // O cliente vê quem vai atendê-lo; a barbearia vê quem será
+          // atendido. Na agenda geral aparecem os dois.
           _linha(
-            _modoBarbeiro ? Icons.face_outlined : Icons.person_outline,
-            _modoBarbeiro
+            _pelaBarbearia ? Icons.face_outlined : Icons.person_outline,
+            _pelaBarbearia
                 ? (a.cliente?.nome ?? '-')
                 : (a.barbeiro?.nome ?? '-'),
           ),
-          if (_modoBarbeiro && (a.cliente?.telefone.isNotEmpty ?? false)) ...[
+          if (_pelaBarbearia && (a.cliente?.telefone.isNotEmpty ?? false)) ...[
             const SizedBox(height: 6),
             _linha(Icons.phone_outlined, a.cliente!.telefone),
+          ],
+          if (_agendaGeral) ...[
+            const SizedBox(height: 6),
+            _linha(
+              Icons.content_cut_outlined,
+              'com ${a.barbeiro?.nome ?? '-'}',
+            ),
           ],
           const SizedBox(height: 6),
           _linha(Icons.event_outlined, formatarDataHora(a.data)),
@@ -599,7 +644,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   /// O cliente não veio: aplica a política de cancelamento fora do prazo.
   Future<void> _registrarFalta(Agendamento a) async {
-    if (!_modoBarbeiro || a.id == null) return;
+    if (!_pelaBarbearia || a.id == null) return;
 
     final penalidade = _pagoComPontos(a)
         ? 'Os ${DatabaseService.pontosParaPremio} pontos usados no resgate '
@@ -664,7 +709,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// É o único caminho que dá esse status a um agendamento — sem ele o
   /// indicador de concluídos dos relatórios nunca sai de zero.
   Future<void> _finalizar(Agendamento a) async {
-    if (!_modoBarbeiro || a.id == null) return;
+    if (!_pelaBarbearia || a.id == null) return;
 
     final pendente = a.pagamento?.pendente ?? false;
 
@@ -886,8 +931,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
     final ehMulta = p.natureza == NaturezaPagamento.multa;
 
-    // Só o profissional confirma o recebimento: quem está no caixa é quem
-    // dá a baixa. O cliente apenas acompanha a situação.
+    // Só a barbearia confirma o recebimento: quem está no caixa é quem dá a
+    // baixa. O cliente apenas acompanha a situação.
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -901,7 +946,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              switch ((_modoBarbeiro, ehMulta)) {
+              switch ((_pelaBarbearia, ehMulta)) {
                 (true, true) =>
                   'Multa de ${formatarReal(p.valor)} pendente — confirme '
                       'ao receber',
@@ -920,7 +965,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ),
             ),
           ),
-          if (_modoBarbeiro) ...[
+          if (_pelaBarbearia) ...[
             const SizedBox(width: 6),
             GoldButton(
               texto: 'RECEBER',
