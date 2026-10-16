@@ -506,4 +506,25 @@ void main() {
     expect(find.text('Concluídos'), findsOneWidget);
     expect(find.text('Finalizados'), findsNothing);
   });
+
+  // -------------------------------------------------------------------------
+  // P14 e P16 — régua de dias da tela de horário
+  // -------------------------------------------------------------------------
+
+  testWidgets('a régua de dias vai até o 14º dia e não mostra domingos',
+      (tester) async {
+    BookingFlow.limpar(); // sem barbeiro: a tela não consulta o banco
+    // Tela larga para a régua inteira ser montada: assim nenhum dia fica de
+    // fora da conferência.
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await abrir(tester, const HorarioScreen());
+
+    // Antes eram 7 dias, com domingo.
+    expect(find.text('DOM'), findsNothing);
+    final ultimo = DatabaseService.diasDisponiveis().last;
+    expect(find.text('${ultimo.day}'), findsOneWidget);
+  });
 }

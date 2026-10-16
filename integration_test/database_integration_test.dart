@@ -53,6 +53,17 @@ void main() {
     );
   }
 
+  /// Próximo dia em que a barbearia atende, a partir de amanhã: se amanhã for
+  /// domingo, é a segunda. Sem isto a suíte falharia quando rodasse num
+  /// sábado.
+  DateTime proximoDiaDeAtendimento() {
+    final amanha = DateTime.now().add(const Duration(days: 1));
+    final dia = DatabaseService.atendeNoDia(amanha)
+        ? amanha
+        : amanha.add(const Duration(days: 1));
+    return DateTime(dia.year, dia.month, dia.day);
+  }
+
   // -------------------------------------------------------------------------
   group('Dados iniciais (seed)', () {
     test('cria os 3 barbeiros', () async {
@@ -202,8 +213,7 @@ void main() {
       final servicos = await service.listarServicos();
       final barbeiro = barbeiros.first;
 
-      final amanha = DateTime.now().add(const Duration(days: 1));
-      final data = DateTime(amanha.year, amanha.month, amanha.day);
+      final data = proximoDiaDeAtendimento();
 
       final antes = await service.horariosDisponiveis(barbeiro.id!, data);
       expect(antes, contains('09:00'));
@@ -833,9 +843,11 @@ void main() {
 
     test('a grade completa continua valendo para dias futuros', () async {
       final barbeiro = (await service.listarBarbeiros()).first;
-      final amanha = DateTime.now().add(const Duration(days: 1));
 
-      final livres = await service.horariosDisponiveis(barbeiro.id!, amanha);
+      final livres = await service.horariosDisponiveis(
+        barbeiro.id!,
+        proximoDiaDeAtendimento(),
+      );
       expect(livres.length, DatabaseService.horariosBase.length);
     });
   });
@@ -1154,15 +1166,15 @@ void main() {
     expect(saldo, soma, reason: 'saldo $saldo difere do extrato $soma');
   }
 
-  /// Agendamento de teste para amanhã no horário informado.
-  Future<int> agendarAmanha(
+  /// Agendamento de teste no próximo dia de atendimento, no horário informado.
+  Future<int> agendarNoProximoDia(
     int idCliente, {
     int hora = 9,
     int minuto = 0,
     int idBarbeiro = 1,
     int idServico = 1,
   }) {
-    final d = DateTime.now().add(const Duration(days: 1));
+    final d = proximoDiaDeAtendimento();
     return service.criarAgendamento(
       Agendamento(
         idCliente: idCliente,
@@ -1190,8 +1202,8 @@ void main() {
     test('resgates simultâneos não gastam o mesmo saldo duas vezes', () async {
       final idCliente = await criarClienteTeste();
       await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
-      final a1 = await agendarAmanha(idCliente, hora: 9);
-      final a2 = await agendarAmanha(idCliente, hora: 14);
+      final a1 = await agendarNoProximoDia(idCliente, hora: 9);
+      final a2 = await agendarNoProximoDia(idCliente, hora: 14);
 
       final ids = await Future.wait([
         service.resgatarPremio(
@@ -1214,7 +1226,7 @@ void main() {
 
     test('confirmações simultâneas creditam os pontos uma vez', () async {
       final idCliente = await criarClienteTeste();
-      final a = await agendarAmanha(idCliente);
+      final a = await agendarNoProximoDia(idCliente);
       final p = await service.criarPagamento(
         Pagamento(
           idAgendamento: a,
@@ -1236,9 +1248,9 @@ void main() {
     });
   });
 
-  /// Amanhã no horário informado.
-  DateTime amanhaAs(int hora, [int minuto = 0]) {
-    final d = DateTime.now().add(const Duration(days: 1));
+  /// Próximo dia de atendimento no horário informado.
+  DateTime proximoDiaAs(int hora, [int minuto = 0]) {
+    final d = proximoDiaDeAtendimento();
     return DateTime(d.year, d.month, d.day, hora, minuto);
   }
 
@@ -1250,7 +1262,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // Corte + Barba, R$ 55
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Cartão',
         cartaoFinal: '1111',
@@ -1273,7 +1285,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
@@ -1292,7 +1304,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 5,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.resgatarPontos,
       );
 
@@ -1313,7 +1325,7 @@ void main() {
           idCliente: idCliente,
           idBarbeiro: 1,
           idServico: 1,
-          dataHora: amanhaAs(9),
+          dataHora: proximoDiaAs(9),
           modo: ModoReserva.resgatarPontos,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -1329,7 +1341,7 @@ void main() {
         idCliente: c1,
         idBarbeiro: 1,
         idServico: 1,
-        dataHora: amanhaAs(10),
+        dataHora: proximoDiaAs(10),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
@@ -1338,7 +1350,7 @@ void main() {
           idCliente: c2,
           idBarbeiro: 1,
           idServico: 1,
-          dataHora: amanhaAs(10),
+          dataHora: proximoDiaAs(10),
           modo: ModoReserva.pagarAgora,
           metodo: 'Pix',
         ),
@@ -1356,7 +1368,7 @@ void main() {
       );
 
       expect(
-        await service.horariosDisponiveis(inativo.id!, amanhaAs(0)),
+        await service.horariosDisponiveis(inativo.id!, proximoDiaAs(0)),
         isEmpty,
       );
       await expectLater(
@@ -1364,7 +1376,7 @@ void main() {
           idCliente: idCliente,
           idBarbeiro: inativo.id!,
           idServico: 1,
-          dataHora: amanhaAs(9),
+          dataHora: proximoDiaAs(9),
           modo: ModoReserva.pagarNaBarbearia,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -1396,7 +1408,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: corte.id!,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -1409,12 +1421,12 @@ void main() {
     test('verificarReserva antecipa o impedimento sem gravar', () async {
       final idCliente = await criarClienteTeste();
       expect(
-        await service.verificarReserva(idBarbeiro: 1, dataHora: amanhaAs(9)),
+        await service.verificarReserva(idBarbeiro: 1, dataHora: proximoDiaAs(9)),
         isNull,
       );
-      await agendarAmanha(idCliente, hora: 9);
+      await agendarNoProximoDia(idCliente, hora: 9);
       expect(
-        await service.verificarReserva(idBarbeiro: 1, dataHora: amanhaAs(9)),
+        await service.verificarReserva(idBarbeiro: 1, dataHora: proximoDiaAs(9)),
         isNotNull,
       );
       expect(await service.contarAgendamentos(), 1);
@@ -1428,7 +1440,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
       await service.cancelarAgendamento(r.idAgendamento); // no prazo
@@ -1481,7 +1493,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -1489,7 +1501,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 2,
         idServico: 1,
-        dataHora: amanhaAs(14),
+        dataHora: proximoDiaAs(14),
         modo: ModoReserva.resgatarPontos,
       );
       await service.cancelarAgendamento(pago.idAgendamento);
@@ -1510,7 +1522,7 @@ void main() {
   group('Correção 4 — conclusão do atendimento e estados', () {
     test('não se conclui um atendimento dias antes', () async {
       final idCliente = await criarClienteTeste();
-      final id = await agendarAmanha(idCliente);
+      final id = await agendarNoProximoDia(idCliente);
 
       await expectLater(
         service.finalizarAgendamento(id),
@@ -1522,10 +1534,10 @@ void main() {
 
     test('conclui depois do horário marcado', () async {
       final idCliente = await criarClienteTeste();
-      final id = await agendarAmanha(idCliente, hora: 9);
+      final id = await agendarNoProximoDia(idCliente, hora: 9);
 
       // Antes a opção sumia da tela exatamente neste momento.
-      final depois = amanhaAs(11);
+      final depois = proximoDiaAs(11);
       expect(await service.finalizarAgendamento(id, agora: depois), 1);
     });
 
@@ -1536,11 +1548,11 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
-      await service.finalizarAgendamento(r.idAgendamento, agora: amanhaAs(10));
+      await service.finalizarAgendamento(r.idAgendamento, agora: proximoDiaAs(10));
 
       await expectLater(
         service.cancelarAgendamento(r.idAgendamento, porBarbeiro: true),
@@ -1552,7 +1564,7 @@ void main() {
 
     test('cancelar duas vezes é recusado', () async {
       final idCliente = await criarClienteTeste();
-      final id = await agendarAmanha(idCliente);
+      final id = await agendarNoProximoDia(idCliente);
       await service.cancelarAgendamento(id);
 
       await expectLater(
@@ -1567,18 +1579,18 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // R$ 55
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
       await expectLater(
-        service.registrarFalta(r.idAgendamento, agora: amanhaAs(8)),
+        service.registrarFalta(r.idAgendamento, agora: proximoDiaAs(8)),
         throwsA(isA<RegraNegocioException>()),
       );
 
       final resultado = await service.registrarFalta(
         r.idAgendamento,
-        agora: amanhaAs(10),
+        agora: proximoDiaAs(10),
       );
       expect(resultado.multaAPagar, 27.5);
 
@@ -1603,7 +1615,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // R$ 55 → 515 pontos
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -1611,7 +1623,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 2,
         idServico: 5, // prêmio → sobram 15 pontos
-        dataHora: amanhaAs(14),
+        dataHora: proximoDiaAs(14),
         modo: ModoReserva.resgatarPontos,
       );
 
@@ -1634,7 +1646,7 @@ void main() {
           idCliente: idCliente,
           idBarbeiro: 1,
           idServico: 1,
-          dataHora: amanhaAs(9),
+          dataHora: proximoDiaAs(9),
           modo: ModoReserva.resgatarPontos,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -1649,11 +1661,11 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 5, // Coloração, 60 min
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
-      final livres = await service.horariosDisponiveis(1, amanhaAs(0));
+      final livres = await service.horariosDisponiveis(1, proximoDiaAs(0));
       expect(livres, isNot(contains('09:00')));
       expect(livres, isNot(contains('09:30'))); // antes: oferecido
       expect(livres, contains('10:00'));
@@ -1661,11 +1673,11 @@ void main() {
 
     test('serviço longo não é oferecido onde não cabe', () async {
       final idCliente = await criarClienteTeste();
-      await agendarAmanha(idCliente, hora: 10); // Corte, 30 min
+      await agendarNoProximoDia(idCliente, hora: 10); // Corte, 30 min
 
       final livres = await service.horariosDisponiveis(
         1,
-        amanhaAs(0),
+        proximoDiaAs(0),
         duracaoMinutos: 60,
       );
       expect(livres, contains('09:00')); // 09:00–10:00 cabe
@@ -1679,7 +1691,7 @@ void main() {
         idCliente: c1,
         idBarbeiro: 1,
         idServico: 5,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
@@ -1688,7 +1700,7 @@ void main() {
           idCliente: c2,
           idBarbeiro: 1,
           idServico: 1,
-          dataHora: amanhaAs(9, 30),
+          dataHora: proximoDiaAs(9, 30),
           modo: ModoReserva.pagarNaBarbearia,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -1701,7 +1713,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // 50 min: 09:00–09:50
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
 
@@ -1710,7 +1722,7 @@ void main() {
           idCliente: idCliente,
           idBarbeiro: 2,
           idServico: 1,
-          dataHora: amanhaAs(9, 30),
+          dataHora: proximoDiaAs(9, 30),
           modo: ModoReserva.pagarNaBarbearia,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -1718,7 +1730,7 @@ void main() {
       // Na grade do cliente, o horário também some.
       final livres = await service.horariosDisponiveis(
         2,
-        amanhaAs(0),
+        proximoDiaAs(0),
         idCliente: idCliente,
       );
       expect(livres, isNot(contains('09:30')));
@@ -1727,10 +1739,10 @@ void main() {
 
     test('o banco recusa dois agendamentos no mesmo horário', () async {
       final idCliente = await criarClienteTeste();
-      await agendarAmanha(idCliente, hora: 11);
+      await agendarNoProximoDia(idCliente, hora: 11);
 
       await expectLater(
-        agendarAmanha(idCliente, hora: 11),
+        agendarNoProximoDia(idCliente, hora: 11),
         throwsA(isA<DatabaseException>()),
       );
       expect(await service.contarAgendamentos(), 1);
@@ -1742,7 +1754,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 5,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
       // Encurtar o serviço depois não libera o que já foi marcado.
@@ -1751,7 +1763,7 @@ void main() {
       );
       await service.atualizarServico(coloracao.copyWith(duracaoMinutos: 30));
 
-      final livres = await service.horariosDisponiveis(1, amanhaAs(0));
+      final livres = await service.horariosDisponiveis(1, proximoDiaAs(0));
       expect(livres, isNot(contains('09:30')));
       final agenda = await service.listarAgendamentosCliente(idCliente);
       expect(agenda.first.duracaoMinutos, 60);
@@ -1829,7 +1841,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1, // R$ 35
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
       final corte = (await service.listarServicos()).first;
@@ -1850,7 +1862,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1, // R$ 35
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -1858,7 +1870,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // R$ 55, cancelado no prazo
-        dataHora: amanhaAs(14),
+        dataHora: proximoDiaAs(14),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -1879,14 +1891,14 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 5,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.resgatarPontos,
       );
       await service.reservar(
         idCliente: idCliente,
         idBarbeiro: 2,
         idServico: 1,
-        dataHora: amanhaAs(14),
+        dataHora: proximoDiaAs(14),
         modo: ModoReserva.pagarAgora,
         metodo: 'Cartão',
       );
@@ -1922,7 +1934,7 @@ void main() {
 
     test('filtra pelo período', () async {
       final idCliente = await criarClienteTeste();
-      final id = await agendarAmanha(idCliente);
+      final id = await agendarNoProximoDia(idCliente);
       final agora = DateTime.now();
       final inicioMes = DateTime(agora.year, agora.month);
       final proximoMes = DateTime(agora.year, agora.month + 1);
@@ -1956,14 +1968,14 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 3, // R$ 55
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
       // Cancelado 30 min antes: retém 27,50 e estorna 27,50.
       await service.cancelarAgendamento(
         r.idAgendamento,
-        agora: amanhaAs(8, 30),
+        agora: proximoDiaAs(8, 30),
       );
 
       // Antes devolvia o estorno, e a tela mostrava "Pago via Estorno".
@@ -1983,10 +1995,10 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarNaBarbearia,
       );
-      await agendarAmanha(idCliente, hora: 14); // sem pagamento
+      await agendarNoProximoDia(idCliente, hora: 14); // sem pagamento
 
       final lista = await service.listarAgendamentosCliente(idCliente);
       final comPagamento = lista.firstWhere((a) => a.data.hour == 9);
@@ -2006,7 +2018,7 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 1,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
@@ -2036,7 +2048,7 @@ void main() {
 
     test('a agenda do barbeiro não carrega a senha dos clientes', () async {
       final idCliente = await criarClienteTeste();
-      await agendarAmanha(idCliente);
+      await agendarNoProximoDia(idCliente);
 
       final agenda = await service.listarAgendamentosBarbeiro(1);
       expect(agenda.first.cliente!.nome, 'Novo Cliente');
@@ -2373,7 +2385,7 @@ void main() {
     Future<void> preencherRascunho() async {
       BookingFlow.iniciar((await service.listarServicos()).first);
       BookingFlow.barbeiroSelecionado = (await service.listarBarbeiros()).first;
-      BookingFlow.dataSelecionada = amanhaAs(0);
+      BookingFlow.dataSelecionada = proximoDiaAs(0);
       BookingFlow.horaSelecionada = '09:00';
     }
 
@@ -2543,14 +2555,14 @@ void main() {
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: idServico,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.pagarAgora,
         metodo: 'Pix',
       );
 
       final c = await service.cancelarAgendamento(
         r.idAgendamento,
-        agora: amanhaAs(8, 30),
+        agora: proximoDiaAs(8, 30),
       );
 
       bool emCentavos(double v) => (v * 100) == (v * 100).roundToDouble();
@@ -2566,24 +2578,24 @@ void main() {
 
   // -------------------------------------------------------------------------
   group('P02 — cancelamento só antes do horário', () {
-    /// Reserva paga agora (R$ 55) para amanhã às 9h.
-    Future<ResultadoReserva> reservarPagoAmanha(int idCliente) =>
+    /// Reserva paga agora (R$ 55) para o próximo dia de atendimento às 9h.
+    Future<ResultadoReserva> reservarPagoNoProximoDia(int idCliente) =>
         service.reservar(
           idCliente: idCliente,
           idBarbeiro: 1,
           idServico: 3,
-          dataHora: amanhaAs(9),
+          dataHora: proximoDiaAs(9),
           modo: ModoReserva.pagarAgora,
           metodo: 'Pix',
         );
 
     test('depois do horário o cancelamento é recusado e nada muda', () async {
       final idCliente = await criarClienteTeste();
-      final r = await reservarPagoAmanha(idCliente);
+      final r = await reservarPagoNoProximoDia(idCliente);
 
       // Antes o banco cancelava, cobrava multa e estornava o resto.
       await expectLater(
-        service.cancelarAgendamento(r.idAgendamento, agora: amanhaAs(9, 15)),
+        service.cancelarAgendamento(r.idAgendamento, agora: proximoDiaAs(9, 15)),
         throwsA(isA<RegraNegocioException>()),
       );
 
@@ -2596,22 +2608,22 @@ void main() {
 
     test('no horário exato também já não cancela', () async {
       final idCliente = await criarClienteTeste();
-      final r = await reservarPagoAmanha(idCliente);
+      final r = await reservarPagoNoProximoDia(idCliente);
 
       await expectLater(
-        service.cancelarAgendamento(r.idAgendamento, agora: amanhaAs(9)),
+        service.cancelarAgendamento(r.idAgendamento, agora: proximoDiaAs(9)),
         throwsA(isA<RegraNegocioException>()),
       );
     });
 
     test('a barbearia também não cancela depois do horário', () async {
       final idCliente = await criarClienteTeste();
-      final r = await reservarPagoAmanha(idCliente);
+      final r = await reservarPagoNoProximoDia(idCliente);
 
       await expectLater(
         service.cancelarAgendamento(
           r.idAgendamento,
-          agora: amanhaAs(10),
+          agora: proximoDiaAs(10),
           porBarbeiro: true,
         ),
         throwsA(isA<RegraNegocioException>()),
@@ -2620,11 +2632,11 @@ void main() {
 
     test('um minuto antes ainda cancela, com multa', () async {
       final idCliente = await criarClienteTeste();
-      final r = await reservarPagoAmanha(idCliente);
+      final r = await reservarPagoNoProximoDia(idCliente);
 
       final c = await service.cancelarAgendamento(
         r.idAgendamento,
-        agora: amanhaAs(8, 59),
+        agora: proximoDiaAs(8, 59),
       );
 
       expect(c.comMulta, isTrue);
@@ -2634,16 +2646,16 @@ void main() {
 
   // -------------------------------------------------------------------------
   group('P03 — resgate e desistência tardia', () {
-    /// Troca 500 pontos por uma Coloração amanhã às 9h.
+    /// Troca 500 pontos por uma Coloração no próximo dia de atendimento às 9h.
     /// Devolve (idCliente, idAgendamento).
-    Future<(int, int)> resgatarAmanha() async {
+    Future<(int, int)> resgatarNoProximoDia() async {
       final idCliente = await criarClienteTeste();
       await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
       final r = await service.reservar(
         idCliente: idCliente,
         idBarbeiro: 1,
         idServico: 5,
-        dataHora: amanhaAs(9),
+        dataHora: proximoDiaAs(9),
         modo: ModoReserva.resgatarPontos,
       );
       expect(await service.obterPontos(idCliente), 0);
@@ -2651,9 +2663,9 @@ void main() {
     }
 
     test('cancelado no prazo, os 500 pontos voltam', () async {
-      final (idCliente, id) = await resgatarAmanha();
+      final (idCliente, id) = await resgatarNoProximoDia();
 
-      final c = await service.cancelarAgendamento(id, agora: amanhaAs(7));
+      final c = await service.cancelarAgendamento(id, agora: proximoDiaAs(7));
 
       expect(c.pontosAjustados, 500);
       expect(c.pontosRetidos, 0);
@@ -2663,10 +2675,10 @@ void main() {
 
     test('cancelado com menos de 1 hora, o cliente perde os pontos, sem '
         'multa em dinheiro', () async {
-      final (idCliente, id) = await resgatarAmanha();
+      final (idCliente, id) = await resgatarNoProximoDia();
 
       // Antes os 500 pontos voltavam mesmo em cima da hora.
-      final c = await service.cancelarAgendamento(id, agora: amanhaAs(8, 30));
+      final c = await service.cancelarAgendamento(id, agora: proximoDiaAs(8, 30));
 
       expect(c.comMulta, isFalse);
       expect(c.multa, 0);
@@ -2686,9 +2698,9 @@ void main() {
     });
 
     test('falta num serviço resgatado: perde os pontos, sem multa', () async {
-      final (idCliente, id) = await resgatarAmanha();
+      final (idCliente, id) = await resgatarNoProximoDia();
 
-      final f = await service.registrarFalta(id, agora: amanhaAs(10));
+      final f = await service.registrarFalta(id, agora: proximoDiaAs(10));
 
       expect(f.comMulta, isFalse);
       expect(f.multaAPagar, 0);
@@ -2700,17 +2712,202 @@ void main() {
     });
 
     test('a barbearia cancelando em cima da hora devolve os pontos', () async {
-      final (idCliente, id) = await resgatarAmanha();
+      final (idCliente, id) = await resgatarNoProximoDia();
 
       final c = await service.cancelarAgendamento(
         id,
-        agora: amanhaAs(8, 30),
+        agora: proximoDiaAs(8, 30),
         porBarbeiro: true,
       );
 
       expect(c.pontosAjustados, 500);
       expect(c.pontosRetidos, 0);
       expect(await service.obterPontos(idCliente), 500);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Regras da agenda com datas fixas, que não dependem do dia em que a suíte
+  // roda. 07/01/2030 é uma segunda-feira.
+  final segunda = DateTime(2030, 1, 7);
+
+  /// [dias] depois da segunda 07/01/2030, no horário informado.
+  DateTime naSemana(int dias, [int hora = 0, int minuto = 0]) =>
+      DateTime(segunda.year, segunda.month, segunda.day + dias, hora, minuto);
+
+  group('P14 — domingo fechado', () {
+    final agora = naSemana(0, 7);
+
+    test('domingo não oferece horários; sábado oferece', () async {
+      expect(segunda.weekday, DateTime.monday);
+
+      expect(
+        await service.horariosDisponiveis(1, naSemana(6), agora: agora),
+        isEmpty,
+      );
+      expect(
+        await service.horariosDisponiveis(1, naSemana(5), agora: agora),
+        contains('09:00'),
+      );
+    });
+
+    test('reserva no domingo é recusada sem gravar nada', () async {
+      final idCliente = await criarClienteTeste();
+
+      await expectLater(
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: naSemana(6, 9),
+          modo: ModoReserva.pagarNaBarbearia,
+          agora: agora,
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            contains('domingo'),
+          ),
+        ),
+      );
+      expect(await service.contarAgendamentos(), 0);
+    });
+
+    test('os dias da agenda não incluem domingo', () {
+      final dias = DatabaseService.diasDisponiveis(agora);
+
+      expect(dias.first, segunda);
+      expect(dias.where((d) => d.weekday == DateTime.sunday), isEmpty);
+    });
+  });
+
+  group('P15 — grade e turnos', () {
+    final agora = naSemana(0, 7);
+    final terca = naSemana(1);
+
+    test('a grade tem 16 horários: de 09:00 a 11:30 e de 13:00 a 17:30', () {
+      const grade = DatabaseService.horariosBase;
+
+      expect(grade.length, 16);
+      expect(grade.first, '09:00');
+      expect(grade, containsAll(['11:30', '13:00', '17:30']));
+      expect(grade, isNot(contains('12:00')));
+      expect(grade, isNot(contains('12:30')));
+      expect(grade, isNot(contains('18:00')));
+    });
+
+    test('um serviço de 30 min cabe em todos os horários da grade', () async {
+      final livres = await service.horariosDisponiveis(
+        1,
+        terca,
+        duracaoMinutos: 30,
+        agora: agora,
+      );
+
+      expect(livres, DatabaseService.horariosBase);
+    });
+
+    test('serviço que passaria do fim do turno não é oferecido', () async {
+      final livres = await service.horariosDisponiveis(
+        1,
+        terca,
+        duracaoMinutos: 60, // Coloração
+        agora: agora,
+      );
+
+      expect(livres, containsAll(['11:00', '17:00']));
+      expect(livres, isNot(contains('11:30'))); // terminaria às 12:30
+      expect(livres, isNot(contains('17:30'))); // terminaria às 18:30
+    });
+
+    test('reserva que passaria do fim do turno é recusada', () async {
+      final idCliente = await criarClienteTeste();
+      Future<ResultadoReserva> colorir(int hora, int minuto) =>
+          service.reservar(
+            idCliente: idCliente,
+            idBarbeiro: 1,
+            idServico: 5, // Coloração, 60 min
+            dataHora: naSemana(1, hora, minuto),
+            modo: ModoReserva.pagarNaBarbearia,
+            agora: agora,
+          );
+      final passaDoTurno = throwsA(
+        isA<RegraNegocioException>().having(
+          (e) => e.mensagem,
+          'mensagem',
+          contains('fim do turno'),
+        ),
+      );
+
+      await expectLater(colorir(11, 30), passaDoTurno);
+      await expectLater(colorir(17, 30), passaDoTurno);
+      // 17:00–18:00 cabe no turno da tarde.
+      expect((await colorir(17, 0)).idAgendamento, greaterThan(0));
+    });
+  });
+
+  group('P16 — janela de 14 dias', () {
+    // Quarta, 09/01/2030: o 14º dia, contando hoje, é a terça 22/01; o 15º é
+    // a quarta 23/01. Nenhum dos dois é domingo.
+    final quarta = naSemana(2, 7);
+
+    test('a agenda vai de hoje até 13 dias depois', () {
+      final dias = DatabaseService.diasDisponiveis(quarta);
+
+      expect(DatabaseService.ultimoDiaDaAgenda(quarta), DateTime(2030, 1, 22));
+      expect(dias.first, DateTime(2030, 1, 9));
+      expect(dias.last, DateTime(2030, 1, 22));
+      // 14 dias menos os domingos 13/01 e 20/01.
+      expect(dias.length, 12);
+    });
+
+    test('horários aparecem até o 14º dia e somem no 15º', () async {
+      expect(
+        await service.horariosDisponiveis(
+          1,
+          DateTime(2030, 1, 22),
+          agora: quarta,
+        ),
+        isNotEmpty,
+      );
+      expect(
+        await service.horariosDisponiveis(
+          1,
+          DateTime(2030, 1, 23),
+          agora: quarta,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('reserva no 14º dia é aceita e no 15º, recusada', () async {
+      final idCliente = await criarClienteTeste();
+      Future<ResultadoReserva> reservarEm(DateTime dataHora) =>
+          service.reservar(
+            idCliente: idCliente,
+            idBarbeiro: 1,
+            idServico: 1,
+            dataHora: dataHora,
+            modo: ModoReserva.pagarNaBarbearia,
+            agora: quarta,
+          );
+
+      // Antes o banco aceitava qualquer data futura; só a tela limitava.
+      await expectLater(
+        reservarEm(DateTime(2030, 1, 23, 9)),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            contains('14 dias'),
+          ),
+        ),
+      );
+      expect(
+        (await reservarEm(DateTime(2030, 1, 22, 9))).idAgendamento,
+        greaterThan(0),
+      );
     });
   });
 }

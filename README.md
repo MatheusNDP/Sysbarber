@@ -50,7 +50,7 @@ para a apresentação.
 flutter test
 ```
 
-São **196 testes** no total:
+São **207 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -58,8 +58,8 @@ São **196 testes** no total:
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 21 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate e o termo "Concluído" |
-| `integration_test/database_integration_test.dart` | 118 | CRUD, agenda, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
+| `test/telas_test.dart` | 22 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído" e a régua de dias |
+| `integration_test/database_integration_test.dart` | 128 | CRUD, agenda (dias, turnos e janela de 14 dias), reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -68,7 +68,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 196 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 207 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -153,9 +153,14 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
 ## Regras de negócio
 
 1. Um cliente pode ter vários agendamentos — mas não dois ao mesmo tempo.
-2. Um horário só é oferecido se **o serviço inteiro cabe** sem invadir outro
-   atendimento do barbeiro (uma Coloração de 60 min às 09:00 bloqueia 09:30).
-   Cancelar libera o horário de volta.
+2. A barbearia atende de **segunda a sábado** (domingo não abre), das
+   **09:00 às 12:00** e das **13:00 às 18:00**, com horários de 30 em 30
+   minutos, e aceita reservas de hoje até 13 dias depois (14 dias, contando
+   hoje). Um horário só é oferecido se **o serviço inteiro cabe** no turno e
+   sem invadir outro atendimento do barbeiro: uma Coloração de 60 min às 09:00
+   bloqueia 09:30 e não é oferecida às 11:30 nem às 17:30. Horários que já
+   passaram não aparecem. Cancelar libera o horário de volta. O banco confere
+   tudo isso de novo na reserva.
 3. O agendamento só é gravado **junto com o pagamento**, numa única
    transação: quem desiste no meio do caminho não deixa horário ocupado.
 4. Todo pagamento é vinculado a um agendamento, e cada agendamento tem no
@@ -211,7 +216,7 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
 | `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
 | `/servicos` | Catálogo de serviços | cliente |
 | `/barbeiro` | Escolha do profissional | cliente |
-| `/horario` | Escolha de data e horário disponível | cliente |
+| `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro) | cliente e barbeiro |
@@ -242,8 +247,9 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
 
 - Valores em dinheiro são `REAL` no SQLite; multa e estorno são arredondados
   para centavos, mas a migração completa para centavos inteiros não foi feita.
-- A grade de horários é fixa no código (`DatabaseService.horariosBase`), sem
-  dias de folga configuráveis.
+- Os dias de funcionamento, os turnos, a grade e a janela de agendamento são
+  fixos no código (`DatabaseService.atendeNoDia`, `turnos`, `horariosBase` e
+  `diasDeAgenda`), sem feriados nem folgas configuráveis.
 - Pix e cartão são simulados: nenhum valor é cobrado de verdade.
 - Não há recuperação de senha nem exclusão de conta pelo próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
