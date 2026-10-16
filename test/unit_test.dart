@@ -130,7 +130,7 @@ void main() {
     test('os labels estão em português', () {
       expect(StatusAgendamento.confirmado.label, 'Confirmado');
       expect(StatusAgendamento.cancelado.label, 'Cancelado');
-      expect(StatusAgendamento.finalizado.label, 'Finalizado');
+      expect(StatusAgendamento.finalizado.label, 'Concluído');
     });
 
     test('um valor desconhecido cai em confirmado', () {

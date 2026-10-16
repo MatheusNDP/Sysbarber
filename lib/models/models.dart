@@ -25,8 +25,9 @@ extension StatusAgendamentoX on StatusAgendamento {
         return 'Confirmado';
       case StatusAgendamento.cancelado:
         return 'Cancelado';
+      // O valor gravado no banco continua `finalizado` (ver [dbValue]).
       case StatusAgendamento.finalizado:
-        return 'Finalizado';
+        return 'Concluído';
       case StatusAgendamento.faltou:
         return 'Não compareceu';
     }

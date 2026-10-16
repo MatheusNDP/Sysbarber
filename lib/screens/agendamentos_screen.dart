@@ -514,7 +514,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       // Concluir e registrar falta são atribuições do profissional.
       if (_modoBarbeiro && a.podeFinalizar(agora))
         _acao(
-          'Finalizar',
+          'Concluir',
           Icons.check_circle_outline,
           AppColors.gold,
           () => _finalizar(a),
@@ -676,11 +676,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Finalizar atendimento?', style: AppTheme.serif(size: 18)),
+        title: Text('Concluir atendimento?', style: AppTheme.serif(size: 18)),
         content: Text(
           pendente
               ? 'O pagamento deste atendimento ainda está pendente. '
-                    'Finalize apenas se já registrou o recebimento.'
+                    'Conclua apenas se já registrou o recebimento.'
               : 'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
                     'marcado como concluído e sairá da lista de próximos.',
           style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
@@ -696,7 +696,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'FINALIZAR',
+              'CONCLUIR',
               style: AppTheme.sans(
                 size: 13,
                 weight: FontWeight.w700,
@@ -713,11 +713,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     try {
       await DatabaseService.instance.finalizarAgendamento(a.id!);
       if (!mounted) return;
-      mostrarSucesso(context, 'Atendimento finalizado');
+      mostrarSucesso(context, 'Atendimento concluído');
       await _carregar();
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao finalizar'));
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao concluir o atendimento'));
     }
   }
 
