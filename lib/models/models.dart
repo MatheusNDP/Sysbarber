@@ -627,7 +627,7 @@ class ResultadoReserva {
 // RELATÓRIOS
 // ---------------------------------------------------------------------------
 
-/// Desfecho financeiro de um cancelamento (regra de negócio 9).
+/// Desfecho financeiro de um cancelamento (regra de negócio 7).
 class ResultadoCancelamento {
   /// `true` quando o cancelamento ocorreu dentro do prazo mínimo e houve
   /// cobrança de multa.

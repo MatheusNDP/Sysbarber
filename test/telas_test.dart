@@ -674,4 +674,26 @@ void main() {
     expect(find.text('AGENDA GERAL'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
+
+  // Desde a agenda geral, quem confirma o recebimento é a barbearia — o
+  // barbeiro ou o administrador —, e não só o profissional.
+  testWidgets('quem vai pagar na barbearia lê que a barbearia confirma o '
+      'recebimento', (tester) async {
+    await abrir(tester, const PagamentoScreen());
+
+    await tester.tap(find.text('Pagar na barbearia'));
+    await tester.pump();
+    // O aviso fica abaixo das opções; a lista só o monta quando aparece.
+    await tester.scrollUntilVisible(
+      find.textContaining('a barbearia confirma o recebimento'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.textContaining('a barbearia confirma o recebimento'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('profissional'), findsNothing);
+  });
 }
