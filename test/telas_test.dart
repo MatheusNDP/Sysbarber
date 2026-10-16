@@ -233,27 +233,35 @@ void main() {
   // P03 — resgate e desistência tardia
   // -------------------------------------------------------------------------
 
+  /// Cadastra o cliente `c@teste.com` (senha `senha123`) e devolve o id.
+  Future<int> cadastrarClienteTeste() => service.cadastrarCliente(
+    Cliente(
+      nome: 'Cliente',
+      email: 'c@teste.com',
+      telefone: '(67) 99999-0000',
+      senhaHash: DatabaseService.hashSenha('senha123'),
+      criadoEm: DateTime.now().toIso8601String(),
+    ),
+  );
+
+  /// Corte de Cabelo do cliente [idCliente] com o barbeiro 1 em [quando].
+  /// Devolve o id do agendamento.
+  Future<int> marcarCorte(int idCliente, DateTime quando) =>
+      service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: quando.toIso8601String(),
+        ),
+      );
+
   /// Cliente `c@teste.com` com um Corte de Cabelo trocado por 500 pontos,
   /// marcado com o barbeiro 1 para [quando]. Devolve o id do agendamento.
   Future<int> resgateMarcado(DateTime quando) async {
-    final idCliente = await service.cadastrarCliente(
-      Cliente(
-        nome: 'Cliente',
-        email: 'c@teste.com',
-        telefone: '(67) 99999-0000',
-        senhaHash: DatabaseService.hashSenha('senha123'),
-        criadoEm: DateTime.now().toIso8601String(),
-      ),
-    );
+    final idCliente = await cadastrarClienteTeste();
     await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
-    final id = await service.criarAgendamento(
-      Agendamento(
-        idCliente: idCliente,
-        idBarbeiro: 1,
-        idServico: 1,
-        dataHora: quando.toIso8601String(),
-      ),
-    );
+    final id = await marcarCorte(idCliente, quando);
     await service.resgatarPremio(
       idCliente: idCliente,
       idAgendamento: id,
@@ -350,15 +358,7 @@ void main() {
     final db = await bancoComSeed(tester);
     service.injetarBancoParaTeste(db);
     await tester.runAsync(() async {
-      await service.cadastrarCliente(
-        Cliente(
-          nome: 'Cliente',
-          email: 'c@teste.com',
-          telefone: '(67) 99999-0000',
-          senhaHash: DatabaseService.hashSenha('senha123'),
-          criadoEm: DateTime.now().toIso8601String(),
-        ),
-      );
+      await cadastrarClienteTeste();
       await AuthService.instance.login('c@teste.com', 'senha123');
       await db.close();
     });
@@ -435,5 +435,75 @@ void main() {
 
     expect(find.textContaining('carregar seus pontos'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P12 — "Concluído" no lugar de "Finalizado"
+  // -------------------------------------------------------------------------
+
+  testWidgets('o barbeiro conclui o atendimento pelo botão "Concluir"',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      await marcarCorte(
+        idCliente,
+        DateTime.now().subtract(const Duration(hours: 2)),
+      );
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    expect(find.text('Finalizar'), findsNothing);
+    await tester.ensureVisible(find.text('Concluir'));
+    await tester.tap(find.text('Concluir'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Concluir atendimento?'), findsOneWidget);
+    expect(find.text('CONCLUIR'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('atendimento concluído aparece como "Concluído" no histórico',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final amanha = DateTime.now().add(const Duration(days: 1));
+      final as9 = DateTime(amanha.year, amanha.month, amanha.day, 9);
+      final id = await marcarCorte(await cadastrarClienteTeste(), as9);
+      await service.finalizarAgendamento(
+        id,
+        agora: as9.add(const Duration(hours: 1)),
+      );
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Concluído'), findsOneWidget);
+    expect(find.text('Finalizado'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('os relatórios contam os atendimentos "Concluídos"',
+      (tester) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await abrir(tester, const AdminRelatoriosScreen());
+
+    await tester.scrollUntilVisible(
+      find.text('Concluídos'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Concluídos'), findsOneWidget);
+    expect(find.text('Finalizados'), findsNothing);
   });
 }

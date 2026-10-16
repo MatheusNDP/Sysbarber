@@ -172,9 +172,9 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                             cor: AppColors.red,
                           ),
                           _indicador(
-                            'Finalizados',
+                            'Concluídos',
                             '${r.finalizados}',
-                            'concluídos',
+                            'atendimentos realizados',
                           ),
                           _indicador(
                             'Faltas',

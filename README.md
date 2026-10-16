@@ -50,7 +50,7 @@ para a apresentação.
 flutter test
 ```
 
-São **193 testes** no total:
+São **196 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -58,7 +58,7 @@ São **193 testes** no total:
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 18 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade e avisos de desistência num resgate |
+| `test/telas_test.dart` | 21 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate e o termo "Concluído" |
 | `integration_test/database_integration_test.dart` | 118 | CRUD, agenda, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -68,7 +68,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 193 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 196 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
