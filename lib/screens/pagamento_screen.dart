@@ -585,6 +585,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 ],
               ),
             ),
+            // Mesmo respiro do cartão de resgate: sem ele o texto encosta no
+            // botão de seleção.
+            const SizedBox(width: 8),
             _radio(selecionado),
           ],
         ),
@@ -622,6 +625,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 8),
           _radio(selecionado),
         ],
       ),

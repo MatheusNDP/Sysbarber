@@ -190,7 +190,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                           _indicador(
                             'Clientes',
                             '${r.totalClientes}',
-                            'cadastrados',
+                            r.totalClientes == 1 ? 'cadastrado' : 'cadastrados',
                           ),
                           _indicador(
                             'Pontos ativos',
