@@ -22,8 +22,9 @@ class DatabaseService {
   /// v3: cliente ganhou a marca de administrador e a conta demo virou admin.
   /// v4: barbeiro ganhou a marca de disponibilidade para novos agendamentos.
   /// v5: pagamento ganhou a natureza do lançamento (serviço, multa, estorno
-  /// ou resgate); agendamento guarda a própria duração e o preço da época, e
-  /// ganhou índice único por barbeiro e horário.
+  /// ou resgate); agendamento guarda a própria duração e o preço da época;
+  /// índices únicos por barbeiro e horário e por e-mail de barbeiro (só
+  /// quando o banco antigo não tem duplicados) e índices de consulta.
   static const int versaoBanco = 5;
 
   /// Credenciais da conta administradora criada no seed.
@@ -34,10 +35,10 @@ class DatabaseService {
   static const String emailAdminAlternativo = 'administrador@sysbarber.com';
 
   /// Pontos necessários para trocar por um serviço gratuito
-  /// (regra de negócio 5).
+  /// (regra de negócio 6).
   static const int pontosParaPremio = 500;
 
-  /// Antecedência mínima para cancelar sem multa (regra de negócio 9).
+  /// Antecedência mínima para cancelar sem multa (regra de negócio 7).
   static const Duration prazoCancelamento = Duration(hours: 1);
 
   /// Percentual do serviço cobrado em cancelamentos fora do prazo.
@@ -1561,7 +1562,7 @@ class DatabaseService {
       dataHora.difference(agora ?? DateTime.now()) >= prazoCancelamento;
 
   /// Cancela o agendamento aplicando a política de multa
-  /// (regra de negócio 9).
+  /// (regra de negócio 7).
   ///
   /// Fora do prazo, a barbearia retém [percentualMulta] do valor do serviço.
   /// O acerto financeiro depende de o cliente já ter pago:
@@ -1848,7 +1849,7 @@ class DatabaseService {
 
   /// Efetiva um pagamento **pendente** e só então credita os pontos.
   ///
-  /// Regra de negócio 4: fidelidade acompanha dinheiro que entrou. Um
+  /// Regra de negócio 5: fidelidade acompanha dinheiro que entrou. Um
   /// pagamento marcado para "pagar na barbearia" não pontua enquanto não for
   /// quitado. A operação é idempotente — confirmar duas vezes não duplica os
   /// pontos — e atômica: a leitura do status e o crédito acontecem na mesma
@@ -2161,7 +2162,7 @@ class DatabaseService {
   }
 
   /// Troca [pontosParaPremio] pontos por um serviço gratuito
-  /// (regra de negócio 5).
+  /// (regra de negócio 6).
   ///
   /// A conferência do saldo, o débito e o pagamento de valor zero acontecem
   /// numa única transação: dois resgates simultâneos não conseguem gastar o

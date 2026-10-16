@@ -8,7 +8,9 @@ autenticação própria com senhas em **PBKDF2-HMAC-SHA256** e salt individual.
 
 ## Como rodar
 
-Pré-requisitos: Flutter 3.x, Android SDK e um emulador Android.
+Pré-requisitos: Flutter 3.44 ou superior, com Dart 3.12 (versões mínimas
+exigidas pelo `pubspec.lock`; testado com o Flutter 3.47.5), Android SDK e um
+emulador Android.
 
 ```bash
 flutter pub get
@@ -27,7 +29,10 @@ flutter run
 | Perfil | E-mail | Senha | Acesso |
 |---|---|---|---|
 | Administrador | `admin@sysbarber.com` | `admin1234` | app do cliente + área administrativa |
-| Barbeiros | `carlos.eduardo@sysbarber.com` (e demais) | `barbeiro123` | a própria agenda |
+| Barbeiros | `carlos.eduardo@sysbarber.com`, `rafael.souza@sysbarber.com` e `marcos.lima@sysbarber.com` | `barbeiro123` | a própria agenda |
+
+No seed, **Marcos Lima começa indisponível**, para demonstrar a regra 14: ele
+aparece apagado na escolha do profissional, mas entra no app normalmente.
 
 Contas criadas pelo formulário de cadastro nascem **sempre como cliente
 comum** e não enxergam a área administrativa. A dica com as credenciais do
@@ -50,15 +55,15 @@ para a apresentação.
 flutter test
 ```
 
-São **212 testes** no total:
+São **213 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
 | `test/unit_test.dart` | 21 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização, enums e regras de estado do agendamento |
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
-| `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` |
+| `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 26 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias e a agenda geral do administrador |
+| `test/telas_test.dart` | 27 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador e os textos do pagamento na barbearia |
 | `integration_test/database_integration_test.dart` | 129 | CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -68,7 +73,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 212 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 213 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -97,10 +102,10 @@ lib/
 │   ├── auth_service.dart        # Login, cadastro, sessão, perfil e permissões
 │   ├── senhas.dart              # Hash PBKDF2 com salt individual
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
-│   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão)
+│   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
 │   └── booking_flow.dart        # Rascunho do agendamento em andamento
-├── widgets/common_widgets.dart  # Componentes reutilizáveis
+├── widgets/common_widgets.dart  # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
 └── screens/                     # 18 telas (uma por arquivo)
 ```
 
@@ -139,14 +144,15 @@ cliente ──┬──< agendamento >──── barbeiro
 ```
 
 Versão atual do schema: **v5**. Um banco de qualquer versão anterior é
-migrado sem perder dados (há teste que parte de um banco v2 real):
+migrado sem perder dados (há testes que partem de um banco montado no formato
+v2):
 
 | Versão | Mudança |
 |---|---|
 | v2 | Barbeiro com contato, acesso e salário; pagamento com tipo e cartão mascarado |
 | v3 | Marca de administrador — a conta demo vira a administradora, sem nunca promover um cliente comum |
 | v4 | Disponibilidade do barbeiro para novos agendamentos |
-| v5 | Natureza do pagamento (serviço, multa, estorno, resgate); duração e preço registrados no agendamento; índice único por barbeiro e horário; e-mail de barbeiro único; índices de consulta |
+| v5 | Natureza do pagamento (serviço, multa, estorno, resgate); duração e preço registrados no agendamento; índice único por barbeiro e horário; e-mail de barbeiro único; índices de consulta. Os dois índices únicos só são criados se o banco antigo não tiver duplicados; sem eles, a reserva e o cadastro de barbeiro continuam conferindo no app |
 
 ---
 
@@ -164,17 +170,27 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
 3. O agendamento só é gravado **junto com o pagamento**, numa única
    transação: quem desiste no meio do caminho não deixa horário ocupado.
 4. Todo pagamento é vinculado a um agendamento, e cada agendamento tem no
-   máximo um pagamento de serviço valendo.
-5. Pontos acompanham dinheiro que entrou: o pagamento antecipado pontua na
-   hora; o "pagar na barbearia", só quando o profissional confirma o
+   máximo um pagamento de serviço (ou resgate) valendo: um segundo seria
+   cobrança em dobro.
+5. Pontos acompanham dinheiro que entrou: cada R$ 1,00 pago vale 1 ponto
+   (arredondado). O pagamento antecipado pontua na hora; o "pagar na
+   barbearia", só quando a barbearia (barbeiro ou administrador) confirma o
    recebimento. Multa é receita, mas **não gera pontos**.
-6. Meta de fidelidade: 500 pontos = 1 serviço gratuito.
-7. Cancelamento com menos de 1 hora de antecedência retém 50% do valor como
-   multa; cancelamento feito pela barbearia é sempre sem multa. Os pontos do
-   serviço cancelado são revertidos **por inteiro**, mesmo que o saldo fique
-   negativo. Num serviço pago com pontos (resgate) não há multa em dinheiro:
-   os 500 pontos voltam se o cancelamento for no prazo ou feito pela
-   barbearia, e são perdidos se o cliente cancelar com menos de 1 hora.
+6. Meta de fidelidade: 500 pontos = 1 serviço gratuito, qualquer que seja o
+   preço do serviço. O resgate é feito na etapa de pagamento e exige saldo de
+   pelo menos 500 pontos; saldo negativo (depois de um estorno) não libera
+   prêmio.
+7. Cancelamento com menos de 1 hora de antecedência tem multa de 50% do
+   valor; cancelamento feito pela barbearia é sempre sem multa. O acerto
+   depende de como o cliente pagou:
+   - **pagou antecipado:** o estorno devolve o que não ficou retido como
+     multa, e os pontos do serviço são revertidos **por inteiro**, mesmo que o
+     saldo fique negativo;
+   - **ia pagar na barbearia:** no prazo, a cobrança é cancelada; fora dele, a
+     cobrança vira a multa de 50%, pendente, paga no balcão;
+   - **pagou com pontos (resgate):** não há multa em dinheiro; os 500 pontos
+     voltam se o cancelamento for no prazo ou feito pela barbearia, e são
+     perdidos se o cliente cancelar com menos de 1 hora.
 8. O desfecho de um atendimento é um só: **cancelado** (só antes do horário;
    depois dele, o banco recusa o cancelamento), **concluído** (a partir do dia
    marcado, inclusive depois do horário) ou **não compareceu** (depois do
@@ -188,25 +204,34 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
     editá-los). Serviço ou barbeiro com agendamentos não pode ser excluído:
     os atendimentos sumiriam do histórico dos clientes.
 11. Senhas nunca são armazenadas em texto puro — PBKDF2 com salt individual.
-12. E-mail é único no sistema (clientes e barbeiros).
+12. E-mail é único no sistema: não se repete entre clientes, entre barbeiros
+    nem entre um cliente e um barbeiro. No banco, cada tabela tem o próprio
+    índice único; o cruzamento entre as duas é conferido pelo app no cadastro.
 13. Confirmar o recebimento (informando Pix, Cartão ou Dinheiro), concluir o
     atendimento e registrar falta são ações da barbearia: o barbeiro faz isso
     na própria agenda, e o administrador, na agenda geral, para qualquer
     barbeiro. O cancelamento feito por um dos dois é sempre sem multa; o
     cliente cancela os próprios agendamentos, seguindo a regra 7.
+14. Barbeiro indisponível (o administrador liga e desliga) aparece apagado na
+    escolha do profissional, sem poder ser escolhido, não oferece horários e o
+    banco recusa reservas com ele. Os atendimentos já marcados continuam
+    valendo, e ele segue entrando no app para concluí-los.
 
 ---
 
 ## Segurança
 
 - **Senhas:** PBKDF2-HMAC-SHA256, 50 mil iterações, salt aleatório de 16 bytes
-  por conta, comparação em tempo constante. O hash é calculado em outro
-  isolate, sem travar a tela. Hashes do formato antigo (SHA-256 com salt fixo)
-  ainda entram e são **regravados no formato novo no primeiro login**.
-- **Permissões:** toda rota passa por `AuthService.podeAcessar` antes de ser
-  construída. `/admin` só abre para o administrador; o barbeiro só acessa a
-  própria agenda; o resto mostra "Acesso restrito". A agenda geral, aberta a
-  partir do painel, confere de novo se quem está logado é o administrador.
+  por conta, comparação em tempo constante. No login, no cadastro, na troca de
+  senha e no cadastro de barbeiro, o hash é calculado em outro isolate, sem
+  travar a tela (o seed e a migração calculam antes de a tela abrir). Hashes
+  do formato antigo (SHA-256 com salt fixo) ainda entram e são **regravados
+  no formato novo no primeiro login**.
+- **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
+  de ser construída. `/admin` só abre para o administrador; o barbeiro só
+  acessa a própria agenda; o resto mostra "Acesso restrito". As telas do
+  administrador abrem a partir do `/admin`, e a agenda geral confere de novo
+  se quem está logado é o administrador.
 - **Sessão:** guarda só o id e o tipo de conta (cliente ou barbeiro); os dados
   são sempre relidos do banco, e uma conta excluída perde a sessão salva.
 - **Dados sensíveis:** do cartão só ficam os 4 últimos dígitos; a agenda do
@@ -224,7 +249,7 @@ migrado sem perder dados (há teste que parte de um banco v2 real):
 | `/cadastro` | Criar conta (já entra logado) | todos |
 | `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
 | `/servicos` | Catálogo de serviços | cliente |
-| `/barbeiro` | Escolha do profissional | cliente |
+| `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção) | cliente |
 | `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
@@ -262,7 +287,8 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
                                      │             │
                               confere o horário    grava agendamento + pagamento
                               (não grava nada)     na mesma transação e credita
-                                                   os pontos (se pago agora)
+                                                   os pontos (se pago agora) ou
+                                                   debita os 500 do resgate
 ```
 
 ---
@@ -275,6 +301,7 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
   fixos no código (`DatabaseService.atendeNoDia`, `turnos`, `horariosBase` e
   `diasDeAgenda`), sem feriados nem folgas configuráveis.
 - Pix e cartão são simulados: nenhum valor é cobrado de verdade.
-- Não há recuperação de senha nem exclusão de conta pelo próprio cliente.
+- Não há recuperação de senha, troca de e-mail nem exclusão de conta pelo
+  próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).

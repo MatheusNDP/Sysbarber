@@ -317,8 +317,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               antecipado
                   ? 'Pagamento via ${_metodo.label} registrado com sucesso.'
                   : 'Você optou por pagar na barbearia. O pagamento fica '
-                        'pendente até o profissional confirmar o '
-                        'recebimento no balcão.',
+                        'pendente até a barbearia confirmar o recebimento '
+                        'no balcão.',
               textAlign: TextAlign.center,
               style: AppTheme.sans(size: 13, color: AppColors.muted),
             ),
@@ -854,7 +854,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 const SizedBox(height: 5),
                 Text(
                   'Seu horário fica reservado. Você paga no balcão no dia do '
-                  'atendimento e o profissional confirma o recebimento — só '
+                  'atendimento e a barbearia confirma o recebimento — só '
                   'então os pontos de fidelidade são creditados.',
                   style: AppTheme.sans(
                     size: 12,

@@ -10,10 +10,11 @@ import 'package:crypto/crypto.dart';
 /// em base64). Guardar as iterações no próprio hash permite aumentá-las no
 /// futuro sem invalidar as senhas antigas.
 ///
-/// Até a v5 o app usava SHA-256 com um salt fixo, igual para todos: a mesma
-/// senha gerava o mesmo hash em qualquer conta e o cálculo era rápido demais
-/// para resistir a força bruta. Esse formato ainda é aceito no login e é
-/// trocado pelo novo assim que a senha é conferida.
+/// Versões anteriores do app usavam SHA-256 com um salt fixo, igual para
+/// todos: a mesma senha gerava o mesmo hash em qualquer conta e o cálculo era
+/// rápido demais para resistir a força bruta. Esse formato ainda é aceito no
+/// login e é trocado pelo novo assim que a senha é conferida. (A troca do
+/// formato não mudou o schema do banco, que segue na v5.)
 class Senhas {
   Senhas._();
 
@@ -78,8 +79,8 @@ class Senhas {
   static Future<bool> conferirEmSegundoPlano(String senha, String armazenado) =>
       Isolate.run(() => conferir(senha, armazenado));
 
-  /// Formato usado até a v5: SHA-256 com salt fixo. Só serve para aceitar
-  /// senhas antigas no login.
+  /// Formato antigo: SHA-256 com salt fixo. Só serve para aceitar senhas
+  /// antigas no login.
   static String hashLegado(String senha) =>
       sha256.convert(utf8.encode('sysbarber_salt_$senha')).toString();
 
