@@ -206,6 +206,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       ..sort((a, b) => b.data.compareTo(a.data));
   }
 
+  /// O serviço foi trocado por pontos (resgate), e não pago em dinheiro. Na
+  /// desistência fora do prazo a penalidade é a perda dos pontos, não multa.
+  static bool _pagoComPontos(Agendamento a) =>
+      a.pagamento?.natureza == NaturezaPagamento.resgate;
+
   Future<void> _cancelar(Agendamento a) async {
     final confirmou = await showDialog<bool>(
       context: context,
@@ -233,8 +238,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 height: 1.4,
               ),
             ),
-            // O cliente precisa saber da multa antes de decidir, não depois.
-            // O barbeiro é isento: a falta é da barbearia.
+            // O cliente precisa saber da penalidade antes de decidir, não
+            // depois. O barbeiro é isento: a falta é da barbearia.
             if (!_modoBarbeiro && !DatabaseService.dentroDoPrazo(a.data)) ...[
               const SizedBox(height: 14),
               Container(
@@ -255,10 +260,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Falta menos de 1 hora para o atendimento. Será '
-                        'cobrada multa de '
-                        '${formatarReal(a.valor * DatabaseService.percentualMulta)}'
-                        ' (50% do serviço).',
+                        _pagoComPontos(a)
+                            ? 'Falta menos de 1 hora para o atendimento. Os '
+                                  '${DatabaseService.pontosParaPremio} pontos '
+                                  'usados no resgate não serão devolvidos.'
+                            : 'Falta menos de 1 hora para o atendimento. Será '
+                                  'cobrada multa de '
+                                  '${formatarReal(a.valor * DatabaseService.percentualMulta)}'
+                                  ' (50% do serviço).',
                         style: AppTheme.sans(
                           size: 12,
                           color: AppColors.text,
@@ -317,7 +326,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     ResultadoCancelamento r, {
     String? titulo,
   }) async {
-    if (!r.comMulta && r.estorno <= 0 && r.pontosAjustados == 0) {
+    if (!r.comMulta &&
+        r.estorno <= 0 &&
+        r.pontosAjustados == 0 &&
+        r.pontosRetidos == 0) {
       mostrarInfo(context, 'Agendamento cancelado');
       return;
     }
@@ -330,6 +342,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       if (r.pontosAjustados > 0) '${r.pontosAjustados} pontos devolvidos',
       if (r.pontosAjustados < 0)
         '${r.pontosAjustados.abs()} pontos estornados',
+      if (r.pontosRetidos > 0)
+        '${r.pontosRetidos} pontos do resgate não devolvidos',
     ];
 
     await showDialog<void>(
@@ -342,7 +356,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         ),
         title: Text(
           titulo ??
-              (r.comMulta ? 'Cancelado com multa' : 'Agendamento cancelado'),
+              (r.comMulta
+                  ? 'Cancelado com multa'
+                  : r.pontosRetidos > 0
+                  ? 'Cancelado fora do prazo'
+                  : 'Agendamento cancelado'),
           style: AppTheme.serif(size: 18),
         ),
         content: Column(
@@ -570,7 +588,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   Future<void> _registrarFalta(Agendamento a) async {
     if (!_modoBarbeiro || a.id == null) return;
 
-    final multa = a.valor * DatabaseService.percentualMulta;
+    final penalidade = _pagoComPontos(a)
+        ? 'Os ${DatabaseService.pontosParaPremio} pontos usados no resgate '
+              'não serão devolvidos'
+        : 'Será aplicada a multa de '
+              '${formatarReal(a.valor * DatabaseService.percentualMulta)} '
+              '(50% do serviço)';
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -582,8 +605,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         title: Text('Registrar falta?', style: AppTheme.serif(size: 18)),
         content: Text(
           '${a.cliente?.nome ?? 'O cliente'} não compareceu ao horário de '
-          '${formatarHora(a.data)}. Será aplicada a multa de '
-          '${formatarReal(multa)} (50% do serviço), como num cancelamento '
+          '${formatarHora(a.data)}. $penalidade, como num cancelamento '
           'fora do prazo.',
           style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
         ),
@@ -759,6 +781,29 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: Text(
               'Sem pagamento registrado',
+              style: AppTheme.sans(size: 12, color: AppColors.muted),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Resgate de um atendimento que não aconteceu (falta ou cancelamento fora
+    // do prazo): os pontos ficaram retidos.
+    final pontosRetidos =
+        p.confirmado &&
+        p.natureza == NaturezaPagamento.resgate &&
+        (a.status == StatusAgendamento.cancelado ||
+            a.status == StatusAgendamento.faltou);
+    if (pontosRetidos) {
+      return Row(
+        children: [
+          const Icon(Icons.block, size: 15, color: AppColors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${DatabaseService.pontosParaPremio} pontos do resgate não '
+              'devolvidos',
               style: AppTheme.sans(size: 12, color: AppColors.muted),
             ),
           ),

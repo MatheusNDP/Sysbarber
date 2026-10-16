@@ -645,12 +645,17 @@ class ResultadoCancelamento {
   /// Pontos de fidelidade estornados ou devolvidos ao cliente.
   final int pontosAjustados;
 
+  /// Pontos de um resgate que não voltam ao cliente: o serviço foi pago com
+  /// pontos e houve falta ou cancelamento fora do prazo.
+  final int pontosRetidos;
+
   const ResultadoCancelamento({
     required this.comMulta,
     this.multa = 0,
     this.estorno = 0,
     this.multaAPagar = 0,
     this.pontosAjustados = 0,
+    this.pontosRetidos = 0,
   });
 }
 

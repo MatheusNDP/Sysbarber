@@ -1451,30 +1451,40 @@ class DatabaseService {
   ///   valer somente a multa, que segue devida.
   ///
   /// Os pontos creditados pelo pagamento são revertidos, já que o serviço não
-  /// foi prestado; um serviço obtido por resgate devolve os pontos gastos.
-  /// [porBarbeiro] isenta a multa: quando a falta é da barbearia, não faz
-  /// sentido penalizar o cliente, que recebe o valor integral de volta.
+  /// foi prestado. Num serviço obtido por resgate, os pontos fazem o papel do
+  /// pagamento: voltam no prazo e ficam retidos fora dele, sem multa em
+  /// dinheiro. [porBarbeiro] isenta a multa: quando a falta é da barbearia,
+  /// não faz sentido penalizar o cliente, que recebe tudo de volta.
   ///
   /// Tudo acontece numa única transação: ou o cancelamento inteiro (status,
   /// estorno, multa e pontos) é gravado, ou nada é.
   ///
-  /// Só um agendamento em aberto pode ser cancelado: cancelar um atendimento
-  /// já concluído estornaria um serviço prestado.
+  /// Só um agendamento em aberto pode ser cancelado (cancelar um atendimento
+  /// já concluído estornaria um serviço prestado), e só antes do horário
+  /// marcado ([Agendamento.podeCancelar]): depois dele, o desfecho é concluir
+  /// ou registrar a falta.
   Future<ResultadoCancelamento> cancelarAgendamento(
     int idAgendamento, {
     DateTime? agora,
     bool porBarbeiro = false,
   }) async {
     final db = await database;
-    return db.transaction(
-      (txn) => _encerrarSemAtendimento(
+    return db.transaction((txn) async {
+      final a = await _buscarAgendamento(txn, idAgendamento);
+      if (a != null && a.emAberto && !a.podeCancelar(agora ?? DateTime.now())) {
+        throw const RegraNegocioException(
+          'O horário deste atendimento já chegou e ele não pode mais ser '
+          'cancelado',
+        );
+      }
+      return _encerrarSemAtendimento(
         txn,
         idAgendamento,
         novoStatus: StatusAgendamento.cancelado,
         agora: agora,
         porBarbeiro: porBarbeiro,
-      ),
-    );
+      );
+    });
   }
 
   /// Registra que o cliente não compareceu.
@@ -1588,8 +1598,16 @@ class DatabaseService {
       );
     }
 
-    // Serviço obtido com pontos: devolve o que foi gasto no resgate.
+    // Serviço obtido com pontos: os pontos fazem o papel do pagamento. No
+    // prazo (ou se a barbearia cancelar) eles voltam; fora do prazo e na
+    // falta ficam retidos, sem multa em dinheiro.
     if (pagamento.natureza == NaturezaPagamento.resgate) {
+      if (!noPrazo) {
+        return const ResultadoCancelamento(
+          comMulta: false,
+          pontosRetidos: pontosParaPremio,
+        );
+      }
       await txn.update(
         'pagamento',
         {'status': Pagamento.statusCancelado},
