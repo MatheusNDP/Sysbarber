@@ -21,6 +21,16 @@ class GoldButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rotulo = Text(
+      texto,
+      textAlign: TextAlign.center,
+      style: AppTheme.sans(
+        size: 14,
+        weight: FontWeight.w700,
+        color: onPressed == null ? AppColors.muted : Colors.black,
+        letterSpacing: 1,
+      ),
+    );
     final botao = ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
@@ -37,15 +47,10 @@ class GoldButton extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (icone != null) ...[Icon(icone, size: 18), const SizedBox(width: 8)],
-          Text(
-            texto,
-            style: AppTheme.sans(
-              size: 14,
-              weight: FontWeight.w700,
-              color: onPressed == null ? AppColors.muted : Colors.black,
-              letterSpacing: 1,
-            ),
-          ),
+          // Com a largura toda, o texto quebra a linha em vez de estourar o
+          // botão em telas estreitas. O botão compacto não tem largura
+          // definida, e ali um Flexible não é permitido.
+          if (expandido) Flexible(child: rotulo) else rotulo,
         ],
       ),
     );

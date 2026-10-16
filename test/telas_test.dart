@@ -696,4 +696,80 @@ void main() {
     );
     expect(find.textContaining('profissional'), findsNothing);
   });
+
+  // -------------------------------------------------------------------------
+  // P18 e P19 — ajustes visuais vistos no emulador
+  // -------------------------------------------------------------------------
+
+  testWidgets('o painel usa o singular com um cliente só', (tester) async {
+    // O seed tem um único cliente: a conta administradora.
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+
+    await abrir(tester, const AdminScreen());
+
+    expect(find.text('1 cadastrado'), findsOneWidget);
+    expect(find.text('1 cadastrados'), findsNothing);
+  });
+
+  testWidgets('os relatórios usam o singular com um cliente só',
+      (tester) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await abrir(tester, const AdminRelatoriosScreen());
+
+    await tester.scrollUntilVisible(
+      find.text('cadastrado'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('cadastrado'), findsOneWidget);
+  });
+
+  testWidgets('o texto das opções de pagamento não encosta no botão de '
+      'seleção', (tester) async {
+    celularPequeno(tester);
+    await abrir(tester, const PagamentoScreen());
+
+    for (final descricao in [
+      TipoPagamento.antecipado.descricao,
+      TipoPagamento.naHora.descricao,
+    ]) {
+      final linha = tester.widget<Row>(
+        find
+            .ancestor(of: find.text(descricao), matching: find.byType(Row))
+            .first,
+      );
+      final texto = tester.getRect(find.text(descricao));
+      final selecao = tester.getRect(find.byWidget(linha.children.last));
+
+      expect(
+        selecao.left - texto.right,
+        greaterThanOrEqualTo(8),
+        reason: descricao,
+      );
+    }
+  });
+
+  testWidgets('botão com texto longo quebra a linha em celular pequeno, sem '
+      'estourar', (tester) async {
+    celularPequeno(tester);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: GoldButton(
+              texto: 'RESERVAR E PAGAR NA BARBEARIA',
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Antes o texto ficava numa linha só e estourava o botão.
+    expect(tester.takeException(), isNull);
+    expect(find.text('RESERVAR E PAGAR NA BARBEARIA'), findsOneWidget);
+  });
 }

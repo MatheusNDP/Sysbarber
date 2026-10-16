@@ -55,7 +55,7 @@ para a apresentação.
 flutter test
 ```
 
-São **213 testes** no total:
+São **217 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -63,7 +63,7 @@ São **213 testes** no total:
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 27 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador e os textos do pagamento na barbearia |
+| `test/telas_test.dart` | 31 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
 | `integration_test/database_integration_test.dart` | 129 | CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -73,7 +73,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 213 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 217 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash

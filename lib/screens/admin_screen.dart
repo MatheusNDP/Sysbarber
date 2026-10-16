@@ -140,7 +140,9 @@ class _AdminScreenState extends State<AdminScreen> {
                               resumo.clientesHoje,
                               'Clientes',
                               resumo.clientesTotal,
-                              'cadastrados',
+                              resumo.clientesTotal == 1
+                                  ? 'cadastrado'
+                                  : 'cadastrados',
                             ),
                             _estatistica(
                               '💈',
