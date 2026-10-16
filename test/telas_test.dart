@@ -3,9 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sysbarber/models/models.dart';
+import 'package:sysbarber/screens/admin_barbeiros_screen.dart';
+import 'package:sysbarber/screens/admin_clientes_screen.dart';
+import 'package:sysbarber/screens/admin_relatorios_screen.dart';
+import 'package:sysbarber/screens/admin_screen.dart';
+import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
+import 'package:sysbarber/screens/pagamento_screen.dart';
 import 'package:sysbarber/screens/servicos_screen.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
@@ -323,6 +329,111 @@ void main() {
 
     // Antes aparecia "Resgatado com pontos de fidelidade", como se valesse.
     expect(find.text('500 pontos do resgate não devolvidos'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P01 — estado de erro em toda tela que carrega dados
+  // -------------------------------------------------------------------------
+
+  /// Banco já fechado: qualquer consulta falha.
+  Future<void> bancoFechado(WidgetTester tester) async {
+    final db = await bancoComSeed(tester);
+    await tester.runAsync(db.close);
+    service.injetarBancoParaTeste(db);
+  }
+
+  /// Loga o cliente `c@teste.com` e fecha o banco em seguida: a tela abre com
+  /// sessão, mas toda consulta falha.
+  Future<void> clienteLogadoSemBanco(WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final db = await bancoComSeed(tester);
+    service.injetarBancoParaTeste(db);
+    await tester.runAsync(() async {
+      await service.cadastrarCliente(
+        Cliente(
+          nome: 'Cliente',
+          email: 'c@teste.com',
+          telefone: '(67) 99999-0000',
+          senhaHash: DatabaseService.hashSenha('senha123'),
+          criadoEm: DateTime.now().toIso8601String(),
+        ),
+      );
+      await AuthService.instance.login('c@teste.com', 'senha123');
+      await db.close();
+    });
+  }
+
+  /// O banco volta a responder e o usuário toca em "Tentar novamente".
+  Future<void> tentarDeNovoComBanco(WidgetTester tester) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await tester.tap(find.text('TENTAR NOVAMENTE'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+  }
+
+  for (final (nome, tela) in <(String, Widget)>[
+    ('o painel administrativo', const AdminScreen()),
+    ('os relatórios', const AdminRelatoriosScreen()),
+    ('o cadastro de serviços', const AdminServicosScreen()),
+    ('o cadastro de barbeiros', const AdminBarbeirosScreen()),
+    ('a lista de clientes', const AdminClientesScreen()),
+  ]) {
+    testWidgets('falha ao carregar $nome mostra erro com "tentar novamente"',
+        (tester) async {
+      await bancoFechado(tester);
+
+      await abrir(tester, tela);
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(EstadoErro), findsOneWidget);
+    });
+  }
+
+  testWidgets('"tentar novamente" recarrega o painel administrativo',
+      (tester) async {
+    await bancoFechado(tester);
+    await abrir(tester, const AdminScreen());
+    expect(find.byType(EstadoErro), findsOneWidget);
+
+    await tentarDeNovoComBanco(tester);
+
+    expect(find.byType(EstadoErro), findsNothing);
+    expect(find.text('Painel de Controle'), findsOneWidget);
+  });
+
+  testWidgets('falha ao carregar os agendamentos mostra erro, e "tentar '
+      'novamente" recarrega', (tester) async {
+    await clienteLogadoSemBanco(tester);
+
+    await abrir(tester, const AgendamentosScreen());
+
+    // Antes a lista vazia passava por "Nenhum agendamento futuro".
+    expect(find.text('Nenhum agendamento futuro'), findsNothing);
+    expect(find.byType(EstadoErro), findsOneWidget);
+
+    await tentarDeNovoComBanco(tester);
+
+    expect(find.byType(EstadoErro), findsNothing);
+    expect(find.text('Nenhum agendamento futuro'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('falha ao carregar os pontos no pagamento avisa e deixa tentar '
+      'de novo, sem travar o pagamento', (tester) async {
+    await clienteLogadoSemBanco(tester);
+
+    await abrir(tester, const PagamentoScreen());
+
+    // Antes o resgate sumia sem nenhuma explicação.
+    expect(find.textContaining('carregar seus pontos'), findsOneWidget);
+    expect(find.text('CONFIRMAR PAGAMENTO'), findsOneWidget);
+
+    await tentarDeNovoComBanco(tester);
+
+    expect(find.textContaining('carregar seus pontos'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

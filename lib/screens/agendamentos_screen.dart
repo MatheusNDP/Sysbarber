@@ -21,6 +21,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// Cada agendamento já vem com o seu pagamento (uma consulta só).
   List<Agendamento> _agendamentos = [];
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -48,6 +49,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       if (mounted) setState(() => _carregando = false);
       return;
     }
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
 
     try {
       final db = DatabaseService.instance;
@@ -61,9 +68,13 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         _carregando = false;
       });
     } catch (e) {
+      // Antes só aparecia um aviso rápido, e a lista vazia passava por
+      // "Nenhum agendamento futuro".
       if (!mounted) return;
-      setState(() => _carregando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar agendamentos'));
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar os agendamentos');
+      });
     }
   }
 
@@ -439,6 +450,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
+                : _erro != null
+                ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : TabBarView(
                     controller: _abas,
                     children: [

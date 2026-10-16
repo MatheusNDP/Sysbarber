@@ -23,6 +23,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   ResumoDia? _resumo;
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -31,6 +32,12 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _carregar() async {
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
     try {
       final resumo = await _db.resumoDoDia();
       if (!mounted) return;
@@ -40,8 +47,10 @@ class _AdminScreenState extends State<AdminScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _carregando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar estatísticas'));
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar o painel');
+      });
     }
   }
 
@@ -62,9 +71,15 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           const GoldDivider(),
           Expanded(
-            child: _carregando || resumo == null
+            // Antes uma falha deixava o carregamento girando para sempre.
+            child: _carregando
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : _erro != null || resumo == null
+                ? EstadoErro(
+                    mensagem: _erro ?? 'Não foi possível carregar o painel.',
+                    onTentarNovamente: _carregar,
                   )
                 : RefreshIndicator(
                     color: AppColors.gold,
