@@ -2563,4 +2563,154 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  group('P02 — cancelamento só antes do horário', () {
+    /// Reserva paga agora (R$ 55) para amanhã às 9h.
+    Future<ResultadoReserva> reservarPagoAmanha(int idCliente) =>
+        service.reservar(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 3,
+          dataHora: amanhaAs(9),
+          modo: ModoReserva.pagarAgora,
+          metodo: 'Pix',
+        );
+
+    test('depois do horário o cancelamento é recusado e nada muda', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await reservarPagoAmanha(idCliente);
+
+      // Antes o banco cancelava, cobrava multa e estornava o resto.
+      await expectLater(
+        service.cancelarAgendamento(r.idAgendamento, agora: amanhaAs(9, 15)),
+        throwsA(isA<RegraNegocioException>()),
+      );
+
+      final a = (await service.listarAgendamentosCliente(idCliente)).first;
+      expect(a.status, StatusAgendamento.confirmado);
+      expect(a.valorEstornado, 0);
+      expect(await service.obterPontos(idCliente), 55);
+      expect((await service.gerarRelatorio()).faturamento, 55);
+    });
+
+    test('no horário exato também já não cancela', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await reservarPagoAmanha(idCliente);
+
+      await expectLater(
+        service.cancelarAgendamento(r.idAgendamento, agora: amanhaAs(9)),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('a barbearia também não cancela depois do horário', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await reservarPagoAmanha(idCliente);
+
+      await expectLater(
+        service.cancelarAgendamento(
+          r.idAgendamento,
+          agora: amanhaAs(10),
+          porBarbeiro: true,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('um minuto antes ainda cancela, com multa', () async {
+      final idCliente = await criarClienteTeste();
+      final r = await reservarPagoAmanha(idCliente);
+
+      final c = await service.cancelarAgendamento(
+        r.idAgendamento,
+        agora: amanhaAs(8, 59),
+      );
+
+      expect(c.comMulta, isTrue);
+      expect(c.multa, 27.5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('P03 — resgate e desistência tardia', () {
+    /// Troca 500 pontos por uma Coloração amanhã às 9h.
+    /// Devolve (idCliente, idAgendamento).
+    Future<(int, int)> resgatarAmanha() async {
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 5,
+        dataHora: amanhaAs(9),
+        modo: ModoReserva.resgatarPontos,
+      );
+      expect(await service.obterPontos(idCliente), 0);
+      return (idCliente, r.idAgendamento);
+    }
+
+    test('cancelado no prazo, os 500 pontos voltam', () async {
+      final (idCliente, id) = await resgatarAmanha();
+
+      final c = await service.cancelarAgendamento(id, agora: amanhaAs(7));
+
+      expect(c.pontosAjustados, 500);
+      expect(c.pontosRetidos, 0);
+      expect(await service.obterPontos(idCliente), 500);
+      await expectSaldoConfereComExtrato(idCliente);
+    });
+
+    test('cancelado com menos de 1 hora, o cliente perde os pontos, sem '
+        'multa em dinheiro', () async {
+      final (idCliente, id) = await resgatarAmanha();
+
+      // Antes os 500 pontos voltavam mesmo em cima da hora.
+      final c = await service.cancelarAgendamento(id, agora: amanhaAs(8, 30));
+
+      expect(c.comMulta, isFalse);
+      expect(c.multa, 0);
+      expect(c.multaAPagar, 0);
+      expect(c.pontosAjustados, 0);
+      expect(c.pontosRetidos, 500);
+      expect(await service.obterPontos(idCliente), 0);
+      await expectSaldoConfereComExtrato(idCliente);
+
+      // Nenhuma cobrança nasce: o resgate continua sendo o lançamento.
+      final p = await service.buscarPagamentoDoAgendamento(id);
+      expect(p!.natureza, NaturezaPagamento.resgate);
+      final rel = await service.gerarRelatorio();
+      expect(rel.aReceber, 0);
+      expect(rel.faturamento, 0);
+      expect(rel.cancelados, 1);
+    });
+
+    test('falta num serviço resgatado: perde os pontos, sem multa', () async {
+      final (idCliente, id) = await resgatarAmanha();
+
+      final f = await service.registrarFalta(id, agora: amanhaAs(10));
+
+      expect(f.comMulta, isFalse);
+      expect(f.multaAPagar, 0);
+      expect(f.pontosRetidos, 500);
+      expect(await service.obterPontos(idCliente), 0);
+      final rel = await service.gerarRelatorio();
+      expect(rel.aReceber, 0);
+      expect(rel.faltas, 1);
+    });
+
+    test('a barbearia cancelando em cima da hora devolve os pontos', () async {
+      final (idCliente, id) = await resgatarAmanha();
+
+      final c = await service.cancelarAgendamento(
+        id,
+        agora: amanhaAs(8, 30),
+        porBarbeiro: true,
+      );
+
+      expect(c.pontosAjustados, 500);
+      expect(c.pontosRetidos, 0);
+      expect(await service.obterPontos(idCliente), 500);
+    });
+  });
 }

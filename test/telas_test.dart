@@ -222,4 +222,107 @@ void main() {
     );
     semantica.dispose();
   });
+
+  // -------------------------------------------------------------------------
+  // P03 — resgate e desistência tardia
+  // -------------------------------------------------------------------------
+
+  /// Cliente `c@teste.com` com um Corte de Cabelo trocado por 500 pontos,
+  /// marcado com o barbeiro 1 para [quando]. Devolve o id do agendamento.
+  Future<int> resgateMarcado(DateTime quando) async {
+    final idCliente = await service.cadastrarCliente(
+      Cliente(
+        nome: 'Cliente',
+        email: 'c@teste.com',
+        telefone: '(67) 99999-0000',
+        senhaHash: DatabaseService.hashSenha('senha123'),
+        criadoEm: DateTime.now().toIso8601String(),
+      ),
+    );
+    await service.adicionarPontos(idCliente, 500, 'Saldo de teste');
+    final id = await service.criarAgendamento(
+      Agendamento(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: quando.toIso8601String(),
+      ),
+    );
+    await service.resgatarPremio(
+      idCliente: idCliente,
+      idAgendamento: id,
+      nomeServico: 'Corte de Cabelo',
+    );
+    return id;
+  }
+
+  testWidgets('cancelar um resgate em cima da hora avisa a perda dos pontos, '
+      'e não multa em dinheiro', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await resgateMarcado(DateTime.now().add(const Duration(minutes: 30)));
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    await tester.tap(find.text('Cancelar agendamento'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('500 pontos usados no resgate não serão devolvidos'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('multa'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('registrar falta num resgate avisa a perda dos pontos',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await resgateMarcado(DateTime.now().subtract(const Duration(hours: 2)));
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    await tester.ensureVisible(find.text('Não compareceu'));
+    await tester.tap(find.text('Não compareceu'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('500 pontos usados no resgate não serão devolvidos'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('multa de'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('resgate cancelado fora do prazo mostra os pontos retidos',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final amanha = DateTime.now().add(const Duration(days: 1));
+      final as9 = DateTime(amanha.year, amanha.month, amanha.day, 9);
+      final id = await resgateMarcado(as9);
+      await service.cancelarAgendamento(
+        id,
+        agora: as9.subtract(const Duration(minutes: 30)),
+      );
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+
+    // Antes aparecia "Resgatado com pontos de fidelidade", como se valesse.
+    expect(find.text('500 pontos do resgate não devolvidos'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
 }
