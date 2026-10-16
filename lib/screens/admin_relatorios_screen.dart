@@ -23,6 +23,7 @@ enum _Periodo { esteMes, mesPassado, tudo }
 class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   RelatorioGeral? _relatorio;
   bool _carregando = true;
+  String? _erro;
 
   /// O padrão é o mês corrente: é o único recorte em que comparar
   /// faturamento com a folha mensal faz sentido.
@@ -62,6 +63,12 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   }
 
   Future<void> _carregar() async {
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
     try {
       final (inicio, fim) = _intervalo;
       final r = await DatabaseService.instance.gerarRelatorio(
@@ -75,8 +82,10 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _carregando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao gerar relatório'));
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível gerar o relatório');
+      });
     }
   }
 
@@ -94,11 +103,10 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
-                : r == null
-                ? const EstadoVazio(
-                    icone: '📊',
-                    titulo: 'Sem dados',
-                    descricao: 'Não foi possível gerar o relatório.',
+                : _erro != null || r == null
+                ? EstadoErro(
+                    mensagem: _erro ?? 'Não foi possível gerar o relatório.',
+                    onTentarNovamente: _carregar,
                   )
                 : RefreshIndicator(
                     color: AppColors.gold,

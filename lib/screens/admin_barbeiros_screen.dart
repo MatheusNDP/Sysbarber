@@ -25,6 +25,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
 
   List<Barbeiro> _barbeiros = [];
   bool _carregando = true;
+  String? _erro;
 
   @override
   void initState() {
@@ -33,6 +34,12 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
   }
 
   Future<void> _carregar() async {
+    if (_erro != null) {
+      setState(() {
+        _erro = null;
+        _carregando = true;
+      });
+    }
     try {
       final lista = await _db.listarBarbeiros();
       if (!mounted) return;
@@ -42,8 +49,10 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _carregando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar barbeiros'));
+      setState(() {
+        _carregando = false;
+        _erro = mensagemDeErro(e, 'Não foi possível carregar os barbeiros');
+      });
     }
   }
 
@@ -186,6 +195,8 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.gold),
                   )
+                : _erro != null
+                ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : _barbeiros.isEmpty
                 ? const EstadoVazio(
                     icone: '✂️',

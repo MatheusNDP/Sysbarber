@@ -33,6 +33,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   int _pontos = 0;
   bool _usarPontos = false;
 
+  /// Falha ao ler o saldo. O pagamento em dinheiro segue normal, mas o
+  /// cliente precisa saber por que o resgate não aparece.
+  String? _erroPontos;
+
   final _numeroCtrl = TextEditingController();
   final _nomeCartaoCtrl = TextEditingController();
   final _validadeCtrl = TextEditingController();
@@ -52,9 +56,18 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     try {
       final pontos = await DatabaseService.instance.obterPontos(id);
       if (!mounted) return;
-      setState(() => _pontos = pontos);
-    } catch (_) {
-      // Sem o saldo o resgate simplesmente não é oferecido.
+      setState(() {
+        _pontos = pontos;
+        _erroPontos = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(
+        () => _erroPontos = mensagemDeErro(
+          e,
+          'Não foi possível carregar seus pontos de fidelidade',
+        ),
+      );
     }
   }
 
@@ -366,7 +379,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: [
                 _cartaoValor(servico),
-                if (_podeResgatar) ...[
+                if (_erroPontos != null) ...[
+                  const SizedBox(height: 22),
+                  _avisoPontosIndisponiveis(_erroPontos!),
+                ] else if (_podeResgatar) ...[
                   const SizedBox(height: 22),
                   _cardResgate(),
                 ],
@@ -439,6 +455,40 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           Text(
             servico?.nome ?? '',
             style: AppTheme.sans(size: 13, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// No lugar da oferta de resgate quando o saldo não carregou. Não ocupa a
+  /// tela inteira: pagar em dinheiro continua possível.
+  Widget _avisoPontosIndisponiveis(String mensagem) {
+    return GoldCard(
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.muted, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              mensagem,
+              style: AppTheme.sans(
+                size: 12,
+                color: AppColors.muted,
+                height: 1.3,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _carregarPontos,
+            child: Text(
+              'TENTAR NOVAMENTE',
+              style: AppTheme.sans(
+                size: 12,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
           ),
         ],
       ),
