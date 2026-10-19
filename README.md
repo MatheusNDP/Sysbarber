@@ -56,7 +56,7 @@ pontos ficam no arquivo `sysbarber.db`, guardado no próprio aparelho onde o app
 está instalado. Isso tem três consequências:
 
 - **Cada instalação é uma barbearia separada.** O banco é criado na primeira
-  abertura, já com o seed. O mesmo app instalado em dois celulares gera dois
+  abertura do app. O mesmo app instalado em dois celulares gera dois
   bancos que não se comunicam: o que é cadastrado num não aparece no outro. O
   cliente que instala o app no próprio celular não vê os barbeiros nem os
   horários cadastrados no aparelho da barbearia.
