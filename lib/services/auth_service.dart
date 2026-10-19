@@ -29,6 +29,10 @@ class AuthService {
   /// Rotas abertas a quem ainda não entrou.
   static const Set<String> _rotasPublicas = {'/', '/login', '/cadastro'};
 
+  /// Tela da configuração inicial, a única aberta antes de existir o
+  /// administrador (regra de negócio 15).
+  static const String rotaConfiguracao = '/configuracao';
+
   /// Rotas da área do cliente (inclui o administrador, que é um cliente).
   static const Set<String> _rotasCliente = {
     '/home',
@@ -68,11 +72,21 @@ class AuthService {
   /// Primeira tela depois de entrar: o barbeiro vai direto para a agenda.
   String get rotaInicial => ehBarbeiro ? '/agendamentos' : '/home';
 
+  bool _barbeariaConfigurada = false;
+
+  /// Já existe o administrador? Lido do banco na abertura do app
+  /// ([carregarConfiguracao]) e atualizado por [configurarBarbearia].
+  bool get barbeariaConfigurada => _barbeariaConfigurada;
+
   /// Quem está logado pode abrir [rota]?
   ///
   /// Esconder um botão não protege uma tela; as rotas passam por aqui antes
   /// de serem construídas (ver `onGenerateRoute` em `main.dart`).
   bool podeAcessar(String rota) {
+    // Antes da configuração inicial não há contas para entrar: só a abertura
+    // e a própria configuração. Depois dela, a configuração não abre mais.
+    if (!_barbeariaConfigurada) return rota == '/' || rota == rotaConfiguracao;
+    if (rota == rotaConfiguracao) return false;
     if (_rotasPublicas.contains(rota)) return true;
     if (rota == '/agendamentos') return estaLogado;
     if (rota == '/admin') return podeAdministrar;
@@ -81,6 +95,47 @@ class AuthService {
   }
 
   final DatabaseService _db = DatabaseService.instance;
+
+  /// Lê do banco se a barbearia já foi configurada (chamado na abertura do
+  /// app, antes da primeira tela).
+  Future<void> carregarConfiguracao() async {
+    _barbeariaConfigurada = await _db.barbeariaConfigurada();
+  }
+
+  /// Configuração inicial: cria o administrador (e, se pedido, os dados de
+  /// exemplo) e já entra com ele (regra de negócio 15).
+  Future<({bool sucesso, String? erro})> configurarBarbearia({
+    required String nome,
+    required String email,
+    required String telefone,
+    required String senha,
+    required bool dadosDeExemplo,
+  }) async {
+    try {
+      final admin = await _db.configurarBarbearia(
+        nome: nome,
+        email: email,
+        telefone: telefone,
+        senha: senha,
+        dadosDeExemplo: dadosDeExemplo,
+      );
+      _barbeariaConfigurada = true;
+      BookingFlow.limpar();
+      _usuarioAtual = admin;
+      _barbeiroAtual = null;
+      await _salvarSessao(admin.id!, _tipoCliente);
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      // Se outra configuração terminou antes, a tela precisa saber.
+      try {
+        await carregarConfiguracao();
+      } catch (_) {}
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível configurar a barbearia'),
+      );
+    }
+  }
 
   /// Restaura a sessão salva (chamado na inicialização do app).
   Future<void> carregarSessao() async {

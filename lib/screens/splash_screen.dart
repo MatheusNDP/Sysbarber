@@ -6,7 +6,8 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
-/// Tela inicial (`/`). Se houver sessão salva, entra direto na Home.
+/// Tela inicial (`/`). Se houver sessão salva, entra direto na Home. Na
+/// primeira abertura, sem administrador, leva à configuração da barbearia.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -37,7 +38,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nome = AuthService.instance.nomeLogado;
+    final auth = AuthService.instance;
+    final nome = auth.nomeLogado;
 
     return Scaffold(
       body: Stack(
@@ -121,7 +123,25 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                       ],
                     )
-                  else ...[
+                  else if (!auth.barbeariaConfigurada) ...[
+                    Text(
+                      'Primeiro acesso: crie a conta de administrador da '
+                      'barbearia para começar.',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.sans(
+                        size: 13,
+                        color: AppColors.muted,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    GoldButton(
+                      texto: 'CONFIGURAR BARBEARIA',
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pushNamed(AuthService.rotaConfiguracao),
+                    ),
+                  ] else ...[
                     GoldButton(
                       texto: 'ENTRAR',
                       onPressed: () =>
