@@ -3,6 +3,8 @@
 Trabalho de Conclusão de Curso — Engenharia de Software.
 Aplicativo mobile em **Flutter/Dart** com banco **SQLite local** (sem Firebase) e
 autenticação própria com senhas em **PBKDF2-HMAC-SHA256** e salt individual.
+Todos os dados ficam no aparelho: o sistema completo funciona em **um aparelho
+compartilhado** (veja [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)).
 
 ---
 
@@ -46,6 +48,30 @@ O app não faz nenhuma requisição de rede. O banco é local (SQLite) e as font
 (`assets/fonts/`, declaradas em `pubspec.yaml`), e não baixadas em tempo de
 execução. A identidade visual fica idêntica com ou sem internet — importante
 para a apresentação.
+
+### Os dados ficam no aparelho
+
+Não existe servidor. Clientes, barbeiros, serviços, agendamentos, pagamentos e
+pontos ficam no arquivo `sysbarber.db`, guardado no próprio aparelho onde o app
+está instalado. Isso tem três consequências:
+
+- **Cada instalação é uma barbearia separada.** O banco é criado na primeira
+  abertura do app. O mesmo app instalado em dois celulares gera dois
+  bancos que não se comunicam: o que é cadastrado num não aparece no outro. O
+  cliente que instala o app no próprio celular não vê os barbeiros nem os
+  horários cadastrados no aparelho da barbearia.
+- **O sistema completo funciona em um aparelho compartilhado**, por exemplo um
+  tablet no balcão: clientes, barbeiros e administrador usam o mesmo aparelho,
+  cada um entrando com a própria conta. É assim que o app é demonstrado, no
+  emulador.
+- **Cada pessoa precisa sair da conta ao terminar.** A sessão fica salva, e o
+  app reabre direto na última conta usada. Num aparelho compartilhado, quem
+  termina toca em **Sair**: o cliente e o administrador no Perfil, o barbeiro
+  no ícone de saída da própria agenda.
+
+Levar o app para o celular de cada cliente exige um servidor central, com o
+banco na nuvem e sincronização entre os aparelhos. Isso fica fora do escopo
+deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 
 ---
 
@@ -295,6 +321,12 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
 
 ## Limitações conhecidas
 
+- Não há servidor: os dados não são compartilhados entre aparelhos, e cada
+  instalação é uma barbearia separada. O sistema completo funciona em um
+  aparelho compartilhado (veja
+  [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)). Para clientes e
+  barbearia usarem aparelhos diferentes, seria preciso um servidor central com
+  sincronização — trabalho futuro.
 - Valores em dinheiro são `REAL` no SQLite; multa e estorno são arredondados
   para centavos, mas a migração completa para centavos inteiros não foi feita.
 - Os dias de funcionamento, os turnos, a grade e a janela de agendamento são
