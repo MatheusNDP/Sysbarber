@@ -9,6 +9,7 @@ import 'screens/admin_screen.dart';
 import 'screens/agendamentos_screen.dart';
 import 'screens/barbeiro_screen.dart';
 import 'screens/cadastro_screen.dart';
+import 'screens/configuracao_screen.dart';
 import 'screens/confirmacao_screen.dart';
 import 'screens/fidelidade_screen.dart';
 import 'screens/home_screen.dart';
@@ -63,8 +64,11 @@ Future<void> main() async {
 /// desenhar qualquer coisa.
 Future<void> iniciar() async {
   try {
-    // Abre (e na primeira execução cria + popula) o banco.
+    // Abre (e na primeira execução cria, ainda vazio) o banco e lê se a
+    // barbearia já foi configurada: sem administrador, a abertura leva à
+    // configuração inicial.
     await DatabaseService.instance.database;
+    await AuthService.instance.carregarConfiguracao();
   } catch (erro, pilha) {
     developer.log(
       'Falha ao abrir o banco',
@@ -112,6 +116,7 @@ class SysBarberApp extends StatelessWidget {
     '/': (_) => const SplashScreen(),
     '/login': (_) => const LoginScreen(),
     '/cadastro': (_) => const CadastroScreen(),
+    AuthService.rotaConfiguracao: (_) => const ConfiguracaoScreen(),
     '/home': (_) => const HomeScreen(),
     '/servicos': (_) => const ServicosScreen(),
     '/barbeiro': (_) => const BarbeiroScreen(),

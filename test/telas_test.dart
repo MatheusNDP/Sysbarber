@@ -9,15 +9,22 @@ import 'package:sysbarber/screens/admin_relatorios_screen.dart';
 import 'package:sysbarber/screens/admin_screen.dart';
 import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
+import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
 import 'package:sysbarber/screens/servicos_screen.dart';
+import 'package:sysbarber/screens/splash_screen.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
+
+/// Administrador criado pela configuração inicial nos testes (desde a P22 o
+/// app não tem conta padrão).
+const emailAdmin = 'admin@sysbarber.com';
+const senhaAdmin = 'admin1234';
 
 /// Testes de tela: o que o usuário vê quando os dados chegam — e quando não
 /// chegam.
@@ -32,7 +39,8 @@ void main() {
 
   tearDown(() async => service.resetarParaTeste());
 
-  /// Abre um banco em memória com o seed (fora do relógio falso do teste).
+  /// Abre um banco em memória já configurado, com o administrador e os
+  /// dados de exemplo (fora do relógio falso do teste).
   Future<Database> bancoComSeed(WidgetTester tester) async {
     late Database db;
     await tester.runAsync(() async {
@@ -44,6 +52,14 @@ void main() {
           onCreate: service.criarSchema,
           onConfigure: DatabaseService.configurar,
         ),
+      );
+      service.injetarBancoParaTeste(db);
+      await service.configurarBarbearia(
+        nome: 'Administrador',
+        email: emailAdmin,
+        telefone: '(67) 99999-0000',
+        senha: senhaAdmin,
+        dadosDeExemplo: true,
       );
     });
     return db;
@@ -538,8 +554,8 @@ void main() {
     service.injetarBancoParaTeste(await bancoComSeed(tester));
     await tester.runAsync(
       () => AuthService.instance.login(
-        DatabaseService.emailAdmin,
-        DatabaseService.senhaAdmin,
+        emailAdmin,
+        senhaAdmin,
       ),
     );
   }
@@ -771,5 +787,95 @@ void main() {
     // Antes o texto ficava numa linha só e estourava o botão.
     expect(tester.takeException(), isNull);
     expect(find.text('RESERVAR E PAGAR NA BARBEARIA'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // P22 — configuração inicial da barbearia
+  // -------------------------------------------------------------------------
+
+  /// Banco recém-criado, como na primeira abertura: sem administrador.
+  Future<void> bancoNovo(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      service.injetarBancoParaTeste(
+        await databaseFactory.openDatabase(
+          inMemoryDatabasePath,
+          options: OpenDatabaseOptions(
+            version: 1,
+            singleInstance: false,
+            onCreate: service.criarSchema,
+            onConfigure: DatabaseService.configurar,
+          ),
+        ),
+      );
+      SharedPreferences.setMockInitialValues({});
+      await AuthService.instance.logout();
+      await AuthService.instance.carregarConfiguracao();
+    });
+  }
+
+  testWidgets('a primeira abertura leva à configuração da barbearia', (
+    tester,
+  ) async {
+    await bancoNovo(tester);
+
+    await abrir(tester, const SplashScreen());
+
+    expect(find.text('CONFIGURAR BARBEARIA'), findsOneWidget);
+    expect(find.text('ENTRAR'), findsNothing);
+    expect(find.text('CRIAR CONTA'), findsNothing);
+  });
+
+  testWidgets('a configuração cria o administrador e mostra como os '
+      'barbeiros de exemplo entram', (tester) async {
+    await bancoNovo(tester);
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          home: const ConfiguracaoScreen(),
+          routes: {'/home': (_) => const Scaffold(body: Text('INÍCIO'))},
+        ),
+      ),
+    );
+
+    final campos = find.byType(TextField);
+    await tester.enterText(campos.at(0), 'Dono da Barbearia');
+    await tester.enterText(campos.at(1), 'dono@barbearia.com');
+    await tester.enterText(campos.at(2), '67987654321');
+    await tester.enterText(campos.at(3), 'senhaDoDono1');
+    await tester.enterText(campos.at(4), 'senhaDoDono1');
+    await tester.ensureVisible(find.text('Começar com dados de exemplo'));
+    await tester.tap(find.text('Começar com dados de exemplo'));
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('CONFIGURAR E ENTRAR'));
+    await tester.runAsync(() async {
+      await tester.tap(find.text('CONFIGURAR E ENTRAR'));
+      await Future<void>.delayed(const Duration(seconds: 1));
+    });
+    await tester.pump();
+
+    // O dono precisa saber como os barbeiros de exemplo entram no app.
+    expect(find.textContaining('barbeiro123'), findsWidgets);
+    // A navegação depois do diálogo continua o código iniciado no relógio
+    // real (o toque em "CONFIGURAR E ENTRAR"), então também roda nele.
+    await tester.runAsync(() async {
+      await tester.tap(find.text('ENTENDI'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.podeAdministrar, isTrue);
+    expect(await tester.runAsync(service.listarBarbeiros), hasLength(3));
+  });
+
+  testWidgets('o login não mostra mais as credenciais do administrador', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+
+    // Antes, em modo de desenvolvimento, o login exibia a conta padrão.
+    expect(find.textContaining('admin1234'), findsNothing);
+    expect(find.textContaining('admin@sysbarber.com'), findsNothing);
   });
 }

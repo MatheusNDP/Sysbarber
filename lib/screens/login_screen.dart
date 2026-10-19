@@ -1,8 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
-import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -65,12 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   _cabecalho(),
                   const SizedBox(height: 28),
-                  // As credenciais de demonstração só aparecem em build de
-                  // desenvolvimento — um APK de release não as expõe.
-                  if (kDebugMode) ...[
-                    _dicaDemo(),
-                    const SizedBox(height: 24),
-                  ],
                   const SectionLabel('E-mail'),
                   const SizedBox(height: 8),
                   TextField(
@@ -193,45 +185,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _dicaDemo() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Conta administradora',
-                  style: AppTheme.sans(
-                    size: 12,
-                    weight: FontWeight.w700,
-                    color: AppColors.gold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${DatabaseService.emailAdmin}  ·  '
-                  '${DatabaseService.senhaAdmin}',
-                  style: AppTheme.sans(size: 12, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

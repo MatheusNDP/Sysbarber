@@ -19,7 +19,8 @@ class DatabaseService {
 
   /// v2: barbeiro ganhou contato/acesso/salário e pagamento ganhou tipo e
   /// cartão mascarado.
-  /// v3: cliente ganhou a marca de administrador e a conta demo virou admin.
+  /// v3: cliente ganhou a marca de administrador (a migração não promove
+  /// ninguém: sem administrador, o app pede a configuração inicial).
   /// v4: barbeiro ganhou a marca de disponibilidade para novos agendamentos.
   /// v5: pagamento ganhou a natureza do lançamento (serviço, multa, estorno
   /// ou resgate); agendamento guarda a própria duração e o preço da época;
@@ -27,12 +28,10 @@ class DatabaseService {
   /// quando o banco antigo não tem duplicados) e índices de consulta.
   static const int versaoBanco = 5;
 
-  /// Credenciais da conta administradora criada no seed.
-  static const String emailAdmin = 'admin@sysbarber.com';
-  static const String senhaAdmin = 'admin1234';
-
-  /// Usado na migração quando um cliente comum já ocupa [emailAdmin].
-  static const String emailAdminAlternativo = 'administrador@sysbarber.com';
+  /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
+  /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
+  /// configura a barbearia.
+  static const String senhaBarbeirosDeExemplo = 'barbeiro123';
 
   /// Pontos necessários para trocar por um serviço gratuito
   /// (regra de negócio 6).
@@ -147,13 +146,15 @@ class DatabaseService {
   }
 
   // -------------------------------------------------------------------------
-  // SCHEMA + SEED
+  // SCHEMA E MIGRAÇÕES
   // -------------------------------------------------------------------------
 
-  /// Cria todas as tabelas e insere os dados iniciais.
+  /// Cria todas as tabelas, vazias.
   ///
-  /// Público de propósito: os testes de integração reaproveitam este mesmo
-  /// método como `onCreate` do banco em memória.
+  /// O administrador e os dados de exemplo nascem depois, na configuração
+  /// inicial ([configurarBarbearia]). Público de propósito: os testes de
+  /// integração reaproveitam este mesmo método como `onCreate` do banco em
+  /// memória.
   Future<void> criarSchema(Database db, int version) async {
     await db.execute('''
       CREATE TABLE cliente (
@@ -248,8 +249,6 @@ class DatabaseService {
     await _criarIndiceHorario(db);
     await _criarIndicesDeConsulta(db);
     await _criarIndiceEmailBarbeiro(db);
-
-    await _popularDadosIniciais(db);
   }
 
   /// Índices das consultas mais frequentes: grade do barbeiro, histórico do
@@ -321,7 +320,7 @@ class DatabaseService {
           'barbeiro',
           {
             'email': email,
-            'senha_hash': hashSenha('barbeiro123'),
+            'senha_hash': hashSenha(senhaBarbeirosDeExemplo),
             'telefone': '(67) 99000-0000',
             'salario': 2500.0,
           },
@@ -332,10 +331,12 @@ class DatabaseService {
     }
 
     if (versaoAntiga < 3) {
+      // Ninguém é promovido nem criado aqui: sem administrador, o app abre
+      // na configuração inicial (regra de negócio 15). Antes, a migração
+      // promovia a conta demo — ou criava uma conta — com a senha padrão.
       await db.execute(
         'ALTER TABLE cliente ADD COLUMN admin INTEGER NOT NULL DEFAULT 0',
       );
-      await _definirAdministradora(db);
     }
 
     if (versaoAntiga < 4) {
@@ -424,56 +425,6 @@ class DatabaseService {
     }
   }
 
-  /// Garante exatamente uma conta administradora ao chegar na v3.
-  ///
-  /// A antiga conta `demo` vira a administradora. Ela só herda o e-mail
-  /// oficial se ninguém o estiver usando: antes, um cliente que tivesse se
-  /// cadastrado com esse e-mail fazia o UPDATE violar o UNIQUE e o app não
-  /// abria mais — ou, sem a conta demo, era promovido a administrador.
-  /// Cliente comum nunca é promovido; se preciso, nasce uma conta nova.
-  Future<void> _definirAdministradora(DatabaseExecutor db) async {
-    Future<int?> idPorEmail(String email) async {
-      final linhas = await db.query(
-        'cliente',
-        columns: ['id'],
-        where: 'email = ?',
-        whereArgs: [email],
-        limit: 1,
-      );
-      return linhas.isEmpty ? null : linhas.first['id'] as int;
-    }
-
-    final emailLivre = await idPorEmail(emailAdmin) == null;
-    final idDemo = await idPorEmail('demo@sysbarber.com');
-
-    if (idDemo != null) {
-      await db.update(
-        'cliente',
-        {
-          'nome': 'Administrador',
-          if (emailLivre) 'email': emailAdmin,
-          'senha_hash': hashSenha(senhaAdmin),
-          'admin': 1,
-        },
-        where: 'id = ?',
-        whereArgs: [idDemo],
-      );
-      return;
-    }
-
-    final email = emailLivre ? emailAdmin : emailAdminAlternativo;
-    if (await idPorEmail(email) != null) return;
-    final id = await db.insert('cliente', {
-      'nome': 'Administrador',
-      'email': email,
-      'telefone': '(67) 99999-0000',
-      'senha_hash': hashSenha(senhaAdmin),
-      'criado_em': DateTime.now().toIso8601String(),
-      'admin': 1,
-    });
-    await db.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
-  }
-
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
   static String _emailPadraoBarbeiro(String nome) {
     final limpo = nome
@@ -490,106 +441,230 @@ class DatabaseService {
     return '$limpo@sysbarber.com';
   }
 
-  Future<void> _popularDadosIniciais(Database db) async {
-    final lote = db.batch();
+  // -------------------------------------------------------------------------
+  // CONFIGURAÇÃO INICIAL
+  // -------------------------------------------------------------------------
 
-    // Senha de acesso de todos os barbeiros do seed: `barbeiro123`.
-    final barbeiros = [
-      Barbeiro(
-        nome: 'Carlos Eduardo',
-        especialidade: 'Especialista em barba',
-        avaliacao: 4.9,
-        avaliacoes: 128,
-        iniciais: 'CE',
-        telefone: '(67) 99101-1001',
-        email: 'carlos.eduardo@sysbarber.com',
-        senhaHash: hashSenha('barbeiro123'),
-        salario: 2800.00,
-      ),
-      Barbeiro(
-        nome: 'Rafael Souza',
-        especialidade: 'Cortes modernos',
-        avaliacao: 4.7,
-        avaliacoes: 95,
-        iniciais: 'RS',
-        telefone: '(67) 99202-2002',
-        email: 'rafael.souza@sysbarber.com',
-        senhaHash: hashSenha('barbeiro123'),
-        salario: 2500.00,
-      ),
-      Barbeiro(
-        nome: 'Marcos Lima',
-        especialidade: 'Coloração e Corte',
-        avaliacao: 4.8,
-        avaliacoes: 74,
-        iniciais: 'ML',
-        telefone: '(67) 99303-3003',
-        email: 'marcos.lima@sysbarber.com',
-        senhaHash: hashSenha('barbeiro123'),
-        salario: 2650.00,
-        // Indisponível no seed para demonstrar o estado inativo.
-        ativo: false,
-      ),
-    ];
-    for (final b in barbeiros) {
-      lote.insert('barbeiro', b.toMap()..remove('id'));
-    }
+  /// Barbeiros de demonstração, criados quando o dono marca "Começar com
+  /// dados de exemplo". A senha de todos é [senhaBarbeirosDeExemplo].
+  static const List<Barbeiro> _barbeirosDeExemplo = [
+    Barbeiro(
+      nome: 'Carlos Eduardo',
+      especialidade: 'Especialista em barba',
+      avaliacao: 4.9,
+      avaliacoes: 128,
+      iniciais: 'CE',
+      telefone: '(67) 99101-1001',
+      email: 'carlos.eduardo@sysbarber.com',
+      salario: 2800.00,
+    ),
+    Barbeiro(
+      nome: 'Rafael Souza',
+      especialidade: 'Cortes modernos',
+      avaliacao: 4.7,
+      avaliacoes: 95,
+      iniciais: 'RS',
+      telefone: '(67) 99202-2002',
+      email: 'rafael.souza@sysbarber.com',
+      salario: 2500.00,
+    ),
+    Barbeiro(
+      nome: 'Marcos Lima',
+      especialidade: 'Coloração e Corte',
+      avaliacao: 4.8,
+      avaliacoes: 74,
+      iniciais: 'ML',
+      telefone: '(67) 99303-3003',
+      email: 'marcos.lima@sysbarber.com',
+      salario: 2650.00,
+      // Indisponível para demonstrar a regra 14.
+      ativo: false,
+    ),
+  ];
 
-    const servicos = [
-      Servico(
-        nome: 'Corte de Cabelo',
-        descricao: 'Tesoura ou máquina',
-        preco: 35.00,
-        duracaoMinutos: 30,
-        icone: '✂️',
-      ),
-      Servico(
-        nome: 'Barba',
-        descricao: 'Navalha + toalha quente',
-        preco: 25.00,
-        duracaoMinutos: 25,
-        icone: '🪒',
-      ),
-      Servico(
-        nome: 'Corte + Barba',
-        descricao: 'Combo completo',
-        preco: 55.00,
-        duracaoMinutos: 50,
-        icone: '💈',
-      ),
-      Servico(
-        nome: 'Hidratação',
-        descricao: 'Tratamento capilar',
-        preco: 40.00,
-        duracaoMinutos: 40,
-        icone: '💆',
-      ),
-      Servico(
-        nome: 'Coloração',
-        descricao: 'Tintura profissional',
-        preco: 80.00,
-        duracaoMinutos: 60,
-        icone: '🎨',
-      ),
-    ];
-    for (final s in servicos) {
-      lote.insert('servico', s.toMap()..remove('id'));
-    }
+  /// Serviços de demonstração, criados junto com os barbeiros de exemplo.
+  static const List<Servico> _servicosDeExemplo = [
+    Servico(
+      nome: 'Corte de Cabelo',
+      descricao: 'Tesoura ou máquina',
+      preco: 35.00,
+      duracaoMinutos: 30,
+      icone: '✂️',
+    ),
+    Servico(
+      nome: 'Barba',
+      descricao: 'Navalha + toalha quente',
+      preco: 25.00,
+      duracaoMinutos: 25,
+      icone: '🪒',
+    ),
+    Servico(
+      nome: 'Corte + Barba',
+      descricao: 'Combo completo',
+      preco: 55.00,
+      duracaoMinutos: 50,
+      icone: '💈',
+    ),
+    Servico(
+      nome: 'Hidratação',
+      descricao: 'Tratamento capilar',
+      preco: 40.00,
+      duracaoMinutos: 40,
+      icone: '💆',
+    ),
+    Servico(
+      nome: 'Coloração',
+      descricao: 'Tintura profissional',
+      preco: 80.00,
+      duracaoMinutos: 60,
+      icone: '🎨',
+    ),
+  ];
 
-    await lote.commit(noResult: true);
+  /// E-mails de acesso dos barbeiros de exemplo, para quem configura a
+  /// barbearia saber como eles entram.
+  static List<String> get emailsBarbeirosDeExemplo =>
+      _barbeirosDeExemplo.map((b) => b.email).toList();
 
-    // Conta administradora usada na apresentação para a banca. É a única com
-    // acesso à área administrativa — contas criadas pelo cadastro são
-    // sempre clientes comuns.
-    final idAdmin = await db.insert('cliente', {
-      'nome': 'Administrador',
-      'email': emailAdmin,
-      'telefone': '(67) 99999-0000',
-      'senha_hash': hashSenha(senhaAdmin),
-      'criado_em': DateTime.now().toIso8601String(),
-      'admin': 1,
+  /// A barbearia já foi configurada, isto é, já existe o administrador?
+  ///
+  /// Enquanto não existe, o app abre na configuração inicial (regra de
+  /// negócio 15).
+  Future<bool> barbeariaConfigurada() async =>
+      _existeAdministrador(await database);
+
+  Future<bool> _existeAdministrador(DatabaseExecutor db) async {
+    final linhas = await db.query(
+      'cliente',
+      columns: ['id'],
+      where: 'admin = 1',
+      limit: 1,
+    );
+    return linhas.isNotEmpty;
+  }
+
+  /// Configuração inicial da barbearia (regra de negócio 15).
+  ///
+  /// Cria a conta do administrador — a única, e só enquanto não existe
+  /// nenhuma — com os dados escolhidos pelo dono. Com [dadosDeExemplo], cria
+  /// também os barbeiros e os serviços de demonstração, o que só é aceito
+  /// numa barbearia ainda vazia.
+  ///
+  /// Os hashes das senhas são calculados antes, em outro isolate. A gravação
+  /// acontece numa única transação, que confere tudo de novo: ou a barbearia
+  /// fica configurada por inteiro, ou nada muda. Devolve o administrador.
+  Future<Cliente> configurarBarbearia({
+    required String nome,
+    required String email,
+    required String telefone,
+    required String senha,
+    bool dadosDeExemplo = false,
+  }) async {
+    final erro = Validators.validarCadastro(
+      nome: nome,
+      email: email,
+      telefone: telefone,
+      senha: senha,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
+
+    final emailNormalizado = email.trim().toLowerCase();
+    final db = await database;
+
+    // Conferido antes de calcular os hashes, que são caros, e de novo dentro
+    // da transação, que é quem garante a regra.
+    final antes = await _impedimentoConfiguracao(
+      db,
+      emailNormalizado,
+      dadosDeExemplo,
+    );
+    if (antes != null) throw RegraNegocioException(antes);
+
+    final senhaHash = await Senhas.gerarHashEmSegundoPlano(senha);
+    final hashesBarbeiros = dadosDeExemplo
+        ? await Future.wait([
+            for (final _ in _barbeirosDeExemplo)
+              Senhas.gerarHashEmSegundoPlano(senhaBarbeirosDeExemplo),
+          ])
+        : const <String>[];
+
+    return db.transaction((txn) async {
+      final impedimento = await _impedimentoConfiguracao(
+        txn,
+        emailNormalizado,
+        dadosDeExemplo,
+      );
+      if (impedimento != null) throw RegraNegocioException(impedimento);
+
+      final admin = Cliente(
+        nome: nome.trim(),
+        email: emailNormalizado,
+        telefone: telefone.trim(),
+        senhaHash: senhaHash,
+        criadoEm: DateTime.now().toIso8601String(),
+        admin: true,
+      );
+      final id = await txn.insert('cliente', admin.toMap()..remove('id'));
+      await txn.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
+
+      if (dadosDeExemplo) {
+        for (var i = 0; i < _barbeirosDeExemplo.length; i++) {
+          await txn.insert(
+            'barbeiro',
+            _barbeirosDeExemplo[i]
+                .copyWith(senhaHash: hashesBarbeiros[i])
+                .toMap()
+              ..remove('id'),
+          );
+        }
+        for (final servico in _servicosDeExemplo) {
+          await txn.insert('servico', servico.toMap()..remove('id'));
+        }
+      }
+      return admin.copyWith(id: id);
     });
-    await db.insert('fidelidade', {'id_cliente': idAdmin, 'pontos': 0});
+  }
+
+  /// Por que a configuração inicial não pode acontecer, ou `null` se pode.
+  Future<String?> _impedimentoConfiguracao(
+    DatabaseExecutor db,
+    String email,
+    bool dadosDeExemplo,
+  ) async {
+    if (await _existeAdministrador(db)) {
+      return 'A barbearia já foi configurada';
+    }
+
+    // E-mail é único no sistema (regra de negócio 12), inclusive entre o
+    // administrador e os barbeiros que os dados de exemplo vão criar.
+    Future<bool> emUso(String tabela) async => (await db.query(
+      tabela,
+      columns: ['id'],
+      where: 'email = ?',
+      whereArgs: [email],
+      limit: 1,
+    )).isNotEmpty;
+    if (await emUso('cliente') || await emUso('barbeiro')) {
+      return 'Este e-mail já está cadastrado';
+    }
+    if (dadosDeExemplo && emailsBarbeirosDeExemplo.contains(email)) {
+      return 'Este e-mail é de um barbeiro dos dados de exemplo';
+    }
+
+    if (dadosDeExemplo) {
+      final cadastros =
+          Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT (SELECT COUNT(*) FROM barbeiro) + '
+              '(SELECT COUNT(*) FROM servico)',
+            ),
+          ) ??
+          0;
+      if (cadastros > 0) {
+        return 'Os dados de exemplo só podem ser criados numa barbearia vazia';
+      }
+    }
+    return null;
   }
 
   // -------------------------------------------------------------------------

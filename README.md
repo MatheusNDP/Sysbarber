@@ -24,20 +24,30 @@ flutter run
 > (ex.: `C:\TCC\sysbarber`). Caminhos como "Área de Trabalho" quebram o
 > build do Gradle no Windows.
 
-### Contas do seed
+### Primeiro acesso
 
-| Perfil | E-mail | Senha | Acesso |
-|---|---|---|---|
-| Administrador | `admin@sysbarber.com` | `admin1234` | app do cliente + área administrativa |
-| Barbeiros | `carlos.eduardo@sysbarber.com`, `rafael.souza@sysbarber.com` e `marcos.lima@sysbarber.com` | `barbeiro123` | a própria agenda |
+O app não vem com conta de administrador nem senha padrão. Na primeira
+abertura o banco está vazio, e a tela inicial leva à **configuração da
+barbearia**: o dono cria a conta de administrador com o próprio nome, e-mail,
+telefone e senha (regra 15) e já entra com ela.
 
-No seed, **Marcos Lima começa indisponível**, para demonstrar a regra 14: ele
-aparece apagado na escolha do profissional, mas entra no app normalmente.
+A configuração tem a opção **"Começar com dados de exemplo"**, útil para testar
+ou apresentar o app. Marcada, ela cria 5 serviços e 3 barbeiros, que entram com
+estas contas e veem só a própria agenda:
+
+| Barbeiro | E-mail de acesso | Senha |
+|---|---|---|
+| Carlos Eduardo | `carlos.eduardo@sysbarber.com` | `barbeiro123` |
+| Rafael Souza | `rafael.souza@sysbarber.com` | `barbeiro123` |
+| Marcos Lima | `marcos.lima@sysbarber.com` | `barbeiro123` |
+
+**Marcos Lima começa indisponível**, para demonstrar a regra 14: ele aparece
+apagado na escolha do profissional, mas entra no app normalmente. Desmarcada a
+opção, a barbearia começa vazia, e o administrador cadastra os próprios
+serviços e barbeiros.
 
 Contas criadas pelo formulário de cadastro nascem **sempre como cliente
-comum** e não enxergam a área administrativa. A dica com as credenciais do
-administrador aparece na tela de login **só em build de desenvolvimento**
-(`kDebugMode`); um APK de release não as exibe.
+comum** e não enxergam a área administrativa.
 
 ### Funciona 100% offline
 
@@ -55,7 +65,7 @@ para a apresentação.
 flutter test
 ```
 
-São **217 testes** no total:
+São **226 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -63,8 +73,8 @@ São **217 testes** no total:
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 31 | Telas: carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
-| `integration_test/database_integration_test.dart` | 129 | CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
+| `test/telas_test.dart` | 34 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
+| `integration_test/database_integration_test.dart` | 135 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -73,7 +83,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 217 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 226 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -94,19 +104,19 @@ Arquitetura em camadas, com as telas isoladas do acesso a dados:
 
 ```
 lib/
-├── main.dart                    # Inicializa DB, restaura sessão, rotas com permissão
+├── main.dart                    # Inicializa DB, lê configuração e sessão, rotas com permissão
 ├── theme/app_theme.dart         # Cores, tipografia e tema global
 ├── models/models.dart           # Entidades, enums e regras de estado (toMap/fromMap)
 ├── services/
 │   ├── database_service.dart    # Singleton de acesso ao SQLite (CRUD + transações)
-│   ├── auth_service.dart        # Login, cadastro, sessão, perfil e permissões
+│   ├── auth_service.dart        # Configuração inicial, login, cadastro, sessão, perfil e permissões
 │   ├── senhas.dart              # Hash PBKDF2 com salt individual
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
 │   └── booking_flow.dart        # Rascunho do agendamento em andamento
 ├── widgets/common_widgets.dart  # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-└── screens/                     # 18 telas (uma por arquivo)
+└── screens/                     # 19 telas (uma por arquivo)
 ```
 
 **Padrões aplicados**
@@ -117,8 +127,9 @@ lib/
   pela camada de serviços. As regras de estado (cancelar, concluir, registrar
   falta) ficam no modelo `Agendamento` e valem igualmente para a tela e para o
   banco.
-- **Transações** — toda operação com mais de uma escrita (reserva,
-  cancelamento, confirmação de pagamento, resgate, cadastro) acontece numa
+- **Transações** — toda operação com mais de uma escrita (configuração
+  inicial, reserva, cancelamento, confirmação de pagamento, resgate, cadastro)
+  acontece numa
   única transação: ou tudo é gravado, ou nada é. O saldo de pontos é movido com
   `UPDATE ... SET pontos = pontos + ?`, sem ler-somar-gravar.
 - **Serialização toMap/fromMap** — converte entidades ↔ linhas do SQLite.
@@ -130,9 +141,10 @@ lib/
 
 ## Banco de dados
 
-7 tabelas relacionais criadas automaticamente na primeira execução
-(`sysbarber.db`, no diretório de documentos do app), já populadas com
-3 barbeiros, 5 serviços e a conta administradora.
+7 tabelas relacionais criadas automaticamente, vazias, na primeira execução
+(`sysbarber.db`, no diretório de documentos do app). O administrador e, se o
+dono quiser, os dados de exemplo nascem na configuração inicial (veja
+[Primeiro acesso](#primeiro-acesso)).
 
 ```
 cliente ──┬──< agendamento >──── barbeiro
@@ -150,7 +162,7 @@ v2):
 | Versão | Mudança |
 |---|---|
 | v2 | Barbeiro com contato, acesso e salário; pagamento com tipo e cartão mascarado |
-| v3 | Marca de administrador — a conta demo vira a administradora, sem nunca promover um cliente comum |
+| v3 | Marca de administrador. A migração não promove nem cria ninguém: sem administrador, o app pede a configuração inicial |
 | v4 | Disponibilidade do barbeiro para novos agendamentos |
 | v5 | Natureza do pagamento (serviço, multa, estorno, resgate); duração e preço registrados no agendamento; índice único por barbeiro e horário; e-mail de barbeiro único; índices de consulta. Os dois índices únicos só são criados se o banco antigo não tiver duplicados; sem eles, a reserva e o cadastro de barbeiro continuam conferindo no app |
 
@@ -206,7 +218,8 @@ v2):
 11. Senhas nunca são armazenadas em texto puro — PBKDF2 com salt individual.
 12. E-mail é único no sistema: não se repete entre clientes, entre barbeiros
     nem entre um cliente e um barbeiro. No banco, cada tabela tem o próprio
-    índice único; o cruzamento entre as duas é conferido pelo app no cadastro.
+    índice único; o cruzamento entre as duas é conferido pelo app no cadastro
+    e pelo banco na configuração inicial.
 13. Confirmar o recebimento (informando Pix, Cartão ou Dinheiro), concluir o
     atendimento e registrar falta são ações da barbearia: o barbeiro faz isso
     na própria agenda, e o administrador, na agenda geral, para qualquer
@@ -216,19 +229,32 @@ v2):
     escolha do profissional, sem poder ser escolhido, não oferece horários e o
     banco recusa reservas com ele. Os atendimentos já marcados continuam
     valendo, e ele segue entrando no app para concluí-los.
+15. A barbearia tem **um único administrador**, criado na configuração
+    inicial, na primeira abertura do app: o dono escolhe nome, e-mail,
+    telefone e senha, e não existe conta nem senha padrão. Enquanto ele não
+    existe, só a abertura e a configuração ficam acessíveis; depois, a
+    configuração não abre mais, e o banco recusa uma segunda. A opção
+    "Começar com dados de exemplo" cria também 3 barbeiros (senha
+    `barbeiro123`) e 5 serviços, o que o banco só aceita numa barbearia vazia.
+    Não há como promover outro cliente a administrador.
 
 ---
 
 ## Segurança
 
 - **Senhas:** PBKDF2-HMAC-SHA256, 50 mil iterações, salt aleatório de 16 bytes
-  por conta, comparação em tempo constante. No login, no cadastro, na troca de
-  senha e no cadastro de barbeiro, o hash é calculado em outro isolate, sem
-  travar a tela (o seed e a migração calculam antes de a tela abrir). Hashes
+  por conta, comparação em tempo constante. No login, no cadastro, na
+  configuração inicial, na troca de senha e no cadastro de barbeiro, o hash é
+  calculado em outro isolate, sem travar a tela (só a migração de bancos
+  antigos calcula antes de a tela abrir). Hashes
   do formato antigo (SHA-256 com salt fixo) ainda entram e são **regravados
   no formato novo no primeiro login**.
+- **Sem senha padrão:** não existe conta de administrador pronta; ela é criada
+  pelo dono na configuração inicial (regra 15), e a tela de login não mostra
+  credenciais.
 - **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
-  de ser construída. `/admin` só abre para o administrador; o barbeiro só
+  de ser construída. Antes da configuração inicial, só a abertura e a
+  configuração abrem; depois dela, a configuração não abre mais. `/admin` só abre para o administrador; o barbeiro só
   acessa a própria agenda; o resto mostra "Acesso restrito". As telas do
   administrador abrem a partir do `/admin`, e a agenda geral confere de novo
   se quem está logado é o administrador.
@@ -244,7 +270,8 @@ v2):
 
 | Rota | Tela | Quem acessa |
 |---|---|---|
-| `/` | Splash — entra direto se houver sessão salva | todos |
+| `/` | Splash — entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
+| `/configuracao` | Configuração inicial: cria o administrador e, se marcado, os dados de exemplo | só antes de existir o administrador |
 | `/login` | Login | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
 | `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
@@ -257,6 +284,9 @@ v2):
 | `/fidelidade` | Pontos e histórico | cliente |
 | `/perfil` | Dados do usuário, editar dados, alterar senha e sair | cliente |
 | `/admin` | Painel administrativo: movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
+
+Antes da configuração inicial, só `/` e `/configuracao` abrem; as demais rotas
+mostram "Acesso restrito".
 
 Telas abertas a partir do painel administrativo (só o administrador chega a
 elas):
@@ -282,6 +312,17 @@ da oferta de resgate e o pagamento em dinheiro continua disponível.
 
 ## Fluxo principal
 
+Primeiro acesso (uma vez só, em cada instalação):
+
+```
+Abertura → Configurar barbearia → Início, já como administrador
+               │
+               cria o administrador e, se marcado,
+               os dados de exemplo (na mesma transação)
+```
+
+Agendamento:
+
 ```
 Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
                                      │             │
@@ -305,3 +346,7 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
   próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).
+- Instalações feitas antes da configuração inicial mantêm a conta de
+  administrador criada na época (`admin@sysbarber.com`, com a senha
+  `admin1234` se ela não foi trocada no Perfil). Para configurar do zero, é
+  preciso desinstalar e instalar o app de novo.

@@ -7,6 +7,12 @@ import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/senhas.dart';
 
+/// Administrador criado pela configuração inicial no início de cada teste.
+/// Desde a P22 o app não tem mais conta padrão: a senha é escolhida por quem
+/// configura a barbearia.
+const emailAdmin = 'admin@sysbarber.com';
+const senhaAdmin = 'admin1234';
+
 /// Testes de integração do [DatabaseService].
 ///
 /// Cada teste roda contra um banco SQLite **em memória** criado do zero,
@@ -33,6 +39,15 @@ void main() {
       ),
     );
     service.injetarBancoParaTeste(db);
+    // Mesmo ponto de partida em todos os testes: barbearia configurada, com
+    // os dados de exemplo (3 barbeiros e 5 serviços).
+    await service.configurarBarbearia(
+      nome: 'Administrador',
+      email: emailAdmin,
+      telefone: '(67) 99999-0000',
+      senha: senhaAdmin,
+      dadosDeExemplo: true,
+    );
   });
 
   tearDown(() async => await service.resetarParaTeste());
@@ -65,7 +80,7 @@ void main() {
   }
 
   // -------------------------------------------------------------------------
-  group('Dados iniciais (seed)', () {
+  group('Configuração com dados de exemplo', () {
     test('cria os 3 barbeiros', () async {
       final barbeiros = await service.listarBarbeiros();
       expect(barbeiros.length, 3);
@@ -85,14 +100,14 @@ void main() {
 
     test('cria a conta administradora com a senha em hash', () async {
       final admin = await service.buscarClientePorEmail(
-        DatabaseService.emailAdmin,
+        emailAdmin,
       );
       expect(admin, isNotNull);
       expect(admin!.nome, 'Administrador');
       expect(admin.admin, isTrue);
-      expect(admin.senhaHash, isNot(equals(DatabaseService.senhaAdmin)));
+      expect(admin.senhaHash, isNot(equals(senhaAdmin)));
       expect(
-        Senhas.conferir(DatabaseService.senhaAdmin, admin.senhaHash),
+        Senhas.conferir(senhaAdmin, admin.senhaHash),
         isTrue,
       );
     });
@@ -101,7 +116,7 @@ void main() {
       final clientes = await service.listarClientes();
       expect(clientes.where((c) => c.admin).length, 1);
       expect(clientes.firstWhere((c) => c.admin).email,
-          DatabaseService.emailAdmin);
+          emailAdmin);
     });
   });
 
@@ -132,7 +147,7 @@ void main() {
     });
 
     test('emailExiste identifica e-mails já cadastrados', () async {
-      expect(await service.emailExiste(DatabaseService.emailAdmin), isTrue);
+      expect(await service.emailExiste(emailAdmin), isTrue);
       expect(await service.emailExiste('naocadastrado@teste.com'), isFalse);
     });
 
@@ -2172,45 +2187,20 @@ void main() {
     Future<List<Map<String, Object?>>> admins(Database db) =>
         db.query('cliente', where: 'admin = 1');
 
-    test('cliente comum com o e-mail oficial não é promovido nem quebra a '
-        'migração', () async {
+    test('a migração não cria nem promove administrador: o app pede a '
+        'configuração inicial', () async {
       final db = await bancoV2();
+      // A antiga conta demo e um cliente que usava o antigo e-mail oficial.
       await inserirCliente(db, 'demo@sysbarber.com');
-      final intruso = await inserirCliente(db, DatabaseService.emailAdmin);
-
-      // Antes: o UPDATE violava o UNIQUE do e-mail e o app não abria.
-      await service.migrar(db, 2, DatabaseService.versaoBanco);
-
-      final lista = await admins(db);
-      expect(lista.length, 1);
-      expect(lista.single['email'], 'demo@sysbarber.com');
-      expect(lista.single['id'], isNot(intruso));
-      await db.close();
-    });
-
-    test('sem conta demo e com o e-mail oficial tomado, cria uma '
-        'administradora própria', () async {
-      final db = await bancoV2();
-      final intruso = await inserirCliente(db, DatabaseService.emailAdmin);
+      await inserirCliente(db, 'admin@sysbarber.com');
 
       await service.migrar(db, 2, DatabaseService.versaoBanco);
 
-      final lista = await admins(db);
-      expect(lista.length, 1);
-      expect(lista.single['id'], isNot(intruso));
-      expect(lista.single['email'], DatabaseService.emailAdminAlternativo);
-      await db.close();
-    });
-
-    test('caminho feliz: a conta demo vira a administradora oficial',
-        () async {
-      final db = await bancoV2();
-      await inserirCliente(db, 'demo@sysbarber.com');
-
-      await service.migrar(db, 2, DatabaseService.versaoBanco);
-
-      final lista = await admins(db);
-      expect(lista.single['email'], DatabaseService.emailAdmin);
+      // Antes, a migração promovia (ou criava) um administrador com a senha
+      // padrão admin1234. Agora ninguém é promovido: sem administrador, o
+      // app abre na configuração inicial.
+      expect(await admins(db), isEmpty);
+      expect((await db.query('cliente')).length, 2);
       await db.close();
     });
 
@@ -2288,6 +2278,7 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       await auth.logout();
+      await auth.carregarConfiguracao();
     });
 
     /// Simula fechar e abrir o app: a memória some, o que foi salvo fica.
@@ -2368,7 +2359,7 @@ void main() {
       expect(auth.podeAcessar('/admin'), isFalse);
 
       // Administrador.
-      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+      await auth.login(emailAdmin, senhaAdmin);
       expect(auth.podeAcessar('/admin'), isTrue);
 
       // Barbeiro: só a própria agenda.
@@ -2410,7 +2401,7 @@ void main() {
     test('entrar com outra conta começa sem rascunho', () async {
       await preencherRascunho();
 
-      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+      await auth.login(emailAdmin, senhaAdmin);
 
       expectRascunhoVazio();
     });
@@ -2437,7 +2428,7 @@ void main() {
 
     test('atualiza nome e telefone sem tocar em e-mail, senha e privilégio',
         () async {
-      await auth.login(DatabaseService.emailAdmin, DatabaseService.senhaAdmin);
+      await auth.login(emailAdmin, senhaAdmin);
       final antes = auth.usuarioAtual!;
 
       final r = await auth.atualizarPerfil(
@@ -2949,6 +2940,179 @@ void main() {
       expect(todos.every((a) => a.pagamento != null), isTrue);
       // O hash da senha dos clientes não sai do banco.
       expect(todos.every((a) => a.cliente!.senhaHash.isEmpty), isTrue);
+    });
+  });
+
+  group('P22 — configuração inicial da barbearia', () {
+    final auth = AuthService.instance;
+
+    /// Troca o banco do teste por um recém-criado, como na primeira abertura
+    /// do app: sem administrador e sem dados.
+    Future<void> bancoNovo() async {
+      await service.resetarParaTeste();
+      service.injetarBancoParaTeste(
+        await databaseFactory.openDatabase(
+          inMemoryDatabasePath,
+          options: OpenDatabaseOptions(
+            version: 1,
+            singleInstance: false,
+            onCreate: service.criarSchema,
+            onConfigure: DatabaseService.configurar,
+          ),
+        ),
+      );
+    }
+
+    Future<Cliente> configurar({
+      String email = 'dono@barbearia.com',
+      String senha = 'senhaDoDono1',
+      bool dadosDeExemplo = false,
+    }) => service.configurarBarbearia(
+      nome: 'Dono da Barbearia',
+      email: email,
+      telefone: '(67) 98765-4321',
+      senha: senha,
+      dadosDeExemplo: dadosDeExemplo,
+    );
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+      await bancoNovo();
+    });
+
+    test('banco novo nasce vazio, sem administrador nem senha padrão',
+        () async {
+      // Antes: já nascia com admin@sysbarber.com / admin1234 e três
+      // barbeiros fictícios.
+      expect(await service.barbeariaConfigurada(), isFalse);
+      expect(await service.listarClientes(), isEmpty);
+      expect(await service.listarBarbeiros(), isEmpty);
+      expect(await service.listarServicos(), isEmpty);
+    });
+
+    test('configura só o administrador, com a senha escolhida pelo dono',
+        () async {
+      final admin = await configurar();
+
+      expect(await service.barbeariaConfigurada(), isTrue);
+      final clientes = await service.listarClientes();
+      expect(clientes.single.id, admin.id);
+      expect(clientes.single.admin, isTrue);
+      expect(clientes.single.email, 'dono@barbearia.com');
+      expect(
+        Senhas.conferir('senhaDoDono1', clientes.single.senhaHash),
+        isTrue,
+      );
+      expect(await service.obterPontos(admin.id!), 0);
+      // Sem os dados de exemplo, a barbearia começa vazia.
+      expect(await service.listarBarbeiros(), isEmpty);
+      expect(await service.listarServicos(), isEmpty);
+    });
+
+    test('com dados de exemplo cria os 3 barbeiros e os 5 serviços',
+        () async {
+      await configurar(dadosDeExemplo: true);
+
+      final barbeiros = await service.listarBarbeiros();
+      expect(barbeiros.length, 3);
+      expect(barbeiros.where((b) => !b.ativo).single.nome, 'Marcos Lima');
+      expect((await service.listarServicos()).length, 5);
+      expect(
+        await service.autenticarBarbeiro(
+          'carlos.eduardo@sysbarber.com',
+          DatabaseService.senhaBarbeirosDeExemplo,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('a barbearia é configurada uma vez só', () async {
+      await configurar();
+
+      await expectLater(
+        configurar(email: 'outro@barbearia.com'),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      final clientes = await service.listarClientes();
+      expect(clientes.length, 1);
+      expect(clientes.where((c) => c.admin).length, 1);
+    });
+
+    test('dados inválidos ou e-mail em uso não gravam nada', () async {
+      await expectLater(
+        configurar(senha: '123'),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      // O e-mail de um barbeiro dos dados de exemplo não pode ser também o
+      // do administrador: e-mail é único no sistema.
+      await expectLater(
+        configurar(
+          email: 'carlos.eduardo@sysbarber.com',
+          dadosDeExemplo: true,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+
+      expect(await service.barbeariaConfigurada(), isFalse);
+      expect(await service.listarClientes(), isEmpty);
+      expect(await service.listarBarbeiros(), isEmpty);
+    });
+
+    test('dados de exemplo só entram numa barbearia vazia', () async {
+      await service.cadastrarBarbeiro(
+        const Barbeiro(
+          nome: 'Pedro Alves',
+          especialidade: 'Degradê',
+          avaliacao: 0,
+          avaliacoes: 0,
+          iniciais: 'PA',
+          salario: 2000,
+        ),
+      );
+
+      await expectLater(
+        configurar(dadosDeExemplo: true),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.barbeariaConfigurada(), isFalse);
+      expect((await service.listarBarbeiros()).length, 1);
+    });
+
+    test('antes da configuração só a abertura e a configuração abrem',
+        () async {
+      await auth.carregarConfiguracao();
+
+      expect(auth.barbeariaConfigurada, isFalse);
+      expect(auth.podeAcessar('/'), isTrue);
+      expect(auth.podeAcessar('/configuracao'), isTrue);
+      expect(auth.podeAcessar('/login'), isFalse);
+      expect(auth.podeAcessar('/cadastro'), isFalse);
+    });
+
+    test('configurar entra como administrador e fecha a configuração',
+        () async {
+      await auth.carregarConfiguracao();
+
+      final r = await auth.configurarBarbearia(
+        nome: 'Dono da Barbearia',
+        email: 'dono@barbearia.com',
+        telefone: '(67) 98765-4321',
+        senha: 'senhaDoDono1',
+        dadosDeExemplo: false,
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.podeAdministrar, isTrue);
+      expect(auth.podeAcessar('/admin'), isTrue);
+      expect(auth.podeAcessar('/login'), isTrue);
+      expect(auth.podeAcessar('/configuracao'), isFalse);
+
+      // A sessão fica salva como a de qualquer cliente.
+      auth.esquecerSessaoEmMemoria();
+      await auth.carregarSessao();
+      expect(auth.usuarioAtual!.email, 'dono@barbearia.com');
+      expect(auth.podeAdministrar, isTrue);
     });
   });
 }
