@@ -477,6 +477,15 @@ String formatarReal(double valor) {
   return centavos < 0 ? '-$texto' : texto;
 }
 
+/// Esconde o meio do telefone, ex.: `(67) 98888-1234` → `(67) •••••-1234`.
+/// Um número fora do padrão (menos de 10 dígitos) volta como veio.
+String mascararTelefone(String telefone) {
+  final d = telefone.replaceAll(RegExp(r'\D'), '');
+  if (d.length < 10) return telefone;
+  final meio = '•' * (d.length - 6);
+  return '(${d.substring(0, 2)}) $meio-${d.substring(d.length - 4)}';
+}
+
 String _doisDigitos(int n) => n.toString().padLeft(2, '0');
 
 /// Data por extenso em pt_BR, ex.: "Segunda, 11 de agosto".

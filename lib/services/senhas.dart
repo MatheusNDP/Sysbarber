@@ -14,7 +14,7 @@ import 'package:crypto/crypto.dart';
 /// todos: a mesma senha gerava o mesmo hash em qualquer conta e o cálculo era
 /// rápido demais para resistir a força bruta. Esse formato ainda é aceito no
 /// login e é trocado pelo novo assim que a senha é conferida. (A troca do
-/// formato não mudou o schema do banco, que segue na v5.)
+/// formato não mudou o schema do banco.)
 class Senhas {
   Senhas._();
 

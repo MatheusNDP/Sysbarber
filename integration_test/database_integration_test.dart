@@ -6,6 +6,7 @@ import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/senhas.dart';
+import 'package:sysbarber/services/sms.dart';
 
 /// Administrador criado pela configuração inicial no início de cada teste.
 /// Desde a P22 o app não tem mais conta padrão: a senha é escolhida por quem
@@ -2270,6 +2271,20 @@ void main() {
       expect(indice, hasLength(1));
       await db.close();
     });
+
+    test('a migração cria a tabela dos códigos para criar uma senha nova '
+        '(v6)', () async {
+      final db = await bancoV2();
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final tabela = await db.query(
+        'sqlite_master',
+        where: 'type = ? AND name = ?',
+        whereArgs: ['table', 'codigo_senha'],
+      );
+      expect(tabela, hasLength(1));
+      await db.close();
+    });
   });
 
   group('Correção 13 — sessão do barbeiro e acesso às rotas', () {
@@ -2347,6 +2362,7 @@ void main() {
     test('cada perfil só abre as próprias rotas', () async {
       // Ninguém logado.
       expect(auth.podeAcessar('/login'), isTrue);
+      expect(auth.podeAcessar('/recuperar-senha'), isTrue);
       expect(auth.podeAcessar('/home'), isFalse);
       expect(auth.podeAcessar('/admin'), isFalse);
 
@@ -3088,6 +3104,7 @@ void main() {
       expect(auth.podeAcessar('/configuracao'), isTrue);
       expect(auth.podeAcessar('/login'), isFalse);
       expect(auth.podeAcessar('/cadastro'), isFalse);
+      expect(auth.podeAcessar('/recuperar-senha'), isFalse);
     });
 
     test('configurar entra como administrador e fecha a configuração',
@@ -3113,6 +3130,395 @@ void main() {
       await auth.carregarSessao();
       expect(auth.usuarioAtual!.email, 'dono@barbearia.com');
       expect(auth.podeAdministrar, isTrue);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('P24 — recuperação de senha', () {
+    final auth = AuthService.instance;
+    final t0 = DateTime(2030, 3, 4, 10);
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+    });
+
+    /// O código de 6 dígitos do último SMS simulado.
+    String codigoDoSms() => RegExp(
+      r'\d{6}',
+    ).firstMatch(SmsSimulado.instance.ultima.value!.mensagem)!.group(0)!;
+
+    Future<List<Map<String, Object?>>> codigos() =>
+        service.database.then((db) => db.query('codigo_senha'));
+
+    test('com e-mail e celular certos, o SMS leva o código, e com ele o '
+        'cliente cria uma senha nova e já entra', () async {
+      await criarClienteTeste(senha: 'senha123');
+
+      // O celular vale com ou sem máscara.
+      final pedido = await auth.pedirCodigoPorSms(
+        email: 'NOVO@teste.com ',
+        telefone: '67988881234',
+      );
+      expect(pedido.sucesso, isTrue);
+      expect(pedido.telefone, '(67) 98888-1234');
+      expect(SmsSimulado.instance.ultima.value!.telefone, '(67) 98888-1234');
+
+      // No banco fica só o hash do código.
+      final codigo = codigoDoSms();
+      final gravado = (await codigos()).single;
+      expect(gravado['codigo_hash'], isNot(contains(codigo)));
+      expect(gravado['origem'], 'sms');
+
+      final r = await auth.redefinirSenha(
+        email: 'novo@teste.com',
+        codigo: codigo,
+        novaSenha: 'senhaNova1',
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.usuarioAtual!.email, 'novo@teste.com');
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNull);
+      expect(
+        await service.autenticar('novo@teste.com', 'senhaNova1'),
+        isNotNull,
+      );
+      // Uso único: o código foi gasto.
+      expect(await codigos(), isEmpty);
+    });
+
+    test('e-mail e celular que não são da mesma conta não geram código',
+        () async {
+      await criarClienteTeste();
+      SmsSimulado.instance.ultima.value = null;
+
+      // O celular do administrador com o e-mail do cliente.
+      final r = await auth.pedirCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 99999-0000',
+      );
+      final semConta = await auth.pedirCodigoPorSms(
+        email: 'ninguem@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+
+      expect(r.sucesso, isFalse);
+      expect(r.erro, 'E-mail e celular não conferem com nenhuma conta');
+      expect(semConta.sucesso, isFalse);
+      expect(await codigos(), isEmpty);
+      expect(SmsSimulado.instance.ultima.value, isNull);
+    });
+
+    test('o barbeiro também recupera a senha pelo SMS', () async {
+      final pedido = await auth.pedirCodigoPorSms(
+        email: 'carlos.eduardo@sysbarber.com',
+        telefone: '(67) 99101-1001',
+      );
+      expect(pedido.sucesso, isTrue);
+
+      final r = await auth.redefinirSenha(
+        email: 'carlos.eduardo@sysbarber.com',
+        codigo: codigoDoSms(),
+        novaSenha: 'carlosNovo1',
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.ehBarbeiro, isTrue);
+      expect(
+        await service.autenticarBarbeiro(
+          'carlos.eduardo@sysbarber.com',
+          'barbeiro123',
+        ),
+        isNull,
+      );
+    });
+
+    test('o administrador também recupera a senha pelo SMS', () async {
+      await auth.pedirCodigoPorSms(
+        email: emailAdmin,
+        telefone: '(67) 99999-0000',
+      );
+
+      final r = await auth.redefinirSenha(
+        email: emailAdmin,
+        codigo: codigoDoSms(),
+        novaSenha: 'adminNovo1',
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.podeAdministrar, isTrue);
+    });
+
+    test('o código do SMS vale por 10 minutos', () async {
+      await criarClienteTeste(senha: 'senha123');
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+        agora: t0,
+      );
+
+      await expectLater(
+        service.redefinirSenhaComCodigo(
+          email: 'novo@teste.com',
+          codigo: gerado.codigo,
+          novaSenha: 'senhaNova1',
+          agora: t0.add(const Duration(minutes: 10)),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Este código venceu. Peça um novo',
+          ),
+        ),
+      );
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNotNull);
+      expect(await codigos(), isEmpty);
+    });
+
+    test('um minuto antes de vencer, o código ainda vale', () async {
+      await criarClienteTeste();
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+        agora: t0,
+      );
+
+      await service.redefinirSenhaComCodigo(
+        email: 'novo@teste.com',
+        codigo: gerado.codigo,
+        novaSenha: 'senhaNova1',
+        agora: t0.add(const Duration(minutes: 9)),
+      );
+
+      expect(
+        await service.autenticar('novo@teste.com', 'senhaNova1'),
+        isNotNull,
+      );
+    });
+
+    test('o código só serve uma vez', () async {
+      await criarClienteTeste();
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+      await service.redefinirSenhaComCodigo(
+        email: 'novo@teste.com',
+        codigo: gerado.codigo,
+        novaSenha: 'senhaNova1',
+      );
+
+      await expectLater(
+        service.redefinirSenhaComCodigo(
+          email: 'novo@teste.com',
+          codigo: gerado.codigo,
+          novaSenha: 'outraSenha1',
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(
+        await service.autenticar('novo@teste.com', 'senhaNova1'),
+        isNotNull,
+      );
+    });
+
+    test('5 tentativas erradas cancelam o código', () async {
+      await criarClienteTeste(senha: 'senha123');
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+      final errado = gerado.codigo == '000000' ? '111111' : '000000';
+
+      Future<String> tentar(String codigo) async {
+        try {
+          await service.redefinirSenhaComCodigo(
+            email: 'novo@teste.com',
+            codigo: codigo,
+            novaSenha: 'senhaNova1',
+          );
+          return 'trocou';
+        } on RegraNegocioException catch (e) {
+          return e.mensagem;
+        }
+      }
+
+      expect(await tentar(errado), 'Código incorreto. Restam 4 tentativas');
+      await tentar(errado);
+      await tentar(errado);
+      expect(await tentar(errado), 'Código incorreto. Resta 1 tentativa');
+      expect(await tentar(errado), contains('foi cancelado'));
+
+      // Nem o código certo vale mais.
+      expect(await tentar(gerado.codigo), 'Código inválido. Peça um novo');
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNotNull);
+    });
+
+    test('um novo SMS só sai depois de 1 minuto, e invalida o anterior',
+        () async {
+      await criarClienteTeste();
+      Future<String> pedir(DateTime agora) async => (await service
+              .gerarCodigoPorSms(
+                email: 'novo@teste.com',
+                telefone: '(67) 98888-1234',
+                agora: agora,
+              ))
+          .codigo;
+
+      final primeiro = await pedir(t0);
+      await expectLater(
+        pedir(t0.add(const Duration(seconds: 59))),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Aguarde 1 minuto para pedir outro código',
+          ),
+        ),
+      );
+      final segundo = await pedir(t0.add(const Duration(minutes: 1)));
+
+      expect(await codigos(), hasLength(1));
+      if (primeiro != segundo) {
+        await expectLater(
+          service.redefinirSenhaComCodigo(
+            email: 'novo@teste.com',
+            codigo: primeiro,
+            novaSenha: 'senhaNova1',
+            agora: t0.add(const Duration(minutes: 2)),
+          ),
+          throwsA(isA<RegraNegocioException>()),
+        );
+      }
+      await service.redefinirSenhaComCodigo(
+        email: 'novo@teste.com',
+        codigo: segundo,
+        novaSenha: 'senhaNova1',
+        agora: t0.add(const Duration(minutes: 2)),
+      );
+    });
+
+    test('senha nova curta é recusada e não gasta o código', () async {
+      await criarClienteTeste();
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+
+      await expectLater(
+        service.redefinirSenhaComCodigo(
+          email: 'novo@teste.com',
+          codigo: gerado.codigo,
+          novaSenha: '123',
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect((await codigos()).single['tentativas'], 0);
+    });
+
+    test('o administrador libera uma nova senha: o cliente entra com o '
+        'código e é obrigado a criar uma senha nova', () async {
+      final idCliente = await criarClienteTeste(senha: 'senha123');
+      await auth.login(emailAdmin, senhaAdmin);
+      final liberado = await auth.liberarNovaSenha(idCliente);
+      expect(liberado.sucesso, isTrue);
+      expect(liberado.codigo, matches(RegExp(r'^\d{6}$')));
+      await auth.logout();
+
+      // Com o código no lugar da senha, ainda não entra: cria a senha nova.
+      final entrada = await auth.login('novo@teste.com', liberado.codigo!);
+      expect(entrada.sucesso, isFalse);
+      expect(entrada.criarNovaSenha, isTrue);
+      expect(auth.estaLogado, isFalse);
+
+      final r = await auth.redefinirSenha(
+        email: 'novo@teste.com',
+        codigo: liberado.codigo!,
+        novaSenha: 'minhaSenha1',
+      );
+      expect(r.sucesso, isTrue);
+      expect(auth.usuarioAtual!.email, 'novo@teste.com');
+
+      await auth.logout();
+      // O código provisório não vale mais, nem a senha antiga.
+      final deNovo = await auth.login('novo@teste.com', liberado.codigo!);
+      expect(deNovo.criarNovaSenha, isFalse);
+      expect(deNovo.erro, 'E-mail ou senha incorretos');
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNull);
+    });
+
+    test('só o administrador libera uma nova senha', () async {
+      final idCliente = await criarClienteTeste(senha: 'senha123');
+      await auth.login('novo@teste.com', 'senha123');
+
+      final r = await auth.liberarNovaSenha(idCliente);
+
+      expect(r.sucesso, isFalse);
+      expect(r.codigo, isNull);
+      expect(await codigos(), isEmpty);
+    });
+
+    test('o código da barbearia vale por 24 horas', () async {
+      final idCliente = await criarClienteTeste();
+      final codigo = await service.liberarCodigoDaBarbearia(
+        idCliente,
+        agora: t0,
+      );
+
+      expect(
+        await service.codigoDaBarbeariaConfere(
+          'novo@teste.com',
+          codigo,
+          agora: t0.add(const Duration(hours: 23, minutes: 59)),
+        ),
+        isTrue,
+      );
+      expect(
+        await service.codigoDaBarbeariaConfere(
+          'novo@teste.com',
+          codigo,
+          agora: t0.add(const Duration(hours: 24)),
+        ),
+        isFalse,
+      );
+    });
+
+    test('o código do SMS não serve para entrar pelo login', () async {
+      await criarClienteTeste();
+      await auth.pedirCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+
+      final r = await auth.login('novo@teste.com', codigoDoSms());
+
+      expect(r.sucesso, isFalse);
+      expect(r.criarNovaSenha, isFalse);
+      expect(r.erro, 'E-mail ou senha incorretos');
+    });
+
+    test('excluir o barbeiro apaga o código dele', () async {
+      final id = await service.cadastrarBarbeiro(
+        const Barbeiro(
+          nome: 'Novo Barbeiro',
+          especialidade: 'Cortes',
+          avaliacao: 0,
+          avaliacoes: 0,
+          iniciais: 'NB',
+          telefone: '(67) 99555-5555',
+          email: 'novo.barbeiro@sysbarber.com',
+          salario: 2000,
+        ),
+      );
+      await service.gerarCodigoPorSms(
+        email: 'novo.barbeiro@sysbarber.com',
+        telefone: '(67) 99555-5555',
+      );
+
+      await service.excluirBarbeiro(id);
+
+      expect(await codigos(), isEmpty);
     });
   });
 }

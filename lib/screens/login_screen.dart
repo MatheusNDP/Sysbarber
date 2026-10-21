@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'recuperar_senha_screen.dart';
 
 /// Tela de login (`/login`).
 class LoginScreen extends StatefulWidget {
@@ -35,6 +36,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     setState(() => _carregando = false);
+
+    if (resultado.criarNovaSenha) {
+      // Entrou com o código provisório que a barbearia liberou: antes de
+      // qualquer coisa, cria uma senha nova (regra de negócio 16).
+      final email = _emailCtrl.text;
+      final codigo = _senhaCtrl.text;
+      _senhaCtrl.clear();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              RecuperarSenhaScreen(email: email, codigoDaBarbearia: codigo),
+        ),
+      );
+      return;
+    }
 
     if (resultado.sucesso) {
       // Profissional entra direto na própria agenda: a Home é a área do
@@ -110,7 +126,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pushNamed(AuthService.rotaRecuperarSenha),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(48, 48),
+                      ),
+                      child: Text(
+                        'Esqueci minha senha',
+                        style: AppTheme.sans(
+                          size: 13,
+                          weight: FontWeight.w700,
+                          color: AppColors.gold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   GoldButton(
                     texto: _carregando ? 'ENTRANDO...' : 'ENTRAR',
                     onPressed: _carregando ? null : _entrar,

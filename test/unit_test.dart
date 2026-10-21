@@ -201,6 +201,33 @@ void main() {
     });
   });
 
+  group('Entidade CodigoSenha', () {
+    const codigo = CodigoSenha(
+      idBarbeiro: 2,
+      origem: OrigemCodigo.barbearia,
+      codigoHash: 'hash',
+      criadoEm: '2030-03-04T10:00:00.000',
+      expiraEm: '2030-03-05T10:00:00.000',
+      tentativas: 3,
+    );
+
+    test('vai e volta pelo banco, de cliente ou de barbeiro', () {
+      final mapa = codigo.toMap();
+      expect(mapa['id_cliente'], isNull);
+      expect(mapa['origem'], 'barbearia');
+
+      final lido = CodigoSenha.fromMap(mapa);
+      expect(lido.idBarbeiro, 2);
+      expect(lido.origem, OrigemCodigo.barbearia);
+      expect(lido.tentativas, 3);
+    });
+
+    test('vence exatamente no fim da validade', () {
+      expect(codigo.vencido(DateTime(2030, 3, 5, 9, 59)), isFalse);
+      expect(codigo.vencido(DateTime(2030, 3, 5, 10)), isTrue);
+    });
+  });
+
   group('Regras de estado do Agendamento', () {
     Agendamento em(DateTime quando, [StatusAgendamento? status]) =>
         Agendamento(

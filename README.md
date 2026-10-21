@@ -57,7 +57,7 @@ O app não faz nenhuma requisição de rede. O banco é local (SQLite) e as font
 **Playfair Display** e **DM Sans** estão embarcadas no APK
 (`assets/fonts/`, declaradas em `pubspec.yaml`), e não baixadas em tempo de
 execução. A identidade visual fica idêntica com ou sem internet — importante
-para a apresentação.
+para a apresentação. Até o SMS da recuperação de senha é simulado (regra 16).
 
 ### Os dados ficam no aparelho
 
@@ -91,16 +91,16 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **226 testes** no total:
+São **250 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
-| `test/unit_test.dart` | 21 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização, enums e regras de estado do agendamento |
+| `test/unit_test.dart` | 23 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha e da validade dele), enums e regras de estado do agendamento |
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
-| `test/formatters_test.dart` | 13 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex) e `formatarReal` (de `common_widgets.dart`) |
+| `test/formatters_test.dart` | 15 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex), `formatarReal` e `mascararTelefone` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 34 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
-| `integration_test/database_integration_test.dart` | 135 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, sessão, permissões e migrações |
+| `test/telas_test.dart` | 38 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (SMS simulado, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
+| `integration_test/database_integration_test.dart` | 151 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -109,7 +109,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 226 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 250 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -135,14 +135,15 @@ lib/
 ├── models/models.dart           # Entidades, enums e regras de estado (toMap/fromMap)
 ├── services/
 │   ├── database_service.dart    # Singleton de acesso ao SQLite (CRUD + transações)
-│   ├── auth_service.dart        # Configuração inicial, login, cadastro, sessão, perfil e permissões
+│   ├── auth_service.dart        # Configuração inicial, login, cadastro, recuperação de senha, sessão, perfil e permissões
 │   ├── senhas.dart              # Hash PBKDF2 com salt individual
+│   ├── sms.dart                 # Envio de SMS da recuperação de senha (simulado)
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
 │   └── booking_flow.dart        # Rascunho do agendamento em andamento
 ├── widgets/common_widgets.dart  # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-└── screens/                     # 19 telas (uma por arquivo)
+└── screens/                     # 20 telas (uma por arquivo)
 ```
 
 **Padrões aplicados**
@@ -154,11 +155,14 @@ lib/
   falta) ficam no modelo `Agendamento` e valem igualmente para a tela e para o
   banco.
 - **Transações** — toda operação com mais de uma escrita (configuração
-  inicial, reserva, cancelamento, confirmação de pagamento, resgate, cadastro)
-  acontece numa
+  inicial, reserva, cancelamento, confirmação de pagamento, resgate, cadastro,
+  pedido e uso do código de nova senha) acontece numa
   única transação: ou tudo é gravado, ou nada é. O saldo de pontos é movido com
   `UPDATE ... SET pontos = pontos + ?`, sem ler-somar-gravar.
 - **Serialização toMap/fromMap** — converte entidades ↔ linhas do SQLite.
+- **Interface para o SMS** — `EnvioSms` separa o envio do resto do app.
+  Hoje a implementação é simulada (`SmsSimulado`); um provedor real entra
+  implementando a interface, sem mudar as telas nem o banco.
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes.
@@ -167,21 +171,25 @@ lib/
 
 ## Banco de dados
 
-7 tabelas relacionais criadas automaticamente, vazias, na primeira execução
+8 tabelas relacionais criadas automaticamente, vazias, na primeira execução
 (`sysbarber.db`, no diretório de documentos do app). O administrador e, se o
 dono quiser, os dados de exemplo nascem na configuração inicial (veja
 [Primeiro acesso](#primeiro-acesso)).
 
 ```
-cliente ──┬──< agendamento >──── barbeiro
-          │         │
-          │         └──< pagamento
-          │         └──── servico
-          ├──── fidelidade
-          └──< historico_ponto
+cliente ──┬──< agendamento >──── barbeiro ──┐
+          │         │                       │
+          │         └──< pagamento          │
+          │         └──── servico           │
+          ├──── fidelidade                  │
+          ├──< historico_ponto              │
+          └──── codigo_senha ───────────────┘
 ```
 
-Versão atual do schema: **v5**. Um banco de qualquer versão anterior é
+`codigo_senha` guarda os códigos para criar uma senha nova (regra 16): cada
+um é de um cliente ou de um barbeiro, e cada conta tem no máximo um.
+
+Versão atual do schema: **v6**. Um banco de qualquer versão anterior é
 migrado sem perder dados (há testes que partem de um banco montado no formato
 v2):
 
@@ -191,6 +199,7 @@ v2):
 | v3 | Marca de administrador. A migração não promove nem cria ninguém: sem administrador, o app pede a configuração inicial |
 | v4 | Disponibilidade do barbeiro para novos agendamentos |
 | v5 | Natureza do pagamento (serviço, multa, estorno, resgate); duração e preço registrados no agendamento; índice único por barbeiro e horário; e-mail de barbeiro único; índices de consulta. Os dois índices únicos só são criados se o banco antigo não tiver duplicados; sem eles, a reserva e o cadastro de barbeiro continuam conferindo no app |
+| v6 | Tabela `codigo_senha`, com os códigos da recuperação de senha |
 
 ---
 
@@ -239,9 +248,11 @@ v2):
    muda multa nem histórico de quem já marcou.
 10. O administrador cadastra, edita e exclui serviços e barbeiros, liga e
     desliga a disponibilidade dos barbeiros e consulta os clientes (sem
-    editá-los). Serviço ou barbeiro com agendamentos não pode ser excluído:
-    os atendimentos sumiriam do histórico dos clientes.
+    editar os dados deles), podendo liberar uma nova senha para quem a
+    esqueceu (regra 16). Serviço ou barbeiro com agendamentos não pode ser
+    excluído: os atendimentos sumiriam do histórico dos clientes.
 11. Senhas nunca são armazenadas em texto puro — PBKDF2 com salt individual.
+    O mesmo vale para os códigos da recuperação de senha (regra 16).
 12. E-mail é único no sistema: não se repete entre clientes, entre barbeiros
     nem entre um cliente e um barbeiro. No banco, cada tabela tem o próprio
     índice único; o cruzamento entre as duas é conferido pelo app no cadastro
@@ -263,6 +274,25 @@ v2):
     "Começar com dados de exemplo" cria também 3 barbeiros (senha
     `barbeiro123`) e 5 serviços, o que o banco só aceita numa barbearia vazia.
     Não há como promover outro cliente a administrador.
+16. Quem esqueceu a senha cria uma nova sem saber a atual, de dois jeitos:
+    - **por SMS:** em "Esqueci minha senha", no login, a pessoa digita o
+      e-mail e o celular da conta (de cliente, do administrador ou de
+      barbeiro). Se os dois forem da mesma conta, o app envia por SMS um
+      código de 6 dígitos, que vale por 10 minutos; com ele, a pessoa cria
+      a senha nova e já entra. Um novo SMS só sai depois de 1 minuto. O
+      envio é simulado, como o Pix e o cartão: a mensagem aparece na tela
+      como "SMS simulado";
+    - **pela barbearia:** o cliente pede no balcão, e o administrador, no
+      detalhe do cliente em Gerenciar Clientes, libera um código provisório,
+      que vale por 24 horas. O cliente entra com o e-mail e esse código no
+      lugar da senha e é obrigado a criar uma senha nova antes de usar o
+      app; o administrador não fica sabendo dela. O código do SMS não serve
+      para entrar pelo login.
+
+    Os dois códigos valem uma vez só e são cancelados depois de 5 tentativas
+    erradas. Cada conta tem no máximo um código valendo: um novo substitui o
+    anterior. O banco confere tudo isso. O barbeiro também pode receber uma
+    senha nova do administrador, em Gerenciar Barbeiros.
 
 ---
 
@@ -270,14 +300,20 @@ v2):
 
 - **Senhas:** PBKDF2-HMAC-SHA256, 50 mil iterações, salt aleatório de 16 bytes
   por conta, comparação em tempo constante. No login, no cadastro, na
-  configuração inicial, na troca de senha e no cadastro de barbeiro, o hash é
-  calculado em outro isolate, sem travar a tela (só a migração de bancos
+  configuração inicial, na troca e na recuperação de senha e no cadastro de
+  barbeiro, o hash é calculado em outro isolate, sem travar a tela (só a migração de bancos
   antigos calcula antes de a tela abrir). Hashes
   do formato antigo (SHA-256 com salt fixo) ainda entram e são **regravados
   no formato novo no primeiro login**.
 - **Sem senha padrão:** não existe conta de administrador pronta; ela é criada
   pelo dono na configuração inicial (regra 15), e a tela de login não mostra
   credenciais.
+- **Recuperação de senha:** os códigos saem de um gerador próprio para
+  segredos (`Random.secure`) e são guardados só como hash PBKDF2, como as
+  senhas. Valem por tempo limitado e uma vez só, e 5 tentativas erradas os
+  cancelam. O SMS só sai quando o e-mail e o celular são da mesma conta, e no
+  máximo um por minuto. Liberar uma nova senha confere se quem pede é o
+  administrador.
 - **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
   de ser construída. Antes da configuração inicial, só a abertura e a
   configuração abrem; depois dela, a configuração não abre mais. `/admin` só abre para o administrador; o barbeiro só
@@ -298,7 +334,8 @@ v2):
 |---|---|---|
 | `/` | Splash — entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
 | `/configuracao` | Configuração inicial: cria o administrador e, se marcado, os dados de exemplo | só antes de existir o administrador |
-| `/login` | Login | todos |
+| `/login` | Login, com "Esqueci minha senha" | todos |
+| `/recuperar-senha` | Esqueci minha senha: e-mail e celular, o SMS simulado com o código e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
 | `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
 | `/servicos` | Catálogo de serviços | cliente |
@@ -322,7 +359,7 @@ elas):
 | Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa) |
 | Gerenciar Serviços | Cadastrar, editar e excluir serviços |
 | Gerenciar Barbeiros | Cadastrar, editar e excluir barbeiros e ligar ou desligar a disponibilidade |
-| Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos |
+| Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
 | Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e rankings: formas de pagamento, 5 serviços mais procurados e 5 barbeiros mais requisitados. Recortes: este mês, mês passado ou tudo |
 
 Outras telas: **Acesso restrito**, mostrada no lugar de qualquer tela que o
@@ -358,6 +395,17 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
                                                    debita os 500 do resgate
 ```
 
+Recuperação de senha (regra 16):
+
+```
+Login → Esqueci minha senha → e-mail + celular → SMS simulado com o código
+                                                       │
+                                     código + senha nova → entra no app
+
+Gerenciar Clientes → Liberar nova senha → código provisório, entregue no balcão
+Login com o e-mail e o código → Crie sua nova senha → entra no app
+```
+
 ---
 
 ## Limitações conhecidas
@@ -373,9 +421,14 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
 - Os dias de funcionamento, os turnos, a grade e a janela de agendamento são
   fixos no código (`DatabaseService.atendeNoDia`, `turnos`, `horariosBase` e
   `diasDeAgenda`), sem feriados nem folgas configuráveis.
-- Pix e cartão são simulados: nenhum valor é cobrado de verdade.
-- Não há recuperação de senha, troca de e-mail nem exclusão de conta pelo
-  próprio cliente.
+- Pix, cartão e o SMS da recuperação de senha são simulados: nenhum valor é
+  cobrado de verdade e nenhuma mensagem sai do aparelho. Um SMS de verdade
+  precisa de internet, de um provedor pago e de um servidor que guarde a chave
+  do provedor (dentro do APK, ela poderia ser extraída).
+- O celular não é confirmado no cadastro: o código vai para o número que a
+  pessoa informou, mesmo errado. Nesse caso, o administrador libera uma nova
+  senha para o cliente, ou define uma para o barbeiro.
+- Não há troca de e-mail nem exclusão de conta pelo próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).
 - Instalações feitas antes da configuração inicial mantêm a conta de

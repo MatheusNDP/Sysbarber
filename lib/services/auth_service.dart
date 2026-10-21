@@ -6,6 +6,7 @@ import 'booking_flow.dart';
 import 'database_service.dart';
 import 'erros.dart';
 import 'senhas.dart';
+import 'sms.dart';
 import 'validators.dart';
 
 /// Autenticação própria com sessão persistente (padrão Singleton).
@@ -27,7 +28,15 @@ class AuthService {
   static const String _tipoBarbeiro = 'barbeiro';
 
   /// Rotas abertas a quem ainda não entrou.
-  static const Set<String> _rotasPublicas = {'/', '/login', '/cadastro'};
+  static const Set<String> _rotasPublicas = {
+    '/',
+    '/login',
+    '/cadastro',
+    rotaRecuperarSenha,
+  };
+
+  /// "Esqueci minha senha" (regra de negócio 16).
+  static const String rotaRecuperarSenha = '/recuperar-senha';
 
   /// Tela da configuração inicial, a única aberta antes de existir o
   /// administrador (regra de negócio 15).
@@ -95,6 +104,10 @@ class AuthService {
   }
 
   final DatabaseService _db = DatabaseService.instance;
+
+  /// Por onde sai o código de "Esqueci minha senha". Simulado, como o Pix e
+  /// o cartão; um provedor real entra trocando esta linha (ver [EnvioSms]).
+  final EnvioSms _sms = SmsSimulado.instance;
 
   /// Lê do banco se a barbearia já foi configurada (chamado na abertura do
   /// app, antes da primeira tela).
@@ -166,12 +179,21 @@ class AuthService {
     }
   }
 
-  Future<({bool sucesso, String? erro})> login(
+  /// Entra com e-mail e senha.
+  ///
+  /// [criarNovaSenha] é `true` quando, no lugar da senha, veio o código
+  /// provisório que a barbearia liberou (regra de negócio 16): a pessoa ainda
+  /// não entrou e precisa criar uma senha nova ([redefinirSenha]).
+  Future<({bool sucesso, String? erro, bool criarNovaSenha})> login(
     String email,
     String senha,
   ) async {
     if (email.trim().isEmpty || senha.isEmpty) {
-      return (sucesso: false, erro: 'Preencha todos os campos');
+      return (
+        sucesso: false,
+        erro: 'Preencha todos os campos',
+        criarNovaSenha: false,
+      );
     }
 
     final normalizado = email.trim().toLowerCase();
@@ -184,7 +206,7 @@ class AuthService {
         _usuarioAtual = cliente;
         _barbeiroAtual = null;
         await _salvarSessao(cliente.id!, _tipoCliente);
-        return (sucesso: true, erro: null);
+        return (sucesso: true, erro: null, criarNovaSenha: false);
       }
 
       // Não sendo cliente, tenta as credenciais de profissional.
@@ -194,14 +216,112 @@ class AuthService {
         _barbeiroAtual = barbeiro;
         _usuarioAtual = null;
         await _salvarSessao(barbeiro.id!, _tipoBarbeiro);
-        return (sucesso: true, erro: null);
+        return (sucesso: true, erro: null, criarNovaSenha: false);
       }
 
-      return (sucesso: false, erro: 'E-mail ou senha incorretos');
+      // No lugar da senha pode ter vindo o código que a barbearia liberou.
+      if (await _db.codigoDaBarbeariaConfere(normalizado, senha)) {
+        return (sucesso: false, erro: null, criarNovaSenha: true);
+      }
+
+      return (
+        sucesso: false,
+        erro: 'E-mail ou senha incorretos',
+        criarNovaSenha: false,
+      );
     } catch (e) {
       return (
         sucesso: false,
         erro: mensagemDeErro(e, 'Não foi possível entrar'),
+        criarNovaSenha: false,
+      );
+    }
+  }
+
+  /// "Esqueci minha senha": gera o código e o envia por SMS para o celular
+  /// cadastrado (regra de negócio 16). Devolve esse celular, para a tela
+  /// dizer para onde o código foi.
+  Future<({bool sucesso, String? erro, String? telefone})> pedirCodigoPorSms({
+    required String email,
+    required String telefone,
+  }) async {
+    if (email.trim().isEmpty || telefone.trim().isEmpty) {
+      return (
+        sucesso: false,
+        erro: 'Preencha o e-mail e o celular',
+        telefone: null,
+      );
+    }
+    try {
+      final gerado = await _db.gerarCodigoPorSms(
+        email: email,
+        telefone: telefone,
+      );
+      final minutos = DatabaseService.validadeCodigoSms.inMinutes;
+      await _sms.enviar(
+        telefone: gerado.telefone,
+        mensagem:
+            'SysBarber: seu código para criar uma nova senha é '
+            '${gerado.codigo}. Ele vale por $minutos minutos. Não o '
+            'compartilhe com ninguém.',
+      );
+      return (sucesso: true, erro: null, telefone: gerado.telefone);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível enviar o código'),
+        telefone: null,
+      );
+    }
+  }
+
+  /// Cria a senha nova com o código (do SMS ou da barbearia) e já entra
+  /// (regra de negócio 16).
+  Future<({bool sucesso, String? erro})> redefinirSenha({
+    required String email,
+    required String codigo,
+    required String novaSenha,
+  }) async {
+    if (codigo.trim().isEmpty || novaSenha.isEmpty) {
+      return (sucesso: false, erro: 'Preencha todos os campos');
+    }
+    try {
+      await _db.redefinirSenhaComCodigo(
+        email: email,
+        codigo: codigo,
+        novaSenha: novaSenha,
+      );
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível criar a nova senha'),
+      );
+    }
+    final entrada = await login(email, novaSenha);
+    return (sucesso: entrada.sucesso, erro: entrada.erro);
+  }
+
+  /// O administrador libera uma nova senha para o cliente [idCliente]
+  /// (regra de negócio 16). Devolve o código provisório, que ele entrega ao
+  /// cliente no balcão.
+  Future<({bool sucesso, String? erro, String? codigo})> liberarNovaSenha(
+    int idCliente,
+  ) async {
+    if (!podeAdministrar) {
+      return (
+        sucesso: false,
+        erro: 'Só o administrador pode liberar uma nova senha',
+        codigo: null,
+      );
+    }
+    try {
+      final codigo = await _db.liberarCodigoDaBarbearia(idCliente);
+      return (sucesso: true, erro: null, codigo: codigo);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível liberar a nova senha'),
+        codigo: null,
       );
     }
   }

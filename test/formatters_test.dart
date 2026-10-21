@@ -101,4 +101,16 @@ void main() {
       expect(formatarReal(-27.5), '-R\$ 27,50');
     });
   });
+
+  group('mascararTelefone', () {
+    test('esconde o meio do celular e do fixo', () {
+      expect(mascararTelefone('(67) 98888-1234'), '(67) •••••-1234');
+      expect(mascararTelefone('6733334444'), '(67) ••••-4444');
+    });
+
+    test('número fora do padrão volta como veio', () {
+      expect(mascararTelefone('1234'), '1234');
+      expect(mascararTelefone(''), '');
+    });
+  });
 }

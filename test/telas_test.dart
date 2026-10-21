@@ -13,12 +13,14 @@ import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
+import 'package:sysbarber/screens/recuperar_senha_screen.dart';
 import 'package:sysbarber/screens/servicos_screen.dart';
 import 'package:sysbarber/screens/splash_screen.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/senhas.dart';
+import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
 
 /// Administrador criado pela configuração inicial nos testes (desde a P22 o
@@ -877,5 +879,143 @@ void main() {
     // Antes, em modo de desenvolvimento, o login exibia a conta padrão.
     expect(find.textContaining('admin1234'), findsNothing);
     expect(find.textContaining('admin@sysbarber.com'), findsNothing);
+  });
+
+  // -------------------------------------------------------------------------
+  // P24 — recuperação de senha
+  // -------------------------------------------------------------------------
+
+  /// Toca em [alvo] e espera o banco (e o hash em outro isolate) responder.
+  /// O toque roda no relógio real, e com ele tudo o que o botão dispara,
+  /// inclusive o que continua depois de um diálogo.
+  Future<void> tocarEsperando(WidgetTester tester, Finder alvo) async {
+    await tester.ensureVisible(alvo);
+    await tester.runAsync(() async {
+      await tester.tap(alvo);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pump();
+  }
+
+  /// App com a tela [inicio] e a Home trocada por um marcador.
+  Future<void> abrirComHome(WidgetTester tester, Widget inicio) =>
+      tester.runAsync(
+        () => tester.pumpWidget(
+          MaterialApp(
+            home: inicio,
+            routes: {
+              '/home': (_) => const Scaffold(body: Text('INÍCIO')),
+              AuthService.rotaRecuperarSenha: (_) =>
+                  const RecuperarSenhaScreen(),
+            },
+          ),
+        ),
+      );
+
+  testWidgets('"Esqueci minha senha" no login é um botão e abre a '
+      'recuperação', (tester) async {
+    final semantica = tester.ensureSemantics();
+    await abrirComHome(tester, const LoginScreen());
+
+    expect(
+      tester.getSemantics(find.text('Esqueci minha senha')),
+      isSemantics(isButton: true),
+    );
+    await tester.tap(find.text('Esqueci minha senha'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Esqueceu a senha?'), findsOneWidget);
+    expect(find.text('ENVIAR CÓDIGO'), findsOneWidget);
+    semantica.dispose();
+  });
+
+  testWidgets('a recuperação mostra o SMS simulado e, com o código, cria a '
+      'senha nova e entra', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(cadastrarClienteTeste);
+    await abrirComHome(tester, const RecuperarSenhaScreen());
+
+    await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
+    await tester.enterText(find.byType(TextField).at(1), '67999990000');
+    await tocarEsperando(tester, find.text('ENVIAR CÓDIGO'));
+
+    expect(find.text('SMS SIMULADO'), findsOneWidget);
+    expect(find.textContaining('(67) •••••-0000'), findsWidgets);
+    final codigo = RegExp(
+      r'\d{6}',
+    ).firstMatch(SmsSimulado.instance.ultima.value!.mensagem)!.group(0)!;
+    expect(find.textContaining(codigo), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(0), codigo);
+    await tester.enterText(find.byType(TextField).at(1), 'senhaNova1');
+    await tester.enterText(find.byType(TextField).at(2), 'senhaNova1');
+    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.usuarioAtual!.email, 'c@teste.com');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('quem entra com o código liberado pela barbearia é levado a '
+      'criar uma senha nova', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    late String codigo;
+    await tester.runAsync(() async {
+      codigo = await service.liberarCodigoDaBarbearia(
+        await cadastrarClienteTeste(),
+      );
+    });
+    await abrirComHome(tester, const LoginScreen());
+
+    await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
+    await tester.enterText(find.byType(TextField).at(1), codigo);
+    await tocarEsperando(
+      tester,
+      find.widgetWithText(GoldButton, 'ENTRAR'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Crie sua nova senha'), findsOneWidget);
+    expect(AuthService.instance.estaLogado, isFalse);
+
+    await tester.enterText(find.byType(TextField).at(0), 'minhaSenha1');
+    await tester.enterText(find.byType(TextField).at(1), 'minhaSenha1');
+    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.usuarioAtual!.email, 'c@teste.com');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o administrador libera uma nova senha no detalhe do cliente '
+      'e vê o código provisório', (tester) async {
+    await adminLogado(tester);
+    await tester.runAsync(cadastrarClienteTeste);
+    await abrir(tester, const AdminClientesScreen());
+
+    await tocarEsperando(tester, find.text('c@teste.com'));
+    await tocarEsperando(tester, find.text('LIBERAR NOVA SENHA'));
+    await tester.pumpAndSettle();
+    expect(find.text('Liberar nova senha?'), findsOneWidget);
+
+    await tocarEsperando(tester, find.text('LIBERAR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Código provisório'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Text && RegExp(r'^\d{6}$').hasMatch(w.data ?? ''),
+      ),
+      findsOneWidget,
+    );
+    final gravado = await tester.runAsync(
+      () => service.database.then((db) => db.query('codigo_senha')),
+    );
+    expect(gravado!.single['origem'], 'barbearia');
+    await tester.runAsync(AuthService.instance.logout);
   });
 }
