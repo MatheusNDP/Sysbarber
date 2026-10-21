@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
@@ -118,6 +119,16 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
           ),
           actions: [
             TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _liberarNovaSenha(c);
+              },
+              child: Text(
+                'LIBERAR NOVA SENHA',
+                style: AppTheme.sans(size: 13, color: AppColors.muted),
+              ),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
                 'FECHAR',
@@ -135,6 +146,109 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       if (!mounted) return;
       mostrarErro(context, mensagemDeErro(e, 'Erro ao abrir o cliente'));
     }
+  }
+
+  /// O cliente esqueceu a senha e pediu ajuda no balcão: o app gera um
+  /// código provisório que o administrador entrega a ele (regra de negócio
+  /// 16).
+  Future<void> _liberarNovaSenha(Cliente c) async {
+    final horas = DatabaseService.validadeCodigoBarbearia.inHours;
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text('Liberar nova senha?', style: AppTheme.serif(size: 18)),
+        content: Text(
+          'Confira se quem pediu é mesmo ${c.nome}. O app vai gerar um '
+          'código provisório, que vale por $horas horas e uma vez só. Com '
+          'ele no lugar da senha, o cliente entra e cria uma senha nova.',
+          style: AppTheme.sans(size: 13, color: AppColors.muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'CANCELAR',
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'LIBERAR',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true || !mounted) return;
+
+    final r = await AuthService.instance.liberarNovaSenha(c.id!);
+    if (!mounted) return;
+    if (!r.sucesso) {
+      mostrarErro(context, r.erro ?? 'Não foi possível liberar a nova senha');
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text('Código provisório', style: AppTheme.serif(size: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              r.codigo!,
+              textAlign: TextAlign.center,
+              // Sem serifa: os algarismos ficam da mesma altura, mais fáceis
+              // de ditar ao cliente.
+              style: AppTheme.sans(
+                size: 32,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+                letterSpacing: 6,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Entregue este código a ${c.nome}. No login, o cliente usa o '
+              'e-mail ${c.email} e este código no lugar da senha, e o app '
+              'pede uma senha nova. Vale por $horas horas, uma vez só, e não '
+              'aparece de novo.',
+              style: AppTheme.sans(size: 13, color: AppColors.muted),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'ENTENDI',
+              style: AppTheme.sans(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _dataCadastro(String iso) {

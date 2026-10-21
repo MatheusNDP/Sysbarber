@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -26,7 +28,8 @@ class DatabaseService {
   /// ou resgate); agendamento guarda a própria duração e o preço da época;
   /// índices únicos por barbeiro e horário e por e-mail de barbeiro (só
   /// quando o banco antigo não tem duplicados) e índices de consulta.
-  static const int versaoBanco = 5;
+  /// v6: tabela `codigo_senha`, com os códigos para criar uma senha nova.
+  static const int versaoBanco = 6;
 
   /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
   /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
@@ -39,6 +42,19 @@ class DatabaseService {
 
   /// Antecedência mínima para cancelar sem multa (regra de negócio 7).
   static const Duration prazoCancelamento = Duration(hours: 1);
+
+  /// Validade do código enviado por SMS em "Esqueci minha senha" (regra de
+  /// negócio 16).
+  static const Duration validadeCodigoSms = Duration(minutes: 10);
+
+  /// Validade do código provisório que o administrador libera no balcão.
+  static const Duration validadeCodigoBarbearia = Duration(hours: 24);
+
+  /// Tentativas erradas que cancelam o código.
+  static const int tentativasCodigo = 5;
+
+  /// Espera mínima entre dois SMS para a mesma conta.
+  static const Duration intervaloEntreSms = Duration(minutes: 1);
 
   /// Percentual do serviço cobrado em cancelamentos fora do prazo.
   static const double percentualMulta = 0.5;
@@ -246,10 +262,32 @@ class DatabaseService {
       )
     ''');
 
+    await _criarTabelaCodigoSenha(db);
+
     await _criarIndiceHorario(db);
     await _criarIndicesDeConsulta(db);
     await _criarIndiceEmailBarbeiro(db);
   }
+
+  /// Códigos para criar uma senha nova (regra de negócio 16). Cada código é
+  /// de um cliente ou de um barbeiro, nunca dos dois, e cada conta tem no
+  /// máximo um: os índices únicos aceitam vários nulos.
+  static Future<void> _criarTabelaCodigoSenha(DatabaseExecutor db) =>
+      db.execute('''
+        CREATE TABLE codigo_senha (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id_cliente INTEGER UNIQUE,
+          id_barbeiro INTEGER UNIQUE,
+          origem TEXT NOT NULL,
+          codigo_hash TEXT NOT NULL,
+          criado_em TEXT NOT NULL,
+          expira_em TEXT NOT NULL,
+          tentativas INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (id_cliente) REFERENCES cliente(id) ON DELETE CASCADE,
+          FOREIGN KEY (id_barbeiro) REFERENCES barbeiro(id) ON DELETE CASCADE,
+          CHECK ((id_cliente IS NULL) != (id_barbeiro IS NULL))
+        )
+      ''');
 
   /// Índices das consultas mais frequentes: grade do barbeiro, histórico do
   /// cliente, pagamento de cada agendamento e extrato de pontos.
@@ -423,6 +461,8 @@ class DatabaseService {
       );
       if ((emailsRepetidos ?? 0) == 0) await _criarIndiceEmailBarbeiro(db);
     }
+
+    if (versaoAntiga < 6) await _criarTabelaCodigoSenha(db);
   }
 
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
@@ -792,6 +832,267 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // RECUPERAÇÃO DE SENHA
+  // -------------------------------------------------------------------------
+
+  /// Gera o código de "Esqueci minha senha" (regra de negócio 16).
+  ///
+  /// Só gera se [email] e [telefone] forem da mesma conta, de cliente
+  /// (inclusive o administrador) ou de barbeiro. Devolve o código em texto,
+  /// para ser enviado por SMS, e o celular cadastrado; no banco fica só o
+  /// hash. Um código novo substitui o anterior, mas só depois de
+  /// [intervaloEntreSms].
+  Future<({String codigo, String telefone})> gerarCodigoPorSms({
+    required String email,
+    required String telefone,
+    DateTime? agora,
+  }) async {
+    final referencia = agora ?? DateTime.now();
+    final db = await database;
+    final conta = await _contaPorEmail(db, email);
+    if (conta == null || !_mesmoTelefone(conta.telefone, telefone)) {
+      throw const RegraNegocioException(
+        'E-mail e celular não conferem com nenhuma conta',
+      );
+    }
+
+    final codigo = _novoCodigo();
+    final hash = await Senhas.gerarHashEmSegundoPlano(codigo);
+    await db.transaction((txn) async {
+      final anterior = await _codigoDaConta(txn, conta);
+      if (anterior != null &&
+          anterior.origem == OrigemCodigo.sms &&
+          referencia.difference(DateTime.parse(anterior.criadoEm)) <
+              intervaloEntreSms) {
+        throw const RegraNegocioException(
+          'Aguarde 1 minuto para pedir outro código',
+        );
+      }
+      await _gravarCodigo(
+        txn,
+        conta,
+        OrigemCodigo.sms,
+        hash,
+        referencia,
+        validadeCodigoSms,
+      );
+    });
+    return (codigo: codigo, telefone: conta.telefone);
+  }
+
+  /// Libera um código provisório para o cliente [idCliente] (regra de
+  /// negócio 16). O administrador o entrega no balcão, e o cliente entra com
+  /// ele no lugar da senha para criar uma senha nova. Substitui qualquer
+  /// código anterior da conta. Devolve o código em texto.
+  Future<String> liberarCodigoDaBarbearia(
+    int idCliente, {
+    DateTime? agora,
+  }) async {
+    final cliente = await buscarClientePorId(idCliente);
+    if (cliente == null) {
+      throw const RegraNegocioException('Cliente não encontrado');
+    }
+    final codigo = _novoCodigo();
+    await _gravarCodigo(
+      await database,
+      (tabela: 'cliente', id: idCliente, telefone: cliente.telefone),
+      OrigemCodigo.barbearia,
+      await Senhas.gerarHashEmSegundoPlano(codigo),
+      agora ?? DateTime.now(),
+      validadeCodigoBarbearia,
+    );
+    return codigo;
+  }
+
+  /// O [codigo] digitado no login, no lugar da senha, é o código provisório
+  /// que a barbearia liberou para a conta do [email]? (regra de negócio 16)
+  ///
+  /// Não troca a senha nem gasta o código: quem entra com ele é levado a
+  /// criar uma senha nova ([redefinirSenhaComCodigo]). Um código errado gasta
+  /// uma tentativa, como na tela de recuperação.
+  Future<bool> codigoDaBarbeariaConfere(
+    String email,
+    String codigo, {
+    DateTime? agora,
+  }) async {
+    try {
+      await _conferirCodigo(
+        email,
+        codigo,
+        agora ?? DateTime.now(),
+        origem: OrigemCodigo.barbearia,
+      );
+      return true;
+    } on RegraNegocioException {
+      return false;
+    }
+  }
+
+  /// Troca a senha da conta do [email] com um código, sem pedir a senha atual
+  /// (regra de negócio 16). Vale o código do SMS ou o da barbearia, que é
+  /// gasto aqui: a senha nova e a exclusão do código acontecem na mesma
+  /// transação.
+  Future<void> redefinirSenhaComCodigo({
+    required String email,
+    required String codigo,
+    required String novaSenha,
+    DateTime? agora,
+  }) async {
+    if (!Validators.senhaValida(novaSenha)) {
+      throw const RegraNegocioException(
+        'A nova senha deve ter no mínimo 6 caracteres',
+      );
+    }
+    final (conta, registro) = await _conferirCodigo(
+      email,
+      codigo,
+      agora ?? DateTime.now(),
+    );
+    final hash = await Senhas.gerarHashEmSegundoPlano(novaSenha);
+    final db = await database;
+    await db.transaction((txn) async {
+      // O mesmo código não pode ser gasto duas vezes.
+      final apagados = await txn.delete(
+        'codigo_senha',
+        where: 'id = ?',
+        whereArgs: [registro.id],
+      );
+      if (apagados == 0) throw const RegraNegocioException(_codigoInvalido);
+      await txn.update(
+        conta.tabela,
+        {'senha_hash': hash},
+        where: 'id = ?',
+        whereArgs: [conta.id],
+      );
+    });
+  }
+
+  static const String _codigoInvalido = 'Código inválido. Peça um novo';
+
+  /// Confere o [codigo] da conta do [email]. Com [origem], só aceita um
+  /// código dessa origem.
+  ///
+  /// Código errado gasta uma tentativa, e a última apaga o código. Código
+  /// vencido também é apagado. Devolve a conta e o código conferido.
+  Future<(_Conta, CodigoSenha)> _conferirCodigo(
+    String email,
+    String codigo,
+    DateTime agora, {
+    OrigemCodigo? origem,
+  }) async {
+    final db = await database;
+    final conta = await _contaPorEmail(db, email);
+    final registro = conta == null ? null : await _codigoDaConta(db, conta);
+    if (conta == null ||
+        registro == null ||
+        (origem != null && registro.origem != origem)) {
+      throw const RegraNegocioException(_codigoInvalido);
+    }
+    Future<void> apagar() => db.delete(
+      'codigo_senha',
+      where: 'id = ?',
+      whereArgs: [registro.id],
+    );
+
+    if (registro.vencido(agora)) {
+      await apagar();
+      throw const RegraNegocioException('Este código venceu. Peça um novo');
+    }
+    if (await Senhas.conferirEmSegundoPlano(
+      codigo.trim(),
+      registro.codigoHash,
+    )) {
+      return (conta, registro);
+    }
+
+    await db.rawUpdate(
+      'UPDATE codigo_senha SET tentativas = tentativas + 1 WHERE id = ?',
+      [registro.id],
+    );
+    final restantes = tentativasCodigo - registro.tentativas - 1;
+    if (restantes <= 0) {
+      await apagar();
+      throw const RegraNegocioException(
+        'Código incorreto. Depois de $tentativasCodigo tentativas ele foi '
+        'cancelado: peça um novo',
+      );
+    }
+    throw RegraNegocioException(
+      restantes == 1
+          ? 'Código incorreto. Resta 1 tentativa'
+          : 'Código incorreto. Restam $restantes tentativas',
+    );
+  }
+
+  /// Conta dona do [email], de cliente ou de barbeiro. O e-mail não se
+  /// repete entre as duas tabelas (regra de negócio 12).
+  Future<_Conta?> _contaPorEmail(DatabaseExecutor db, String email) async {
+    final normalizado = email.trim().toLowerCase();
+    if (normalizado.isEmpty) return null;
+    for (final tabela in const ['cliente', 'barbeiro']) {
+      final linhas = await db.query(
+        tabela,
+        columns: ['id', 'telefone'],
+        where: 'email = ?',
+        whereArgs: [normalizado],
+        limit: 1,
+      );
+      if (linhas.isNotEmpty) {
+        return (
+          tabela: tabela,
+          id: linhas.first['id'] as int,
+          telefone: linhas.first['telefone'] as String,
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<CodigoSenha?> _codigoDaConta(DatabaseExecutor db, _Conta conta) async {
+    final linhas = await db.query(
+      'codigo_senha',
+      where: 'id_${conta.tabela} = ?',
+      whereArgs: [conta.id],
+      limit: 1,
+    );
+    return linhas.isEmpty ? null : CodigoSenha.fromMap(linhas.first);
+  }
+
+  /// Grava o código da conta. Os índices únicos fazem o `REPLACE` apagar o
+  /// código anterior no mesmo comando.
+  Future<void> _gravarCodigo(
+    DatabaseExecutor db,
+    _Conta conta,
+    OrigemCodigo origem,
+    String hash,
+    DateTime agora,
+    Duration validade,
+  ) => db.insert(
+    'codigo_senha',
+    CodigoSenha(
+      idCliente: conta.tabela == 'cliente' ? conta.id : null,
+      idBarbeiro: conta.tabela == 'barbeiro' ? conta.id : null,
+      origem: origem,
+      codigoHash: hash,
+      criadoEm: agora.toIso8601String(),
+      expiraEm: agora.add(validade).toIso8601String(),
+    ).toMap()..remove('id'),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+
+  /// Código de 6 dígitos, de um gerador próprio para segredos.
+  static String _novoCodigo() =>
+      Random.secure().nextInt(1000000).toString().padLeft(6, '0');
+
+  /// Compara só os dígitos: `(67) 98888-1234` e `67988881234` são o mesmo
+  /// celular.
+  static bool _mesmoTelefone(String cadastrado, String digitado) {
+    String digitos(String t) => t.replaceAll(RegExp(r'\D'), '');
+    final a = digitos(cadastrado);
+    return a.isNotEmpty && a == digitos(digitado);
   }
 
   // -------------------------------------------------------------------------
@@ -2319,3 +2620,7 @@ class DatabaseService {
 
 /// Trecho da agenda já ocupado, com início e fim.
 typedef _Intervalo = ({DateTime inicio, DateTime fim});
+
+/// Dona de um código para criar uma senha nova: um cliente ou um barbeiro.
+/// [tabela] é `cliente` ou `barbeiro`.
+typedef _Conta = ({String tabela, int id, String telefone});

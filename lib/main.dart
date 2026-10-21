@@ -17,6 +17,7 @@ import 'screens/horario_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pagamento_screen.dart';
 import 'screens/perfil_screen.dart';
+import 'screens/recuperar_senha_screen.dart';
 import 'screens/servicos_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
@@ -116,6 +117,7 @@ class SysBarberApp extends StatelessWidget {
     '/': (_) => const SplashScreen(),
     '/login': (_) => const LoginScreen(),
     '/cadastro': (_) => const CadastroScreen(),
+    AuthService.rotaRecuperarSenha: (_) => const RecuperarSenhaScreen(),
     AuthService.rotaConfiguracao: (_) => const ConfiguracaoScreen(),
     '/home': (_) => const HomeScreen(),
     '/servicos': (_) => const ServicosScreen(),

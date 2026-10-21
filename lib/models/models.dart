@@ -782,3 +782,81 @@ class HistoricoPonto {
     criadoEm: map['criado_em'] as String,
   );
 }
+
+// ---------------------------------------------------------------------------
+// CÓDIGO PARA CRIAR UMA SENHA NOVA
+// ---------------------------------------------------------------------------
+
+/// De onde veio o código para criar uma senha nova (regra de negócio 16).
+enum OrigemCodigo {
+  /// Pedido em "Esqueci minha senha" e enviado por SMS.
+  sms,
+
+  /// Liberado pelo administrador no balcão, em Gerenciar Clientes.
+  barbearia,
+}
+
+extension OrigemCodigoX on OrigemCodigo {
+  /// Valor persistido na coluna `origem` da tabela `codigo_senha`.
+  String get dbValue => switch (this) {
+    OrigemCodigo.sms => 'sms',
+    OrigemCodigo.barbearia => 'barbearia',
+  };
+
+  static OrigemCodigo fromDb(String valor) =>
+      valor == 'barbearia' ? OrigemCodigo.barbearia : OrigemCodigo.sms;
+}
+
+/// Código de uso único que permite criar uma senha nova sem saber a atual
+/// (regra de negócio 16).
+///
+/// Pertence a um cliente ou a um barbeiro, e cada conta tem no máximo um
+/// valendo. Como a senha, o código nunca é gravado em texto puro: só o hash.
+class CodigoSenha {
+  final int? id;
+  final int? idCliente;
+  final int? idBarbeiro;
+  final OrigemCodigo origem;
+  final String codigoHash;
+  final String criadoEm;
+  final String expiraEm;
+
+  /// Tentativas erradas até agora.
+  final int tentativas;
+
+  const CodigoSenha({
+    this.id,
+    this.idCliente,
+    this.idBarbeiro,
+    required this.origem,
+    required this.codigoHash,
+    required this.criadoEm,
+    required this.expiraEm,
+    this.tentativas = 0,
+  });
+
+  /// O código já não vale em [agora]?
+  bool vencido(DateTime agora) => !agora.isBefore(DateTime.parse(expiraEm));
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'id_cliente': idCliente,
+    'id_barbeiro': idBarbeiro,
+    'origem': origem.dbValue,
+    'codigo_hash': codigoHash,
+    'criado_em': criadoEm,
+    'expira_em': expiraEm,
+    'tentativas': tentativas,
+  };
+
+  factory CodigoSenha.fromMap(Map<String, dynamic> map) => CodigoSenha(
+    id: map['id'] as int?,
+    idCliente: (map['id_cliente'] as num?)?.toInt(),
+    idBarbeiro: (map['id_barbeiro'] as num?)?.toInt(),
+    origem: OrigemCodigoX.fromDb(map['origem'] as String),
+    codigoHash: map['codigo_hash'] as String,
+    criadoEm: map['criado_em'] as String,
+    expiraEm: map['expira_em'] as String,
+    tentativas: (map['tentativas'] as num).toInt(),
+  );
+}
