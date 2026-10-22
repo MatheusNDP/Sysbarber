@@ -19,6 +19,7 @@ import 'package:sysbarber/screens/splash_screen.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
+import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
@@ -937,6 +938,11 @@ void main() {
     await abrirComHome(tester, const RecuperarSenhaScreen());
 
     await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
+    // O celular só aparece quando a pessoa escolhe receber por SMS.
+    expect(find.text('CELULAR CADASTRADO'), findsNothing);
+    await tester.tap(find.text('Por SMS'));
+    await tester.pump();
+    expect(find.text('CELULAR CADASTRADO'), findsOneWidget);
     await tester.enterText(find.byType(TextField).at(1), '67999990000');
     await tocarEsperando(tester, find.text('ENVIAR CÓDIGO'));
 
@@ -946,6 +952,36 @@ void main() {
       r'\d{6}',
     ).firstMatch(SmsSimulado.instance.ultima.value!.mensagem)!.group(0)!;
     expect(find.textContaining(codigo), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(0), codigo);
+    await tester.enterText(find.byType(TextField).at(1), 'senhaNova1');
+    await tester.enterText(find.byType(TextField).at(2), 'senhaNova1');
+    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.usuarioAtual!.email, 'c@teste.com');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('por e-mail basta o e-mail da conta: a tela mostra o e-mail '
+      'simulado e, com o código, cria a senha nova e entra', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(cadastrarClienteTeste);
+    await abrirComHome(tester, const RecuperarSenhaScreen());
+
+    // Por e-mail é a opção inicial, e o celular não é pedido.
+    expect(find.text('CELULAR CADASTRADO'), findsNothing);
+    await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
+    await tocarEsperando(tester, find.text('ENVIAR CÓDIGO'));
+
+    expect(find.text('E-MAIL SIMULADO'), findsOneWidget);
+    expect(find.textContaining('c•••@teste.com'), findsWidgets);
+    expect(find.text('CÓDIGO DO E-MAIL'), findsOneWidget);
+    final codigo = RegExp(
+      r'\d{6}',
+    ).firstMatch(EmailSimulado.instance.ultimo.value!.texto)!.group(0)!;
 
     await tester.enterText(find.byType(TextField).at(0), codigo);
     await tester.enterText(find.byType(TextField).at(1), 'senhaNova1');

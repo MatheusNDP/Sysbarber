@@ -113,4 +113,16 @@ void main() {
       expect(mascararTelefone(''), '');
     });
   });
+
+  group('mascararEmail', () {
+    test('mostra só a primeira e a última letra antes do @', () {
+      expect(mascararEmail('lucas.martins@email.com'), 'l•••s@email.com');
+      expect(mascararEmail('ab@email.com'), 'a•••@email.com');
+    });
+
+    test('texto sem @ volta como veio', () {
+      expect(mascararEmail('semarroba'), 'semarroba');
+      expect(mascararEmail('@email.com'), '@email.com');
+    });
+  });
 }

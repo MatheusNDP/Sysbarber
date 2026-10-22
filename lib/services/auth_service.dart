@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import 'booking_flow.dart';
 import 'database_service.dart';
+import 'email.dart';
 import 'erros.dart';
 import 'senhas.dart';
 import 'sms.dart';
@@ -108,6 +109,18 @@ class AuthService {
   /// Por onde sai o código de "Esqueci minha senha". Simulado, como o Pix e
   /// o cartão; um provedor real entra trocando esta linha (ver [EnvioSms]).
   final EnvioSms _sms = SmsSimulado.instance;
+
+  /// Por onde sai o código pedido por e-mail: o EmailJS, quando configurado
+  /// no build, ou o e-mail simulado (ver [envioEmailPadrao]).
+  EnvioEmail _email = envioEmailPadrao();
+
+  /// O e-mail da recuperação de senha é simulado neste build? Nesse caso a
+  /// tela mostra a mensagem, como faz com o SMS.
+  bool get emailSimulado => _email is EmailSimulado;
+
+  /// Troca o envio de e-mail (os testes simulam falhas por aqui).
+  @visibleForTesting
+  set envioEmail(EnvioEmail envio) => _email = envio;
 
   /// Lê do banco se a barbearia já foi configurada (chamado na abertura do
   /// app, antes da primeira tela).
@@ -257,7 +270,7 @@ class AuthService {
         email: email,
         telefone: telefone,
       );
-      final minutos = DatabaseService.validadeCodigoSms.inMinutes;
+      final minutos = DatabaseService.validadeCodigoEnviado.inMinutes;
       await _sms.enviar(
         telefone: gerado.telefone,
         mensagem:
@@ -275,8 +288,58 @@ class AuthService {
     }
   }
 
-  /// Cria a senha nova com o código (do SMS ou da barbearia) e já entra
-  /// (regra de negócio 16).
+  /// "Esqueci minha senha" por e-mail: gera o código e o envia para o
+  /// próprio [email] da conta (regra de negócio 16). Devolve o e-mail para
+  /// onde o código foi.
+  ///
+  /// Se o envio falhar (sem internet, por exemplo), o código é descartado:
+  /// ele não chegou a ninguém e não pode segurar o intervalo entre envios.
+  Future<({bool sucesso, String? erro, String? email})> pedirCodigoPorEmail({
+    required String email,
+  }) async {
+    if (email.trim().isEmpty) {
+      return (sucesso: false, erro: 'Preencha o e-mail', email: null);
+    }
+    final ({String codigo, String nome, String email}) gerado;
+    try {
+      gerado = await _db.gerarCodigoPorEmail(email: email);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível gerar o código'),
+        email: null,
+      );
+    }
+    try {
+      await _email.enviarCodigo(
+        email: gerado.email,
+        nome: gerado.nome,
+        codigo: gerado.codigo,
+        minutos: DatabaseService.validadeCodigoEnviado.inMinutes,
+      );
+    } catch (e) {
+      try {
+        await _db.descartarCodigo(
+          email: gerado.email,
+          origem: OrigemCodigo.email,
+        );
+      } catch (_) {
+        // Sem o descarte, o código só vence sozinho em 10 minutos.
+      }
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(
+          e,
+          'Não foi possível enviar o e-mail. Confira a conexão com a internet',
+        ),
+        email: null,
+      );
+    }
+    return (sucesso: true, erro: null, email: gerado.email);
+  }
+
+  /// Cria a senha nova com o código (do SMS, do e-mail ou da barbearia) e já
+  /// entra (regra de negócio 16).
   Future<({bool sucesso, String? erro})> redefinirSenha({
     required String email,
     required String codigo,

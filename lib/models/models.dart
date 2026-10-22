@@ -792,6 +792,9 @@ enum OrigemCodigo {
   /// Pedido em "Esqueci minha senha" e enviado por SMS.
   sms,
 
+  /// Pedido em "Esqueci minha senha" e enviado por e-mail.
+  email,
+
   /// Liberado pelo administrador no balcão, em Gerenciar Clientes.
   barbearia,
 }
@@ -800,11 +803,15 @@ extension OrigemCodigoX on OrigemCodigo {
   /// Valor persistido na coluna `origem` da tabela `codigo_senha`.
   String get dbValue => switch (this) {
     OrigemCodigo.sms => 'sms',
+    OrigemCodigo.email => 'email',
     OrigemCodigo.barbearia => 'barbearia',
   };
 
-  static OrigemCodigo fromDb(String valor) =>
-      valor == 'barbearia' ? OrigemCodigo.barbearia : OrigemCodigo.sms;
+  static OrigemCodigo fromDb(String valor) => switch (valor) {
+    'barbearia' => OrigemCodigo.barbearia,
+    'email' => OrigemCodigo.email,
+    _ => OrigemCodigo.sms,
+  };
 }
 
 /// Código de uso único que permite criar uma senha nova sem saber a atual

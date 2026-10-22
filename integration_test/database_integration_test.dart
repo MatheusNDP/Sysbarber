@@ -5,6 +5,7 @@ import 'package:sysbarber/models/models.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
+import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 
@@ -3521,4 +3522,159 @@ void main() {
       expect(await codigos(), isEmpty);
     });
   });
+
+  // -------------------------------------------------------------------------
+  group('P25 — recuperação de senha por e-mail', () {
+    final auth = AuthService.instance;
+    final t0 = DateTime(2030, 3, 4, 10);
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+      auth.envioEmail = EmailSimulado.instance;
+      EmailSimulado.instance.ultimo.value = null;
+    });
+
+    tearDown(() => auth.envioEmail = EmailSimulado.instance);
+
+    /// O código de 6 dígitos do último e-mail simulado.
+    String codigoDoEmail() => RegExp(
+      r'\d{6}',
+    ).firstMatch(EmailSimulado.instance.ultimo.value!.texto)!.group(0)!;
+
+    Future<List<Map<String, Object?>>> codigos() =>
+        service.database.then((db) => db.query('codigo_senha'));
+
+    test('basta o e-mail da conta: o código vai para ele, e com o código o '
+        'cliente cria uma senha nova e já entra', () async {
+      await criarClienteTeste(senha: 'senha123');
+
+      final pedido = await auth.pedirCodigoPorEmail(email: ' NOVO@teste.com');
+
+      expect(pedido.sucesso, isTrue);
+      expect(pedido.email, 'novo@teste.com');
+      final email = EmailSimulado.instance.ultimo.value!;
+      expect(email.email, 'novo@teste.com');
+      expect(email.texto, contains('Novo Cliente'));
+      expect((await codigos()).single['origem'], 'email');
+
+      final r = await auth.redefinirSenha(
+        email: 'novo@teste.com',
+        codigo: codigoDoEmail(),
+        novaSenha: 'senhaNova1',
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.usuarioAtual!.email, 'novo@teste.com');
+      expect(await service.autenticar('novo@teste.com', 'senha123'), isNull);
+      expect(await codigos(), isEmpty);
+    });
+
+    test('e-mail que não é de nenhuma conta não gera código nem envia nada',
+        () async {
+      final r = await auth.pedirCodigoPorEmail(email: 'ninguem@teste.com');
+
+      expect(r.sucesso, isFalse);
+      expect(r.erro, 'Este e-mail não pertence a nenhuma conta');
+      expect(await codigos(), isEmpty);
+      expect(EmailSimulado.instance.ultimo.value, isNull);
+    });
+
+    test('o barbeiro também recebe o código por e-mail', () async {
+      await auth.pedirCodigoPorEmail(email: 'rafael.souza@sysbarber.com');
+
+      final r = await auth.redefinirSenha(
+        email: 'rafael.souza@sysbarber.com',
+        codigo: codigoDoEmail(),
+        novaSenha: 'rafaelNovo1',
+      );
+
+      expect(r.sucesso, isTrue);
+      expect(auth.ehBarbeiro, isTrue);
+    });
+
+    test('o intervalo de 1 minuto vale entre os canais, e o código novo '
+        'cancela o do outro canal', () async {
+      await criarClienteTeste();
+      final sms = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+        agora: t0,
+      );
+
+      await expectLater(
+        service.gerarCodigoPorEmail(
+          email: 'novo@teste.com',
+          agora: t0.add(const Duration(seconds: 30)),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Aguarde 1 minuto para pedir outro código',
+          ),
+        ),
+      );
+
+      final email = await service.gerarCodigoPorEmail(
+        email: 'novo@teste.com',
+        agora: t0.add(const Duration(minutes: 1)),
+      );
+      expect((await codigos()).single['origem'], 'email');
+      if (sms.codigo != email.codigo) {
+        await expectLater(
+          service.redefinirSenhaComCodigo(
+            email: 'novo@teste.com',
+            codigo: sms.codigo,
+            novaSenha: 'senhaNova1',
+            agora: t0.add(const Duration(minutes: 2)),
+          ),
+          throwsA(isA<RegraNegocioException>()),
+        );
+      }
+      await service.redefinirSenhaComCodigo(
+        email: 'novo@teste.com',
+        codigo: email.codigo,
+        novaSenha: 'senhaNova1',
+        agora: t0.add(const Duration(minutes: 2)),
+      );
+    });
+
+    test('se o e-mail não sai, o código é descartado e dá para pedir de novo '
+        'na hora', () async {
+      await criarClienteTeste();
+      auth.envioEmail = _EmailQueFalha();
+
+      final r = await auth.pedirCodigoPorEmail(email: 'novo@teste.com');
+
+      expect(r.sucesso, isFalse);
+      expect(r.erro, contains('Não foi possível enviar o e-mail'));
+      expect(await codigos(), isEmpty);
+
+      auth.envioEmail = EmailSimulado.instance;
+      final deNovo = await auth.pedirCodigoPorEmail(email: 'novo@teste.com');
+      expect(deNovo.sucesso, isTrue);
+    });
+
+    test('o código do e-mail não serve para entrar pelo login', () async {
+      await criarClienteTeste();
+      await auth.pedirCodigoPorEmail(email: 'novo@teste.com');
+
+      final r = await auth.login('novo@teste.com', codigoDoEmail());
+
+      expect(r.sucesso, isFalse);
+      expect(r.criarNovaSenha, isFalse);
+    });
+  });
+}
+
+/// Envio que sempre falha, como sem internet.
+class _EmailQueFalha implements EnvioEmail {
+  @override
+  Future<void> enviarCodigo({
+    required String email,
+    required String nome,
+    required String codigo,
+    required int minutos,
+  }) async => throw const FalhaNoEnvioDeEmail('sem conexão');
 }

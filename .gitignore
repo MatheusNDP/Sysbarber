@@ -48,3 +48,7 @@ app.*.map.json
 *.db
 *.db-journal
 *.sqlite
+
+# SysBarber: chaves do EmailJS (recuperação de senha por e-mail). O modelo
+# está em emailjs.exemplo.json.
+emailjs.json

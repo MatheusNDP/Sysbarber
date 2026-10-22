@@ -486,6 +486,17 @@ String mascararTelefone(String telefone) {
   return '(${d.substring(0, 2)}) $meio-${d.substring(d.length - 4)}';
 }
 
+/// Esconde parte do e-mail, ex.: `lucas.martins@email.com` →
+/// `l•••s@email.com`. Um texto sem `@` volta como veio.
+String mascararEmail(String email) {
+  final arroba = email.indexOf('@');
+  if (arroba < 1) return email;
+  final usuario = email.substring(0, arroba);
+  final dominio = email.substring(arroba);
+  final fim = usuario.length > 2 ? usuario[usuario.length - 1] : '';
+  return '${usuario[0]}•••$fim$dominio';
+}
+
 String _doisDigitos(int n) => n.toString().padLeft(2, '0');
 
 /// Data por extenso em pt_BR, ex.: "Segunda, 11 de agosto".
