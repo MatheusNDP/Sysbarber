@@ -72,8 +72,12 @@ jeito, mas o e-mail é **simulado**: a mensagem aparece na própria tela.
 
      Se você não pediu uma nova senha, ignore este e-mail: a sua senha continua a mesma.
      ```
+
+   Na aba **Settings** do modelo, marque **Do not save private data**, para
+   os códigos não ficarem guardados no histórico do EmailJS.
 3. Em **Account → Security**, ligue **Allow EmailJS API for non-browser
-   applications** (sem isso, o EmailJS recusa o app).
+   applications** (sem isso, o EmailJS recusa o app) e desligue **Use Private
+   Key**: o app manda só a chave pública.
 4. Copie `emailjs.exemplo.json` para `emailjs.json` e preencha o Service ID, o
    Template ID e a Public Key (em **Account → General**). O `emailjs.json`
    está no `.gitignore` e não vai para o repositório.
