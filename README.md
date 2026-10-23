@@ -102,7 +102,9 @@ quando o EmailJS está configurado. Todo o resto funciona sem internet: o banco
 embarcadas no APK (`assets/fonts/`, declaradas em `pubspec.yaml`), e não
 baixadas em tempo de execução. A identidade visual fica idêntica com ou sem
 internet — importante para a apresentação. O SMS da recuperação de senha é
-simulado (regra 16).
+simulado (regra 16). Os botões do [Suporte](#suporte), no Perfil, também não
+fazem requisição: só abrem o WhatsApp ou o app de e-mail do aparelho, e são
+eles que usam a internet.
 
 ### Os dados ficam no aparelho
 
@@ -136,7 +138,7 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **265 testes** no total:
+São **274 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -145,7 +147,8 @@ São **265 testes** no total:
 | `test/formatters_test.dart` | 17 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex), `formatarReal`, `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
-| `test/telas_test.dart` | 39 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
+| `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
+| `test/telas_test.dart` | 43 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno) e ajustes visuais em celular pequeno |
 | `integration_test/database_integration_test.dart` | 157 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -155,7 +158,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 265 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 274 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -185,6 +188,7 @@ lib/
 │   ├── senhas.dart              # Hash PBKDF2 com salt individual
 │   ├── sms.dart                 # Envio de SMS da recuperação de senha (simulado)
 │   ├── email.dart               # Envio do código por e-mail: EmailJS ou simulado
+│   ├── suporte.dart             # Contato do suporte, mensagem pronta e links do WhatsApp e do e-mail
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
@@ -214,7 +218,9 @@ lib/
   mudar as telas nem o banco.
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
-  reaproveitados pelos testes.
+  reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
+  (`abrirLink`, que por padrão usa o pacote `url_launcher`), e os testes o
+  trocam por um falso.
 
 ---
 
@@ -404,7 +410,7 @@ v2):
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro) | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
-| `/perfil` | Dados do usuário, editar dados, alterar senha e sair | cliente |
+| `/perfil` | Dados do usuário, editar dados, alterar senha, sair e, no fim, o [Suporte](#suporte) (WhatsApp e e-mail) | cliente |
 | `/admin` | Painel administrativo: movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
 
 Antes da configuração inicial, só `/` e `/configuracao` abrem; as demais rotas
@@ -429,6 +435,22 @@ Toda tela que carrega dados mostra um estado de erro com
 **"Tentar novamente"** quando o banco falha, em vez de um carregamento eterno.
 No pagamento, se só o saldo de pontos não carregar, o aviso aparece no lugar
 da oferta de resgate e o pagamento em dinheiro continua disponível.
+
+### Suporte
+
+No fim do Perfil, a seção **Suporte** tem os botões **WhatsApp** e
+**E-mail**, para falar com o suporte do SysBarber: quem mantém o app, e não a
+barbearia. O contato é fixo no código (`ContatoSuporte`, em
+`lib/services/suporte.dart`), o mesmo em qualquer instalação. Os botões abrem
+o WhatsApp (pelo link `wa.me`; sem o WhatsApp instalado, a página dele no
+navegador) ou o app de e-mail do aparelho, já com a mensagem "Olá! Sou
+Fulano (cliente) e preciso de ajuda com o SysBarber." (ou "(administrador)")
+e, no e-mail, o assunto "Suporte SysBarber". A pessoa pode mudar o texto e é
+ela quem envia: o app não manda nada sozinho. Se o aparelho não tem app para
+abrir o link, o Perfil avisa (no caso do e-mail, mostrando o endereço).
+
+O Suporte aparece para o cliente e para o administrador. O barbeiro não tem
+Perfil: se tiver algum problema, ele fala com o administrador.
 
 ---
 
@@ -492,6 +514,10 @@ Login com o e-mail e o código → Crie sua nova senha → entra no app
   que a pessoa informou, mesmo errado. Nesse caso, o administrador libera uma
   nova senha para o cliente, ou define uma para o barbeiro.
 - Não há troca de e-mail nem exclusão de conta pelo próprio cliente.
+- O WhatsApp e o e-mail do [Suporte](#suporte) ainda são provisórios e não
+  levam a ninguém: o DDD 00 não existe, e o domínio `.example` é reservado e
+  não recebe e-mail. O contato definitivo entra em `ContatoSuporte`
+  (`lib/services/suporte.dart`).
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).
 - Instalações feitas antes da configuração inicial mantêm a conta de

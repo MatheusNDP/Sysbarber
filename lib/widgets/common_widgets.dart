@@ -63,16 +63,28 @@ class GoldOutlineButton extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
   final bool expandido;
+  final IconData? icone;
 
   const GoldOutlineButton({
     super.key,
     required this.texto,
     required this.onPressed,
     this.expandido = true,
+    this.icone,
   });
 
   @override
   Widget build(BuildContext context) {
+    final rotulo = Text(
+      texto,
+      textAlign: TextAlign.center,
+      style: AppTheme.sans(
+        size: 14,
+        weight: FontWeight.w700,
+        color: AppColors.gold,
+        letterSpacing: 1,
+      ),
+    );
     final botao = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
@@ -81,15 +93,19 @@ class GoldOutlineButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      child: Text(
-        texto,
-        style: AppTheme.sans(
-          size: 14,
-          weight: FontWeight.w700,
-          color: AppColors.gold,
-          letterSpacing: 1,
-        ),
-      ),
+      child: icone == null
+          ? rotulo
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icone, size: 18),
+                const SizedBox(width: 8),
+                // Como no GoldButton: com a largura toda, o texto quebra a
+                // linha em vez de estourar o botão.
+                if (expandido) Flexible(child: rotulo) else rotulo,
+              ],
+            ),
     );
     return expandido ? SizedBox(width: double.infinity, child: botao) : botao;
   }

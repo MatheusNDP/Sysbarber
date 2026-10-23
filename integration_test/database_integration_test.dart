@@ -2384,6 +2384,8 @@ void main() {
       expect(auth.podeAcessar('/agendamentos'), isTrue);
       expect(auth.podeAcessar('/home'), isFalse);
       expect(auth.podeAcessar('/admin'), isFalse);
+      // Nem o Perfil (e o Suporte dele): o barbeiro fala com o administrador.
+      expect(auth.podeAcessar('/perfil'), isFalse);
     });
   });
 

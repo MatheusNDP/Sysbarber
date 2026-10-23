@@ -5,12 +5,16 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../services/formatters.dart';
+import '../services/suporte.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
 /// Perfil do usuário logado (`/perfil`).
 class PerfilScreen extends StatefulWidget {
-  const PerfilScreen({super.key});
+  const PerfilScreen({super.key, this.abrirLink = abrirForaDoApp});
+
+  /// Abre o WhatsApp e o e-mail do suporte (os testes trocam por um falso).
+  final AbrirLink abrirLink;
 
   @override
   State<PerfilScreen> createState() => _PerfilScreenState();
@@ -122,6 +126,32 @@ class _PerfilScreenState extends State<PerfilScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
+  /// Mensagem pronta ao suporte, com o nome e o perfil de quem pede ajuda.
+  String get _mensagemAoSuporte => mensagemAoSuporte(
+    nome: AuthService.instance.usuarioAtual?.nome ?? 'Visitante',
+    administrador: AuthService.instance.podeAdministrar,
+  );
+
+  Future<void> _whatsappDoSuporte() async {
+    final abriu = await widget.abrirLink(linkDoWhatsApp(_mensagemAoSuporte));
+    if (abriu || !mounted) return;
+    mostrarErro(
+      context,
+      'Não foi possível abrir o WhatsApp. Tente falar com o suporte por '
+      'e-mail.',
+    );
+  }
+
+  Future<void> _emailDoSuporte() async {
+    final abriu = await widget.abrirLink(linkDoEmail(_mensagemAoSuporte));
+    if (abriu || !mounted) return;
+    mostrarErro(
+      context,
+      'Não há app de e-mail neste aparelho. Escreva para '
+      '${ContatoSuporte.email} ou use o WhatsApp.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final usuario = AuthService.instance.usuarioAtual;
@@ -205,11 +235,49 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         ),
                       const SizedBox(height: 28),
                       GoldOutlineButton(texto: 'SAIR', onPressed: _sair),
+                      const SizedBox(height: 36),
+                      _suporte(),
                     ],
                   ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Seção "Suporte", no fim da tela: fala com o suporte do SysBarber pelo
+  /// WhatsApp ou por e-mail.
+  Widget _suporte() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('Suporte'),
+        const SizedBox(height: 6),
+        Text(
+          'Dúvidas ou problemas com o app? Fale com o suporte do SysBarber.',
+          style: AppTheme.sans(size: 13, color: AppColors.muted),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: GoldOutlineButton(
+                texto: 'WHATSAPP',
+                icone: Icons.chat_outlined,
+                onPressed: _whatsappDoSuporte,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GoldOutlineButton(
+                texto: 'E-MAIL',
+                icone: Icons.email_outlined,
+                onPressed: _emailDoSuporte,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
