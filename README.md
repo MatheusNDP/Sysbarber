@@ -51,13 +51,58 @@ serviços e barbeiros.
 Contas criadas pelo formulário de cadastro nascem **sempre como cliente
 comum** e não enxergam a área administrativa.
 
-### Funciona 100% offline
+### Recuperação de senha por e-mail (EmailJS)
 
-O app não faz nenhuma requisição de rede. O banco é local (SQLite) e as fontes
-**Playfair Display** e **DM Sans** estão embarcadas no APK
-(`assets/fonts/`, declaradas em `pubspec.yaml`), e não baixadas em tempo de
-execução. A identidade visual fica idêntica com ou sem internet — importante
-para a apresentação. Até o SMS da recuperação de senha é simulado (regra 16).
+O código de "Esqueci minha senha" pode ir por e-mail de verdade, pelo
+[EmailJS](https://www.emailjs.com), um serviço feito para enviar e-mail sem
+servidor próprio (regra 16). Sem esta configuração, o app funciona do mesmo
+jeito, mas o e-mail é **simulado**: a mensagem aparece na própria tela.
+
+1. Crie uma conta grátis no EmailJS e, em **Email Services**, conecte o e-mail
+   que vai enviar os códigos (por exemplo, um Gmail da barbearia).
+2. Em **Email Templates**, crie um modelo com:
+   - **To Email:** `{{to_email}}`
+   - **Subject:** `SysBarber: código para criar uma nova senha`
+   - **Content:**
+
+     ```
+     Olá, {{to_name}}!
+
+     Seu código para criar uma nova senha no SysBarber é {{codigo}}. Ele vale por {{minutos}} minutos e só pode ser usado uma vez.
+
+     Se você não pediu uma nova senha, ignore este e-mail: a sua senha continua a mesma.
+     ```
+
+   Na aba **Settings** do modelo, marque **Do not save private data**, para
+   os códigos não ficarem guardados no histórico do EmailJS.
+3. Em **Account → Security**, ligue **Allow EmailJS API for non-browser
+   applications** (sem isso, o EmailJS recusa o app) e desligue **Use Private
+   Key**: o app manda só a chave pública.
+4. Copie `emailjs.exemplo.json` para `emailjs.json` e preencha o Service ID, o
+   Template ID e a Public Key (em **Account → General**). O `emailjs.json`
+   está no `.gitignore` e não vai para o repositório.
+5. Rode ou gere o APK passando o arquivo:
+
+   ```bash
+   flutter run --dart-define-from-file=emailjs.json
+   ```
+
+   ```bash
+   flutter build apk --dart-define-from-file=emailjs.json
+   ```
+
+O app usa só a chave **pública** do EmailJS; nenhuma chave privada vai no
+APK.
+
+### Funciona offline
+
+A única requisição de rede do app é o envio do e-mail da recuperação de senha,
+quando o EmailJS está configurado. Todo o resto funciona sem internet: o banco
+é local (SQLite) e as fontes **Playfair Display** e **DM Sans** estão
+embarcadas no APK (`assets/fonts/`, declaradas em `pubspec.yaml`), e não
+baixadas em tempo de execução. A identidade visual fica idêntica com ou sem
+internet — importante para a apresentação. O SMS da recuperação de senha é
+simulado (regra 16).
 
 ### Os dados ficam no aparelho
 
@@ -91,16 +136,17 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **250 testes** no total:
+São **265 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
-| `test/unit_test.dart` | 23 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha e da validade dele), enums e regras de estado do agendamento |
+| `test/unit_test.dart` | 24 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele), enums e regras de estado do agendamento |
 | `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
-| `test/formatters_test.dart` | 15 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex), `formatarReal` e `mascararTelefone` (de `common_widgets.dart`) |
+| `test/formatters_test.dart` | 17 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex), `formatarReal`, `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
-| `test/telas_test.dart` | 38 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (SMS simulado, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
-| `integration_test/database_integration_test.dart` | 151 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha, sessão, permissões e migrações |
+| `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
+| `test/telas_test.dart` | 39 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia e ajustes visuais em celular pequeno |
+| `integration_test/database_integration_test.dart` | 157 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -109,7 +155,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 250 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 265 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -138,6 +184,7 @@ lib/
 │   ├── auth_service.dart        # Configuração inicial, login, cadastro, recuperação de senha, sessão, perfil e permissões
 │   ├── senhas.dart              # Hash PBKDF2 com salt individual
 │   ├── sms.dart                 # Envio de SMS da recuperação de senha (simulado)
+│   ├── email.dart               # Envio do código por e-mail: EmailJS ou simulado
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
@@ -160,9 +207,11 @@ lib/
   única transação: ou tudo é gravado, ou nada é. O saldo de pontos é movido com
   `UPDATE ... SET pontos = pontos + ?`, sem ler-somar-gravar.
 - **Serialização toMap/fromMap** — converte entidades ↔ linhas do SQLite.
-- **Interface para o SMS** — `EnvioSms` separa o envio do resto do app.
-  Hoje a implementação é simulada (`SmsSimulado`); um provedor real entra
-  implementando a interface, sem mudar as telas nem o banco.
+- **Interfaces para o SMS e o e-mail** — `EnvioSms` e `EnvioEmail` separam o
+  envio do resto do app. O SMS é simulado (`SmsSimulado`); o e-mail sai pelo
+  EmailJS (`EmailJs`) quando o build traz a chave, ou é simulado
+  (`EmailSimulado`). Um provedor novo entra implementando a interface, sem
+  mudar as telas nem o banco.
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes.
@@ -275,23 +324,29 @@ v2):
     `barbeiro123`) e 5 serviços, o que o banco só aceita numa barbearia vazia.
     Não há como promover outro cliente a administrador.
 16. Quem esqueceu a senha cria uma nova sem saber a atual, de dois jeitos:
-    - **por SMS:** em "Esqueci minha senha", no login, a pessoa digita o
-      e-mail e o celular da conta (de cliente, do administrador ou de
-      barbeiro). Se os dois forem da mesma conta, o app envia por SMS um
-      código de 6 dígitos, que vale por 10 minutos; com ele, a pessoa cria
-      a senha nova e já entra. Um novo SMS só sai depois de 1 minuto. O
-      envio é simulado, como o Pix e o cartão: a mensagem aparece na tela
-      como "SMS simulado";
+    - **por e-mail ou SMS:** em "Esqueci minha senha", no login, a pessoa
+      digita o e-mail da conta (de cliente, do administrador ou de barbeiro)
+      e escolhe como receber um código de 6 dígitos, que vale por 10
+      minutos. **Por e-mail**, o código vai para esse mesmo e-mail. **Por
+      SMS**, ela digita também o celular, e o código só sai se os dois forem
+      da mesma conta. Com o código, a pessoa cria a senha nova e já entra.
+      Um novo envio, por qualquer dos dois canais, só sai depois de 1
+      minuto. O e-mail é enviado de verdade pelo EmailJS quando o build está
+      configurado (veja
+      [Recuperação de senha por e-mail](#recuperação-de-senha-por-e-mail-emailjs));
+      sem isso, ele é simulado. O SMS é sempre simulado, como o Pix e o
+      cartão. Simulados, o e-mail e o SMS aparecem na própria tela;
     - **pela barbearia:** o cliente pede no balcão, e o administrador, no
       detalhe do cliente em Gerenciar Clientes, libera um código provisório,
       que vale por 24 horas. O cliente entra com o e-mail e esse código no
       lugar da senha e é obrigado a criar uma senha nova antes de usar o
-      app; o administrador não fica sabendo dela. O código do SMS não serve
-      para entrar pelo login.
+      app; o administrador não fica sabendo dela. Os códigos do e-mail e do
+      SMS não servem para entrar pelo login.
 
-    Os dois códigos valem uma vez só e são cancelados depois de 5 tentativas
-    erradas. Cada conta tem no máximo um código valendo: um novo substitui o
-    anterior. O banco confere tudo isso. O barbeiro também pode receber uma
+    Os códigos valem uma vez só e são cancelados depois de 5 tentativas
+    erradas. Cada conta tem no máximo um código valendo: um novo, de
+    qualquer canal, substitui o anterior. Se o e-mail não sai (sem internet,
+    por exemplo), o código é descartado. O banco confere tudo isso. O barbeiro também pode receber uma
     senha nova do administrador, em Gerenciar Barbeiros.
 
 ---
@@ -311,9 +366,13 @@ v2):
 - **Recuperação de senha:** os códigos saem de um gerador próprio para
   segredos (`Random.secure`) e são guardados só como hash PBKDF2, como as
   senhas. Valem por tempo limitado e uma vez só, e 5 tentativas erradas os
-  cancelam. O SMS só sai quando o e-mail e o celular são da mesma conta, e no
-  máximo um por minuto. Liberar uma nova senha confere se quem pede é o
-  administrador.
+  cancelam. O e-mail vai só para o endereço da própria conta; o SMS só sai
+  quando o e-mail e o celular são da mesma conta; e sai no máximo um código
+  por minuto. Liberar uma nova senha confere se quem pede é o administrador.
+- **EmailJS:** o app leva só a chave pública, que fica fora do Git e entra no
+  build. O texto do e-mail está no modelo da conta do EmailJS, então quem
+  extrair a chave do APK só consegue disparar esse mesmo e-mail com código,
+  até gastar a cota da conta.
 - **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
   de ser construída. Antes da configuração inicial, só a abertura e a
   configuração abrem; depois dela, a configuração não abre mais. `/admin` só abre para o administrador; o barbeiro só
@@ -335,7 +394,7 @@ v2):
 | `/` | Splash — entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
 | `/configuracao` | Configuração inicial: cria o administrador e, se marcado, os dados de exemplo | só antes de existir o administrador |
 | `/login` | Login, com "Esqueci minha senha" | todos |
-| `/recuperar-senha` | Esqueci minha senha: e-mail e celular, o SMS simulado com o código e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
+| `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
 | `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
 | `/servicos` | Catálogo de serviços | cliente |
@@ -398,7 +457,8 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
 Recuperação de senha (regra 16):
 
 ```
-Login → Esqueci minha senha → e-mail + celular → SMS simulado com o código
+Login → Esqueci minha senha → e-mail → por e-mail: código no e-mail (EmailJS)
+                                    └→ por SMS: + celular → SMS simulado
                                                        │
                                      código + senha nova → entra no app
 
@@ -422,12 +482,15 @@ Login com o e-mail e o código → Crie sua nova senha → entra no app
   fixos no código (`DatabaseService.atendeNoDia`, `turnos`, `horariosBase` e
   `diasDeAgenda`), sem feriados nem folgas configuráveis.
 - Pix, cartão e o SMS da recuperação de senha são simulados: nenhum valor é
-  cobrado de verdade e nenhuma mensagem sai do aparelho. Um SMS de verdade
+  cobrado de verdade e nenhum SMS sai do aparelho. Um SMS de verdade
   precisa de internet, de um provedor pago e de um servidor que guarde a chave
   do provedor (dentro do APK, ela poderia ser extraída).
-- O celular não é confirmado no cadastro: o código vai para o número que a
-  pessoa informou, mesmo errado. Nesse caso, o administrador libera uma nova
-  senha para o cliente, ou define uma para o barbeiro.
+- O e-mail da recuperação depende da conta do EmailJS: o plano grátis tem uma
+  cota mensal de envios, e a chave pública vai dentro do APK. Com um servidor
+  central, o envio sairia dele.
+- O celular e o e-mail não são confirmados no cadastro: o código vai para o
+  que a pessoa informou, mesmo errado. Nesse caso, o administrador libera uma
+  nova senha para o cliente, ou define uma para o barbeiro.
 - Não há troca de e-mail nem exclusão de conta pelo próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).

@@ -222,6 +222,12 @@ void main() {
       expect(lido.tentativas, 3);
     });
 
+    test('a origem e-mail também vai e volta pelo banco', () {
+      expect(OrigemCodigo.email.dbValue, 'email');
+      expect(OrigemCodigoX.fromDb('email'), OrigemCodigo.email);
+      expect(OrigemCodigoX.fromDb('sms'), OrigemCodigo.sms);
+    });
+
     test('vence exatamente no fim da validade', () {
       expect(codigo.vencido(DateTime(2030, 3, 5, 9, 59)), isFalse);
       expect(codigo.vencido(DateTime(2030, 3, 5, 10)), isTrue);

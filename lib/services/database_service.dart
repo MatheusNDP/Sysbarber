@@ -43,9 +43,9 @@ class DatabaseService {
   /// Antecedência mínima para cancelar sem multa (regra de negócio 7).
   static const Duration prazoCancelamento = Duration(hours: 1);
 
-  /// Validade do código enviado por SMS em "Esqueci minha senha" (regra de
-  /// negócio 16).
-  static const Duration validadeCodigoSms = Duration(minutes: 10);
+  /// Validade do código enviado por SMS ou e-mail em "Esqueci minha senha"
+  /// (regra de negócio 16).
+  static const Duration validadeCodigoEnviado = Duration(minutes: 10);
 
   /// Validade do código provisório que o administrador libera no balcão.
   static const Duration validadeCodigoBarbearia = Duration(hours: 24);
@@ -53,8 +53,9 @@ class DatabaseService {
   /// Tentativas erradas que cancelam o código.
   static const int tentativasCodigo = 5;
 
-  /// Espera mínima entre dois SMS para a mesma conta.
-  static const Duration intervaloEntreSms = Duration(minutes: 1);
+  /// Espera mínima entre dois envios de código (SMS ou e-mail) para a mesma
+  /// conta.
+  static const Duration intervaloEntreEnvios = Duration(minutes: 1);
 
   /// Percentual do serviço cobrado em cancelamentos fora do prazo.
   static const double percentualMulta = 0.5;
@@ -838,19 +839,18 @@ class DatabaseService {
   // RECUPERAÇÃO DE SENHA
   // -------------------------------------------------------------------------
 
-  /// Gera o código de "Esqueci minha senha" (regra de negócio 16).
+  /// Gera o código de "Esqueci minha senha" enviado por SMS (regra de
+  /// negócio 16).
   ///
   /// Só gera se [email] e [telefone] forem da mesma conta, de cliente
   /// (inclusive o administrador) ou de barbeiro. Devolve o código em texto,
   /// para ser enviado por SMS, e o celular cadastrado; no banco fica só o
-  /// hash. Um código novo substitui o anterior, mas só depois de
-  /// [intervaloEntreSms].
+  /// hash.
   Future<({String codigo, String telefone})> gerarCodigoPorSms({
     required String email,
     required String telefone,
     DateTime? agora,
   }) async {
-    final referencia = agora ?? DateTime.now();
     final db = await database;
     final conta = await _contaPorEmail(db, email);
     if (conta == null || !_mesmoTelefone(conta.telefone, telefone)) {
@@ -858,15 +858,77 @@ class DatabaseService {
         'E-mail e celular não conferem com nenhuma conta',
       );
     }
+    final codigo = await _gerarCodigoEnviado(
+      conta,
+      OrigemCodigo.sms,
+      agora ?? DateTime.now(),
+    );
+    return (codigo: codigo, telefone: conta.telefone);
+  }
 
+  /// Gera o código de "Esqueci minha senha" enviado por e-mail (regra de
+  /// negócio 16).
+  ///
+  /// Basta o [email] ser de uma conta: o código vai para esse mesmo e-mail,
+  /// e só quem abre a caixa de entrada o recebe. Devolve o código em texto,
+  /// o nome da conta (para o e-mail cumprimentar) e o e-mail normalizado.
+  Future<({String codigo, String nome, String email})> gerarCodigoPorEmail({
+    required String email,
+    DateTime? agora,
+  }) async {
+    final db = await database;
+    final conta = await _contaPorEmail(db, email);
+    if (conta == null) {
+      throw const RegraNegocioException(
+        'Este e-mail não pertence a nenhuma conta',
+      );
+    }
+    final codigo = await _gerarCodigoEnviado(
+      conta,
+      OrigemCodigo.email,
+      agora ?? DateTime.now(),
+    );
+    return (
+      codigo: codigo,
+      nome: conta.nome,
+      email: email.trim().toLowerCase(),
+    );
+  }
+
+  /// Apaga o código de [origem] da conta do [email]. Usado quando o envio
+  /// falha: um código que não chegou a ninguém não pode valer, nem segurar o
+  /// intervalo de [intervaloEntreEnvios].
+  Future<void> descartarCodigo({
+    required String email,
+    required OrigemCodigo origem,
+  }) async {
+    final db = await database;
+    final conta = await _contaPorEmail(db, email);
+    if (conta == null) return;
+    await db.delete(
+      'codigo_senha',
+      where: 'id_${conta.tabela} = ? AND origem = ?',
+      whereArgs: [conta.id, origem.dbValue],
+    );
+  }
+
+  /// Grava um código que será enviado por SMS ou e-mail, substituindo o
+  /// anterior da conta, mas só depois de [intervaloEntreEnvios] desde o
+  /// último envio (o código liberado pela barbearia não conta).
+  Future<String> _gerarCodigoEnviado(
+    _Conta conta,
+    OrigemCodigo origem,
+    DateTime agora,
+  ) async {
     final codigo = _novoCodigo();
     final hash = await Senhas.gerarHashEmSegundoPlano(codigo);
+    final db = await database;
     await db.transaction((txn) async {
       final anterior = await _codigoDaConta(txn, conta);
       if (anterior != null &&
-          anterior.origem == OrigemCodigo.sms &&
-          referencia.difference(DateTime.parse(anterior.criadoEm)) <
-              intervaloEntreSms) {
+          anterior.origem != OrigemCodigo.barbearia &&
+          agora.difference(DateTime.parse(anterior.criadoEm)) <
+              intervaloEntreEnvios) {
         throw const RegraNegocioException(
           'Aguarde 1 minuto para pedir outro código',
         );
@@ -874,13 +936,13 @@ class DatabaseService {
       await _gravarCodigo(
         txn,
         conta,
-        OrigemCodigo.sms,
+        origem,
         hash,
-        referencia,
-        validadeCodigoSms,
+        agora,
+        validadeCodigoEnviado,
       );
     });
-    return (codigo: codigo, telefone: conta.telefone);
+    return codigo;
   }
 
   /// Libera um código provisório para o cliente [idCliente] (regra de
@@ -898,7 +960,12 @@ class DatabaseService {
     final codigo = _novoCodigo();
     await _gravarCodigo(
       await database,
-      (tabela: 'cliente', id: idCliente, telefone: cliente.telefone),
+      (
+        tabela: 'cliente',
+        id: idCliente,
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+      ),
       OrigemCodigo.barbearia,
       await Senhas.gerarHashEmSegundoPlano(codigo),
       agora ?? DateTime.now(),
@@ -1035,7 +1102,7 @@ class DatabaseService {
     for (final tabela in const ['cliente', 'barbeiro']) {
       final linhas = await db.query(
         tabela,
-        columns: ['id', 'telefone'],
+        columns: ['id', 'nome', 'telefone'],
         where: 'email = ?',
         whereArgs: [normalizado],
         limit: 1,
@@ -1044,6 +1111,7 @@ class DatabaseService {
         return (
           tabela: tabela,
           id: linhas.first['id'] as int,
+          nome: linhas.first['nome'] as String,
           telefone: linhas.first['telefone'] as String,
         );
       }
@@ -2623,4 +2691,4 @@ typedef _Intervalo = ({DateTime inicio, DateTime fim});
 
 /// Dona de um código para criar uma senha nova: um cliente ou um barbeiro.
 /// [tabela] é `cliente` ou `barbeiro`.
-typedef _Conta = ({String tabela, int id, String telefone});
+typedef _Conta = ({String tabela, int id, String nome, String telefone});

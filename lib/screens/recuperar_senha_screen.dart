@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/email.dart';
 import '../services/formatters.dart';
 import '../services/sms.dart';
 import '../theme/app_theme.dart';
@@ -10,8 +11,9 @@ import '../widgets/common_widgets.dart';
 
 /// "Esqueci minha senha" (`/recuperar-senha`, regra de negócio 16).
 ///
-/// Em duas etapas: a pessoa informa o e-mail e o celular da conta e recebe
-/// um código por SMS (simulado); com ele, cria uma senha nova e já entra.
+/// Em duas etapas: a pessoa informa o e-mail da conta e recebe um código por
+/// e-mail ou por SMS (para o SMS, informa também o celular); com ele, cria
+/// uma senha nova e já entra.
 ///
 /// Com [codigoDaBarbearia], a tela abre direto na criação da senha: é quem
 /// entrou no login com o código provisório liberado pelo administrador.
@@ -28,6 +30,9 @@ class RecuperarSenhaScreen extends StatefulWidget {
   State<RecuperarSenhaScreen> createState() => _RecuperarSenhaScreenState();
 }
 
+/// Por onde o código é enviado.
+enum _Canal { email, sms }
+
 class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
   final _emailCtrl = TextEditingController();
   final _telefoneCtrl = TextEditingController();
@@ -36,10 +41,11 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
   final _confirmacaoCtrl = TextEditingController();
   bool _ocultarSenha = true;
   bool _carregando = false;
+  _Canal _canal = _Canal.email;
 
-  /// Celular para onde o código foi enviado; preenchido, a tela passa para a
-  /// segunda etapa.
-  String? _telefoneEnviado;
+  /// E-mail ou celular para onde o código foi enviado; preenchido, a tela
+  /// passa para a segunda etapa.
+  String? _destino;
 
   bool get _comCodigoDaBarbearia => widget.codigoDaBarbearia != null;
 
@@ -55,19 +61,35 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
 
   Future<void> _enviarCodigo() async {
     setState(() => _carregando = true);
-    final r = await AuthService.instance.pedirCodigoPorSms(
-      email: _emailCtrl.text,
-      telefone: _telefoneCtrl.text,
-    );
+    final auth = AuthService.instance;
+    String? destino;
+    String? erro;
+    if (_canal == _Canal.email) {
+      final r = await auth.pedirCodigoPorEmail(email: _emailCtrl.text);
+      destino = r.email;
+      erro = r.erro;
+    } else {
+      final r = await auth.pedirCodigoPorSms(
+        email: _emailCtrl.text,
+        telefone: _telefoneCtrl.text,
+      );
+      destino = r.telefone;
+      erro = r.erro;
+    }
     if (!mounted) return;
     setState(() {
       _carregando = false;
-      if (r.sucesso) _telefoneEnviado = r.telefone;
+      if (destino != null) _destino = destino;
     });
-    if (r.sucesso) {
-      mostrarSucesso(context, 'Código enviado por SMS');
+    if (destino != null) {
+      mostrarSucesso(
+        context,
+        _canal == _Canal.email
+            ? 'Código enviado por e-mail'
+            : 'Código enviado por SMS',
+      );
     } else {
-      mostrarErro(context, r.erro ?? 'Não foi possível enviar o código');
+      mostrarErro(context, erro ?? 'Não foi possível enviar o código');
     }
   }
 
@@ -98,7 +120,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final criandoSenha = _comCodigoDaBarbearia || _telefoneEnviado != null;
+    final criandoSenha = _comCodigoDaBarbearia || _destino != null;
 
     return Scaffold(
       appBar: BarberAppBar(
@@ -125,8 +147,8 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
     return [
       ..._cabecalho(
         'Esqueceu a senha?',
-        'Digite o e-mail e o celular da sua conta. Vamos enviar um código '
-            'por SMS para você criar uma senha nova.',
+        'Digite o e-mail da sua conta e escolha como receber o código para '
+            'criar uma senha nova.',
       ),
       _campo(
         rotulo: 'E-mail',
@@ -135,14 +157,25 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
         icone: Icons.mail_outline,
         tipo: TextInputType.emailAddress,
       ),
-      _campo(
-        rotulo: 'Celular cadastrado',
-        controller: _telefoneCtrl,
-        hint: '(67) 99999-0000',
-        icone: Icons.phone_outlined,
-        tipo: TextInputType.phone,
-        formatters: [TelefoneInputFormatter()],
+      const SectionLabel('Receber o código'),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          _opcaoCanal(_Canal.email, Icons.mail_outline, 'Por e-mail'),
+          const SizedBox(width: 12),
+          _opcaoCanal(_Canal.sms, Icons.sms_outlined, 'Por SMS'),
+        ],
       ),
+      const SizedBox(height: 18),
+      if (_canal == _Canal.sms)
+        _campo(
+          rotulo: 'Celular cadastrado',
+          controller: _telefoneCtrl,
+          hint: '(67) 99999-0000',
+          icone: Icons.phone_outlined,
+          tipo: TextInputType.phone,
+          formatters: [TelefoneInputFormatter()],
+        ),
       const SizedBox(height: 8),
       GoldButton(
         texto: _carregando ? 'ENVIANDO...' : 'ENVIAR CÓDIGO',
@@ -158,8 +191,56 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
     ];
   }
 
+  Widget _opcaoCanal(_Canal canal, IconData icone, String rotulo) {
+    final selecionado = _canal == canal;
+    final cor = selecionado ? AppColors.gold : AppColors.muted;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selecionado,
+        child: GoldCard(
+          selected: selecionado,
+          onTap: () => setState(() => _canal = canal),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icone, size: 20, color: cor),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  rotulo,
+                  style: AppTheme.sans(
+                    size: 14,
+                    weight: FontWeight.w700,
+                    color: selecionado ? AppColors.gold : AppColors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Para onde o código foi e quanto tempo ele vale.
+  String _textoDoEnvio() {
+    final minutos = DatabaseService.validadeCodigoEnviado.inMinutes;
+    if (_canal == _Canal.sms) {
+      return 'Enviamos um código por SMS para '
+          '${mascararTelefone(_destino ?? '')}. Ele vale por $minutos minutos.';
+    }
+    final spam = AuthService.instance.emailSimulado
+        ? ''
+        : ' Se não encontrar o e-mail, confira a caixa de spam.';
+    return 'Enviamos um código por e-mail para '
+        '${mascararEmail(_destino ?? '')}. Ele vale por $minutos minutos.$spam';
+  }
+
   List<Widget> _etapaNovaSenha() {
-    final telefone = _telefoneEnviado;
+    final porEmail = _canal == _Canal.email;
+    final simulado = !porEmail || AuthService.instance.emailSimulado;
     return [
       if (_comCodigoDaBarbearia)
         ..._cabecalho(
@@ -168,19 +249,16 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
               'crie uma senha só sua.',
         )
       else ...[
-        const _SmsSimuladoCard(),
-        const SizedBox(height: 24),
-        ..._cabecalho(
-          'Digite o código',
-          'Enviamos um código por SMS para '
-              '${mascararTelefone(telefone ?? '')}. Ele vale por '
-              '${DatabaseService.validadeCodigoSms.inMinutes} minutos.',
-        ),
+        if (simulado) ...[
+          porEmail ? const _EmailSimuladoCard() : const _SmsSimuladoCard(),
+          const SizedBox(height: 24),
+        ],
+        ..._cabecalho('Digite o código', _textoDoEnvio()),
         _campo(
-          rotulo: 'Código do SMS',
+          rotulo: porEmail ? 'Código do e-mail' : 'Código do SMS',
           controller: _codigoCtrl,
           hint: '000000',
-          icone: Icons.sms_outlined,
+          icone: porEmail ? Icons.mail_outline : Icons.sms_outlined,
           tipo: TextInputType.number,
           formatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -317,6 +395,55 @@ class _SmsSimuladoCard extends StatelessWidget {
               Text(
                 'O app não envia SMS de verdade: a mensagem aparece aqui, '
                 'como acontece com o Pix e o cartão.',
+                style: AppTheme.sans(size: 11, color: AppColors.muted),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// O e-mail que chegaria na caixa de entrada, mostrado na tela quando o
+/// envio é simulado (ver [EmailSimulado]).
+class _EmailSimuladoCard extends StatelessWidget {
+  const _EmailSimuladoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<EmailEnviado?>(
+      valueListenable: EmailSimulado.instance.ultimo,
+      builder: (_, email, __) {
+        if (email == null) return const SizedBox.shrink();
+        return GoldCard(
+          cor: AppColors.card2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const GoldBadge(texto: 'E-MAIL SIMULADO'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'para ${mascararEmail(email.email)}',
+                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                email.assunto,
+                style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(email.texto, style: AppTheme.sans(size: 14)),
+              const SizedBox(height: 12),
+              Text(
+                'Este aparelho não está configurado para enviar e-mails: a '
+                'mensagem aparece aqui, como acontece com o SMS.',
                 style: AppTheme.sans(size: 11, color: AppColors.muted),
               ),
             ],

@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Só para enviar o e-mail da recuperação de senha pelo EmailJS. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="sysbarber"
         android:name="${applicationName}"
