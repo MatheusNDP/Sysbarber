@@ -78,31 +78,26 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Excluir serviço?', style: AppTheme.serif(size: 18)),
+        title: Text('Excluir serviço?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '"${s.nome}" será removido permanentemente.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Cancelar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'EXCLUIR',
-              style: AppTheme.sans(
+              'Excluir',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.red,
               ),
             ),
@@ -128,28 +123,28 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: BarberAppBar(
-        titulo: 'SERVIÇOS',
+        titulo: 'Serviços',
         acoes: [
-          IconButton(
-            tooltip: 'Novo serviço',
-            icon: const Icon(Icons.add, color: AppColors.gold),
+          BotaoVidro(
+            icone: Icons.add_rounded,
+            dica: 'Novo serviço',
+            corIcone: AppColors.amarelo,
             onPressed: () => _abrirFormulario(),
           ),
         ],
       ),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : _servicos.isEmpty
                 ? const EstadoVazio(
-                    icone: '💈',
+                    icone: Icons.content_cut_rounded,
                     titulo: 'Nenhum serviço',
                     descricao: 'Use o botão + para cadastrar o primeiro.',
                   )
@@ -162,11 +157,14 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) {
                       final s = _servicos[i];
-                      return GoldCard(
+                      return Cartao(
                         onTap: () => _abrirFormulario(servico: s),
                         child: Row(
                           children: [
-                            Text(s.icone, style: const TextStyle(fontSize: 26)),
+                            IconeCirculo(
+                              icone: iconeDoServico(s.icone),
+                              tamanho: 44,
+                            ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
@@ -174,16 +172,16 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                                 children: [
                                   Text(
                                     s.nome,
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 14,
-                                      weight: FontWeight.w700,
+                                      weight: FontWeight.w600,
                                     ),
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
                                     '${formatarReal(s.preco)}  ·  '
                                     '${s.duracaoMinutos} min',
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 12,
                                       color: AppColors.muted,
                                     ),
@@ -194,7 +192,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                             IconButton(
                               tooltip: 'Excluir',
                               icon: const Icon(
-                                Icons.delete_outline,
+                                Icons.delete_outline_rounded,
                                 color: AppColors.red,
                                 size: 20,
                               ),
@@ -227,7 +225,9 @@ class _FormularioServicoState extends State<_FormularioServico> {
   late final TextEditingController _descricao;
   late final TextEditingController _preco;
   late final TextEditingController _duracao;
-  late final TextEditingController _icone;
+
+  /// Valor gravado na coluna `icone` (veja [iconesDeServico]).
+  late String _icone;
 
   bool _salvando = false;
 
@@ -245,7 +245,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
     _duracao = TextEditingController(
       text: s == null ? '' : '${s.duracaoMinutos}',
     );
-    _icone = TextEditingController(text: s?.icone ?? '💈');
+    _icone = s?.icone ?? iconesDeServico.first.$1;
   }
 
   @override
@@ -254,7 +254,6 @@ class _FormularioServicoState extends State<_FormularioServico> {
     _descricao.dispose();
     _preco.dispose();
     _duracao.dispose();
-    _icone.dispose();
     super.dispose();
   }
 
@@ -263,7 +262,6 @@ class _FormularioServicoState extends State<_FormularioServico> {
     final descricao = _descricao.text.trim();
     final preco = moedaParaDouble(_preco.text);
     final duracao = int.tryParse(somenteDigitos(_duracao.text)) ?? 0;
-    final icone = _icone.text.trim().isEmpty ? '💈' : _icone.text.trim();
 
     if (nome.length < 3) {
       mostrarErro(context, 'Nome deve ter pelo menos 3 caracteres');
@@ -292,7 +290,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
         descricao: descricao,
         preco: preco,
         duracaoMinutos: duracao,
-        icone: icone,
+        icone: _icone,
       );
 
       if (_editando) {
@@ -317,14 +315,9 @@ class _FormularioServicoState extends State<_FormularioServico> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.border),
-      ),
       title: Text(
         _editando ? 'Editar serviço' : 'Novo serviço',
-        style: AppTheme.serif(size: 18),
+        style: AppTheme.titulo(size: 18),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -338,8 +331,18 @@ class _FormularioServicoState extends State<_FormularioServico> {
               teclado: TextInputType.number,
               formatters: [MoedaInputFormatter()],
             ),
-            _campo(_duracao, 'Duração (minutos)', teclado: TextInputType.number),
-            _campo(_icone, 'Ícone (emoji)'),
+            _campo(
+              _duracao,
+              'Duração (minutos)',
+              teclado: TextInputType.number,
+            ),
+            const SizedBox(height: 4),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: RotuloCampo('Ícone'),
+            ),
+            const SizedBox(height: 10),
+            _escolhaDeIcone(),
           ],
         ),
       ),
@@ -347,21 +350,66 @@ class _FormularioServicoState extends State<_FormularioServico> {
         TextButton(
           onPressed: _salvando ? null : () => Navigator.of(context).pop(false),
           child: Text(
-            'CANCELAR',
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            'Cancelar',
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
         TextButton(
           onPressed: _salvando ? null : _salvar,
           child: Text(
-            _salvando ? 'SALVANDO...' : 'SALVAR',
-            style: AppTheme.sans(
+            _salvando ? 'Salvando...' : 'Salvar',
+            style: AppTheme.texto(
               size: 13,
-              weight: FontWeight.w700,
-              color: AppColors.gold,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  /// Os ícones de [iconesDeServico], com o escolhido em amarelo.
+  Widget _escolhaDeIcone() {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 10,
+      children: [
+        for (final (valor, icone, nome) in iconesDeServico)
+          Semantics(
+            button: true,
+            selected: valor == _icone,
+            label: 'Ícone $nome',
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: () => setState(() => _icone = valor),
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 64,
+                child: Column(
+                  children: [
+                    IconeCirculo(
+                      icone: icone,
+                      tamanho: 44,
+                      destaque: valor == _icone,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      nome,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.texto(
+                        size: 10,
+                        color: valor == _icone
+                            ? AppColors.text
+                            : AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -382,7 +430,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
             ? TextCapitalization.sentences
             : TextCapitalization.none,
         inputFormatters: formatters?.cast(),
-        style: AppTheme.sans(size: 14),
+        style: AppTheme.texto(size: 14),
         decoration: InputDecoration(labelText: rotulo),
       ),
     );

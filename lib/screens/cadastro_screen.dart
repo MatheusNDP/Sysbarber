@@ -55,10 +55,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'CRIAR CONTA'),
+      appBar: const BarberAppBar(titulo: 'Criar conta'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -68,13 +67,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   Text(
                     'Bem-vindo à barbearia',
                     textAlign: TextAlign.center,
-                    style: AppTheme.serif(size: 22),
+                    style: AppTheme.titulo(size: 22),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Preencha seus dados para começar',
                     textAlign: TextAlign.center,
-                    style: AppTheme.sans(size: 13, color: AppColors.muted),
+                    style: AppTheme.texto(size: 13, color: AppColors.muted),
                   ),
                   const SizedBox(height: 28),
                   _campo(
@@ -106,7 +105,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     icone: Icons.lock_outline,
                     obscuro: _ocultarSenha,
                     sufixo: IconButton(
-                      tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                      tooltip: _ocultarSenha
+                          ? 'Mostrar senha'
+                          : 'Ocultar senha',
                       icon: Icon(
                         _ocultarSenha
                             ? Icons.visibility_outlined
@@ -119,8 +120,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  GoldButton(
-                    texto: _carregando ? 'CADASTRANDO...' : 'CADASTRAR',
+                  BotaoPrincipal(
+                    texto: _carregando ? 'Cadastrando...' : 'Cadastrar',
                     onPressed: _carregando ? null : _cadastrar,
                   ),
                   const SizedBox(height: 20),
@@ -129,7 +130,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     children: [
                       Text(
                         'Já tem conta? ',
-                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                        style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
                       // Botão de verdade (foco, leitor de tela e área de toque),
                       // e não um texto com GestureDetector.
@@ -141,10 +142,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         ),
                         child: Text(
                           'Entrar',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 13,
-                            weight: FontWeight.w700,
-                            color: AppColors.gold,
+                            weight: FontWeight.w600,
+                            color: AppColors.amarelo,
                           ),
                         ),
                       ),
@@ -174,7 +175,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(rotulo),
+          RotuloCampo(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -182,7 +183,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
             obscureText: obscuro,
             inputFormatters: formatters,
             autocorrect: false,
-            style: AppTheme.sans(size: 14),
+            style: AppTheme.texto(size: 14),
             decoration: InputDecoration(
               hintText: hint,
               prefixIcon: Icon(icone, color: AppColors.muted, size: 20),

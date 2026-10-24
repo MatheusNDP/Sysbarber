@@ -6,8 +6,13 @@ import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'agendamentos_screen.dart';
+import 'perfil_screen.dart';
+import 'servicos_screen.dart';
 
-/// Tela principal (`/home`).
+/// Área principal (`/home`): as abas Início, Serviços, Agenda e Perfil, com a
+/// barra de navegação fixa embaixo. Trocar de aba não abre uma tela nova:
+/// a barra continua no lugar e marca a aba atual.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,6 +21,90 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _aba = NavegacaoPrincipal.abaInicio;
+
+  /// 1 quando a aba nova fica à direita da anterior na barra, -1 quando
+  /// fica à esquerda: a aba nova entra por esse lado.
+  int _sentido = 1;
+
+  void _irParaAba(int aba) {
+    if (aba == _aba) return;
+    setState(() {
+      _sentido = aba > _aba ? 1 : -1;
+      _aba = aba;
+    });
+  }
+
+  /// A aba nova entra deslizando do lado da opção tocada e a anterior sai
+  /// pelo outro lado, as duas esmaecendo. A que sai não recebe mais toques.
+  Widget _transicao(Widget aba, Animation<double> animacao) {
+    final entrando = aba.key == ValueKey(_aba);
+    final inicio = Offset(0.12 * _sentido * (entrando ? 1 : -1), 0);
+    return FadeTransition(
+      opacity: animacao,
+      child: SlideTransition(
+        position: Tween(begin: inicio, end: Offset.zero).animate(animacao),
+        child: IgnorePointer(ignoring: !entrando, child: aba),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A aba é montada de novo a cada troca e relê o banco: o que mudou em
+    // outra aba (um cancelamento, por exemplo) já aparece.
+    final aba = switch (_aba) {
+      NavegacaoPrincipal.abaServicos => const ServicosScreen(),
+      NavegacaoPrincipal.abaAgenda => const AgendamentosScreen(),
+      NavegacaoPrincipal.abaPerfil => const PerfilScreen(),
+      _ => const _Inicio(),
+    };
+
+    return PopScope(
+      // O voltar do Android, fora do Início, volta para o Início.
+      canPop: _aba == NavegacaoPrincipal.abaInicio,
+      onPopInvokedWithResult: (saiu, _) {
+        if (!saiu) _irParaAba(NavegacaoPrincipal.abaInicio);
+      },
+      child: NavegacaoPrincipal(
+        irParaAba: _irParaAba,
+        child: Scaffold(
+          // O conteúdo passa por trás da barra de navegação translúcida.
+          extendBody: true,
+          body: AnimatedSwitcher(
+            duration: BarraNavegacao.duracao,
+            switchInCurve: BarraNavegacao.curva,
+            switchOutCurve: BarraNavegacao.curva,
+            // Uma função nova a cada troca faz a aba que sai também usar o
+            // sentido atual (o AnimatedSwitcher refaz as transições).
+            transitionBuilder: (aba, animacao) => _transicao(aba, animacao),
+            child: KeyedSubtree(key: ValueKey(_aba), child: aba),
+          ),
+          bottomNavigationBar: BarraNavegacao(
+            atual: _aba,
+            onTap: _irParaAba,
+            itens: const [
+              (Icons.home_rounded, 'Início'),
+              (Icons.content_cut_rounded, 'Serviços'),
+              (Icons.calendar_month_outlined, 'Agenda'),
+              (Icons.person_outline_rounded, 'Perfil'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Aba Início: próximo horário, pontos e acesso rápido.
+class _Inicio extends StatefulWidget {
+  const _Inicio();
+
+  @override
+  State<_Inicio> createState() => _InicioState();
+}
+
+class _InicioState extends State<_Inicio> {
   final _db = DatabaseService.instance;
 
   Agendamento? _proximo;
@@ -79,21 +168,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _carregarDados();
   }
 
-  void _aoTocarNavegacao(int indice) {
-    switch (indice) {
-      case 1:
-        _irPara('/servicos');
-        break;
-      case 2:
-        _irPara('/agendamentos');
-        break;
-      case 3:
-        _irPara('/perfil');
-        break;
-      default:
-        _carregarDados();
-    }
-  }
+  /// Troca para outra aba da navegação principal.
+  void _irParaAba(int aba, String rota) =>
+      NavegacaoPrincipal.abrir(context, aba, rota);
 
   @override
   Widget build(BuildContext context) {
@@ -101,23 +178,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
-          color: AppColors.gold,
+          color: AppColors.amarelo,
           backgroundColor: AppColors.card,
           onRefresh: _carregarDados,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            // Embaixo, o espaço da barra de navegação, que fica por cima.
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              20 + MediaQuery.paddingOf(context).bottom,
+            ),
             children: [
               _saudacao(usuario),
-              const SizedBox(height: 20),
-              const GoldDivider(),
               const SizedBox(height: 24),
               if (_carregando)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   ),
                 )
               else if (_erro != null)
@@ -127,148 +209,185 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 _cardFidelidade(),
                 const SizedBox(height: 28),
-                const SectionLabel('Acesso rápido'),
-                const SizedBox(height: 12),
-                _gridAcessoRapido(),
+                const TituloSecao('Acesso rápido'),
+                const SizedBox(height: 14),
+                _atalhos(),
               ],
-              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _navegacao(),
     );
   }
 
   Widget _saudacao(Cliente? usuario) {
     return Row(
       children: [
+        Semantics(
+          button: true,
+          label: 'Abrir perfil',
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
+            child: AvatarIniciais(
+              texto: usuario?.iniciais ?? '?',
+              tamanho: 52,
+              large: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Olá, bem-vindo 👋',
-                style: AppTheme.sans(size: 13, color: AppColors.muted),
+                'Olá, bem-vindo',
+                style: AppTheme.texto(size: 13, color: AppColors.muted),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 usuario?.nome ?? 'Visitante',
-                style: AppTheme.serif(size: 24),
+                style: AppTheme.titulo(size: 20),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-        Semantics(
-          button: true,
-          label: 'Abrir perfil',
-          excludeSemantics: true,
-          child: GestureDetector(
-            onTap: () => _irPara('/perfil'),
-            child: GoldAvatar(
-              texto: usuario?.iniciais ?? '?',
-              tamanho: 48,
-              large: true,
-            ),
-          ),
-        ),
       ],
     );
   }
 
+  /// Cartão amarelo de destaque: o próximo horário ou o convite para agendar.
   Widget _cardProximoHorario() {
     final proximo = _proximo;
-    if (proximo == null) {
-      return GoldCard(
-        onTap: () => _irPara('/servicos'),
-        child: Row(
-          children: [
-            const Text('📅', style: TextStyle(fontSize: 28)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nenhum horário marcado',
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Toque para agendar seu próximo corte',
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.gold),
-          ],
-        ),
-      );
-    }
+    final textoEscuro = Colors.black.withValues(alpha: 0.7);
 
-    return GoldCard(
-      selected: true,
-      onTap: () => _irPara('/agendamentos'),
-      child: Column(
+    final Widget conteudo;
+    if (proximo == null) {
+      conteudo = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionLabel('Próximo horário'),
-          const SizedBox(height: 12),
+          Text(
+            'Nenhum horário marcado',
+            style: AppTheme.titulo(size: 20, color: Colors.black),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Toque para agendar seu próximo corte',
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          const SizedBox(height: 18),
+          _pilulaEscura('Agendar', Icons.arrow_forward_rounded),
+        ],
+      );
+    } else {
+      conteudo = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
-              Text(
-                proximo.servico?.icone ?? '💈',
-                style: const TextStyle(fontSize: 30),
-              ),
-              const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      proximo.servico?.nome ?? 'Serviço',
-                      style: AppTheme.serif(size: 17),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      formatarDataExtenso(proximo.data),
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'com ${proximo.barbeiro?.nome ?? ''}',
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
-                    ),
-                  ],
+                child: Text(
+                  'Próximo horário',
+                  style: AppTheme.texto(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: textoEscuro,
+                  ),
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatarHora(proximo.data),
-                    style: AppTheme.serif(size: 20, color: AppColors.gold),
-                  ),
-                  const SizedBox(height: 4),
-                  const GoldBadge(texto: 'Confirmado', cor: AppColors.green),
-                ],
+              Text(
+                formatarHora(proximo.data),
+                style: AppTheme.titulo(size: 26, color: Colors.black),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            proximo.servico?.nome ?? 'Serviço',
+            style: AppTheme.titulo(size: 20, color: Colors.black),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            formatarDataExtenso(proximo.data),
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          Text(
+            'com ${proximo.barbeiro?.nome ?? ''}',
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          const SizedBox(height: 18),
+          _pilulaEscura('Confirmado', Icons.check_rounded),
+        ],
+      );
+    }
+
+    return Material(
+      color: AppColors.amarelo,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => proximo == null
+            ? _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos')
+            : _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
+        child: Stack(
+          children: [
+            // Tesoura grande e apagada no canto, no lugar de uma foto.
+            Positioned(
+              right: -18,
+              bottom: -22,
+              child: Icon(
+                proximo == null
+                    ? Icons.content_cut_rounded
+                    : iconeDoServico(proximo.servico?.icone ?? ''),
+                size: 130,
+                color: Colors.black.withValues(alpha: 0.07),
+              ),
+            ),
+            Padding(padding: const EdgeInsets.all(20), child: conteudo),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Pílula preta dentro do cartão amarelo.
+  Widget _pilulaEscura(String texto, IconData icone) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const ShapeDecoration(
+        color: Colors.black,
+        shape: StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            texto,
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(icone, size: 16, color: AppColors.amarelo),
         ],
       ),
     );
   }
 
   Widget _cardFidelidade() {
-    return GoldCard(
+    return Cartao(
       onTap: () => _irPara('/fidelidade'),
       child: Row(
         children: [
-          const Text('⭐', style: TextStyle(fontSize: 26)),
+          const IconeCirculo(
+            icone: Icons.star_outline_rounded,
+            cor: AppColors.amarelo,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -276,91 +395,57 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(
                   'Pontos de fidelidade',
-                  style: AppTheme.sans(size: 13, color: AppColors.muted),
+                  style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  '$_pontos pts',
-                  style: AppTheme.serif(size: 22, color: AppColors.gold),
-                ),
+                Text('$_pontos pts', style: AppTheme.titulo(size: 22)),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.gold),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
         ],
       ),
     );
   }
 
-  Widget _gridAcessoRapido() {
+  Widget _atalhos() {
     // A administração só aparece para a conta administradora.
     final ehAdmin = AuthService.instance.podeAdministrar;
-    final itens = [
-      ('💈', 'Ver Serviços', '/servicos'),
-      ('📋', 'Meus Agendamentos', '/agendamentos'),
-      ('⭐', 'Fidelidade', '/fidelidade'),
+    // Serviços, Agenda e Perfil são abas; Fidelidade e Painel abrem por cima.
+    final itens = <(IconData, String, VoidCallback)>[
+      (
+        Icons.content_cut_rounded,
+        'Serviços',
+        () => _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos'),
+      ),
+      (
+        Icons.calendar_month_outlined,
+        'Agenda',
+        () => _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
+      ),
+      (Icons.star_outline_rounded, 'Fidelidade', () => _irPara('/fidelidade')),
       if (ehAdmin)
-        ('⚙️', 'Administração', '/admin')
+        (Icons.admin_panel_settings_outlined, 'Painel', () => _irPara('/admin'))
       else
-        ('👤', 'Meu Perfil', '/perfil'),
+        (
+          Icons.person_outline_rounded,
+          'Perfil',
+          () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
+        ),
     ];
 
-    return GradeDuasColunas(
-      filhos: itens
-          .map(
-            (item) => GoldCard(
-              onTap: () => _irPara(item.$3),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.$1, style: const TextStyle(fontSize: 26)),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.$2,
-                    style: AppTheme.sans(size: 13, weight: FontWeight.w700),
-                  ),
-                ],
-              ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final item in itens)
+          Expanded(
+            child: AtalhoCirculo(
+              icone: item.$1,
+              rotulo: item.$2,
+              onTap: item.$3,
             ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _navegacao() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.dark,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: _aoTocarNavegacao,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.gold,
-        unselectedItemColor: AppColors.muted,
-        selectedLabelStyle: AppTheme.sans(size: 11, weight: FontWeight.w700),
-        unselectedLabelStyle: AppTheme.sans(size: 11),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Início'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.content_cut_outlined),
-            label: 'Serviços',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            label: 'Agenda',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Perfil',
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

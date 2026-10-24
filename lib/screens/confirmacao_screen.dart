@@ -55,7 +55,10 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _verificando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Não foi possível verificar o horário'));
+      mostrarErro(
+        context,
+        mensagemDeErro(e, 'Não foi possível verificar o horário'),
+      );
     }
   }
 
@@ -71,81 +74,73 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     final dataHora = BookingFlow.dataHoraCompleta;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'CONFIRMAÇÃO'),
+      appBar: const BarberAppBar(titulo: 'Confirmação'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: [
-                Center(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.gold.withValues(alpha: 0.12),
-                      border: Border.all(color: AppColors.gold, width: 1.5),
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: AppColors.gold,
-                      size: 34,
-                    ),
+                const Center(
+                  child: IconeCirculo(
+                    icone: Icons.check_rounded,
+                    tamanho: 72,
+                    destaque: true,
                   ),
                 ),
                 const SizedBox(height: 18),
                 Text(
                   'Revise seu agendamento',
                   textAlign: TextAlign.center,
-                  style: AppTheme.serif(size: 22),
+                  style: AppTheme.titulo(size: 22),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Confira os dados antes de confirmar',
                   textAlign: TextAlign.center,
-                  style: AppTheme.sans(size: 13, color: AppColors.muted),
+                  style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 28),
                 _linhaResumo(
                   'Serviço',
                   servico?.nome ?? '-',
                   detalhe: servico?.descricao,
-                  icone: servico?.icone,
+                  icone: iconeDoServico(servico?.icone ?? ''),
                 ),
                 const SizedBox(height: 12),
                 _linhaResumo(
                   'Barbeiro',
                   barbeiro?.nome ?? '-',
                   detalhe: barbeiro?.especialidade,
+                  icone: Icons.person_outline_rounded,
                 ),
                 const SizedBox(height: 12),
                 _linhaResumo(
                   'Data',
                   dataHora == null ? '-' : formatarDataExtenso(dataHora),
+                  icone: Icons.calendar_month_outlined,
                 ),
                 const SizedBox(height: 12),
                 _linhaResumo(
                   'Horário',
                   dataHora == null ? '-' : formatarHora(dataHora),
+                  icone: Icons.schedule_rounded,
                 ),
                 const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppColors.card2,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.gold, width: 1.5),
-                  ),
+                // Escuro, e não amarelo: logo abaixo vem o botão amarelo.
+                Cartao(
+                  selected: true,
+                  padding: const EdgeInsets.all(20),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SectionLabel('Valor total'),
+                      const TituloSecao('Valor total'),
                       Text(
                         formatarReal(servico?.preco ?? 0),
-                        style: AppTheme.serif(size: 26, color: AppColors.gold),
+                        style: AppTheme.titulo(
+                          size: 26,
+                          color: AppColors.amarelo,
+                        ),
                       ),
                     ],
                   ),
@@ -157,15 +152,15 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: Column(
               children: [
-                GoldButton(
+                BotaoPrincipal(
                   texto: _verificando
-                      ? 'VERIFICANDO...'
-                      : 'CONTINUAR PARA O PAGAMENTO',
+                      ? 'Verificando...'
+                      : 'Continuar para o pagamento',
                   onPressed: _verificando ? null : _continuar,
                 ),
                 const SizedBox(height: 10),
-                GoldOutlineButton(
-                  texto: 'CANCELAR',
+                BotaoSecundario(
+                  texto: 'Cancelar',
                   onPressed: _verificando ? null : _cancelar,
                 ),
               ],
@@ -180,31 +175,31 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     String rotulo,
     String valor, {
     String? detalhe,
-    String? icone,
+    IconData? icone,
   }) {
-    return GoldCard(
+    return Cartao(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (icone != null) ...[
-            Text(icone, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
+            IconeCirculo(icone: icone, tamanho: 44),
+            const SizedBox(width: 14),
           ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionLabel(rotulo),
-                const SizedBox(height: 6),
+                RotuloCampo(rotulo),
+                const SizedBox(height: 4),
                 Text(
                   valor,
-                  style: AppTheme.sans(size: 15, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 15, weight: FontWeight.w600),
                 ),
                 if (detalhe != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     detalhe,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ],

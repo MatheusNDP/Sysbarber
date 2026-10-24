@@ -86,31 +86,26 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Sair da conta?', style: AppTheme.serif(size: 18)),
+        title: Text('Sair da conta?', style: AppTheme.titulo(size: 18)),
         content: Text(
           'Você precisará entrar novamente para acessar seus agendamentos.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
-              'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Cancelar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
-              'SAIR',
-              style: AppTheme.sans(
+              'Sair',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.red,
               ),
             ),
@@ -157,25 +152,27 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final usuario = AuthService.instance.usuarioAtual;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'PERFIL'),
+      appBar: const BarberAppBar(titulo: 'Perfil'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 28,
+                    // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      28,
+                      20,
+                      28 + MediaQuery.paddingOf(context).bottom,
                     ),
                     children: [
                       Center(
-                        child: GoldAvatar(
+                        child: AvatarIniciais(
                           texto: usuario?.iniciais ?? '?',
                           tamanho: 92,
                           large: true,
@@ -185,15 +182,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       Text(
                         usuario?.nome ?? 'Visitante',
                         textAlign: TextAlign.center,
-                        style: AppTheme.serif(size: 24),
+                        style: AppTheme.titulo(size: 22),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         usuario?.email ?? '',
                         textAlign: TextAlign.center,
-                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                        style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      _numeros(),
+                      const SizedBox(height: 24),
                       _item(
                         Icons.phone_outlined,
                         'Telefone',
@@ -206,35 +205,25 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         onTap: _editarDados,
                       ),
                       _item(
-                        Icons.lock_outline,
+                        Icons.lock_outline_rounded,
                         'Alterar senha',
                         'Exige a senha atual',
                         onTap: _alterarSenha,
                       ),
-                      _item(
-                        Icons.calendar_today_outlined,
-                        'Meus agendamentos',
-                        '$_totalAgendamentos no total',
-                        onTap: () =>
-                            Navigator.of(context).pushNamed('/agendamentos'),
-                      ),
-                      _item(
-                        Icons.star_outline,
-                        'Pontos de fidelidade',
-                        '$_pontos pts',
-                        onTap: () =>
-                            Navigator.of(context).pushNamed('/fidelidade'),
-                      ),
                       if (AuthService.instance.podeAdministrar)
                         _item(
-                          Icons.settings_outlined,
+                          Icons.admin_panel_settings_outlined,
                           'Área administrativa',
                           'Painel de controle',
                           onTap: () =>
                               Navigator.of(context).pushNamed('/admin'),
                         ),
                       const SizedBox(height: 28),
-                      GoldOutlineButton(texto: 'SAIR', onPressed: _sair),
+                      BotaoSecundario(
+                        texto: 'Sair',
+                        icone: Icons.logout_rounded,
+                        onPressed: _sair,
+                      ),
                       const SizedBox(height: 36),
                       _suporte(),
                     ],
@@ -251,26 +240,26 @@ class _PerfilScreenState extends State<PerfilScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel('Suporte'),
+        const TituloSecao('Suporte'),
         const SizedBox(height: 6),
         Text(
           'Dúvidas ou problemas com o app? Fale com o suporte do SysBarber.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
-              child: GoldOutlineButton(
-                texto: 'WHATSAPP',
+              child: BotaoSecundario(
+                texto: 'WhatsApp',
                 icone: Icons.chat_outlined,
                 onPressed: _whatsappDoSuporte,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GoldOutlineButton(
-                texto: 'E-MAIL',
+              child: BotaoSecundario(
+                texto: 'E-mail',
                 icone: Icons.email_outlined,
                 onPressed: _emailDoSuporte,
               ),
@@ -278,6 +267,72 @@ class _PerfilScreenState extends State<PerfilScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  /// Agendamentos e pontos lado a lado, como os números de um perfil.
+  Widget _numeros() {
+    return Cartao(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _numero(
+                Icons.calendar_month_outlined,
+                'Agendamentos',
+                '$_totalAgendamentos',
+                () => NavegacaoPrincipal.abrir(
+                  context,
+                  NavegacaoPrincipal.abaAgenda,
+                  '/agendamentos',
+                ),
+              ),
+            ),
+            const VerticalDivider(width: 1, color: AppColors.border),
+            Expanded(
+              child: _numero(
+                Icons.star_outline_rounded,
+                'Pontos',
+                '$_pontos',
+                () => Navigator.of(context).pushNamed('/fidelidade'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _numero(
+    IconData icone,
+    String rotulo,
+    String valor,
+    VoidCallback onTap,
+  ) {
+    return Semantics(
+      button: true,
+      label: '$rotulo: $valor',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Icon(icone, color: AppColors.amarelo, size: 22),
+              const SizedBox(height: 6),
+              Text(
+                rotulo,
+                style: AppTheme.texto(size: 12, color: AppColors.muted),
+              ),
+              const SizedBox(height: 2),
+              Text(valor, style: AppTheme.titulo(size: 18)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -289,11 +344,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         onTap: onTap,
         child: Row(
           children: [
-            Icon(icone, color: AppColors.gold, size: 20),
+            IconeCirculo(icone: icone, tamanho: 42),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -301,18 +356,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 children: [
                   Text(
                     rotulo,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     valor,
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                   ),
                 ],
               ),
             ),
             if (onTap != null)
-              const Icon(Icons.chevron_right, color: AppColors.gold),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),
@@ -333,12 +388,7 @@ AlertDialog _dialogo({
   required VoidCallback onSalvar,
 }) {
   return AlertDialog(
-    backgroundColor: AppColors.card,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
-      side: const BorderSide(color: AppColors.border),
-    ),
-    title: Text(titulo, style: AppTheme.serif(size: 18)),
+    title: Text(titulo, style: AppTheme.titulo(size: 18)),
     content: SingleChildScrollView(
       child: Column(mainAxisSize: MainAxisSize.min, children: campos),
     ),
@@ -346,18 +396,18 @@ AlertDialog _dialogo({
       TextButton(
         onPressed: salvando ? null : () => Navigator.of(context).pop(false),
         child: Text(
-          'CANCELAR',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          'Cancelar',
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
       ),
       TextButton(
         onPressed: salvando ? null : onSalvar,
         child: Text(
-          salvando ? 'SALVANDO...' : 'SALVAR',
-          style: AppTheme.sans(
+          salvando ? 'Salvando...' : 'Salvar',
+          style: AppTheme.texto(
             size: 13,
-            weight: FontWeight.w700,
-            color: AppColors.gold,
+            weight: FontWeight.w600,
+            color: AppColors.amarelo,
           ),
         ),
       ),
@@ -379,7 +429,7 @@ Widget _campo(
       keyboardType: teclado,
       inputFormatters: formatters,
       obscureText: obscuro,
-      style: AppTheme.sans(size: 14),
+      style: AppTheme.texto(size: 14),
       decoration: InputDecoration(labelText: rotulo),
     ),
   );

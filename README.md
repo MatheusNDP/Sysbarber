@@ -103,9 +103,9 @@ APK.
 
 A única requisição de rede do app é o envio do e-mail da recuperação de senha,
 quando o EmailJS está configurado. Todo o resto funciona sem internet: o banco
-é local (SQLite) e as fontes **Playfair Display** e **DM Sans** estão
-embarcadas no APK (`assets/fonts/`, declaradas em `pubspec.yaml`), e não
-baixadas em tempo de execução. A identidade visual fica idêntica com ou sem
+é local (SQLite) e a fonte **Montserrat** está
+embarcada no APK (`assets/fonts/`, declarada em `pubspec.yaml`), e não
+baixada em tempo de execução. A identidade visual fica idêntica com ou sem
 internet — importante para a apresentação. O SMS da recuperação de senha é
 simulado (regra 16). Os botões do [Suporte](#suporte), no Perfil, também não
 fazem requisição: só abrem o WhatsApp ou o app de e-mail do aparelho, e são
@@ -143,7 +143,7 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **276 testes** no total:
+São **279 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -153,7 +153,7 @@ São **276 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 45 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros e ajustes visuais em celular pequeno |
+| `test/telas_test.dart` | 48 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android) e o ícone do serviço escolhido entre os ícones de linha |
 | `integration_test/database_integration_test.dart` | 157 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -163,7 +163,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 276 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 279 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -407,15 +407,15 @@ v2):
 | `/login` | Login, com "Esqueci minha senha" | todos |
 | `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
-| `/home` | Início — próximo horário, pontos, acesso rápido | cliente |
-| `/servicos` | Catálogo de serviços | cliente |
+| `/home` | Área principal, com a barra de navegação fixa e as abas Início (próximo horário, pontos, acesso rápido), Serviços, Agenda e Perfil | cliente |
+| `/servicos` | Catálogo de serviços (também é a aba Serviços) | cliente |
 | `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção) | cliente |
 | `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
-| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro) | cliente e barbeiro |
+| `/agendamentos` | Meus agendamentos (cliente; também é a aba Agenda) ou Minha agenda (barbeiro) | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
-| `/perfil` | Dados do usuário, editar dados, alterar senha, sair e, no fim, o [Suporte](#suporte) (WhatsApp e e-mail) | cliente |
+| `/perfil` | Dados do usuário, agendamentos e pontos, editar dados, alterar senha, sair e, no fim, o [Suporte](#suporte) (WhatsApp e e-mail) (também é a aba Perfil) | cliente |
 | `/admin` | Painel administrativo: movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
 
 Antes da configuração inicial, só `/` e `/configuracao` abrem; as demais rotas
@@ -427,7 +427,7 @@ elas):
 | Tela | O que faz |
 |---|---|
 | Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa) |
-| Gerenciar Serviços | Cadastrar, editar e excluir serviços |
+| Gerenciar Serviços | Cadastrar, editar e excluir serviços. O ícone do serviço é escolhido entre cinco ícones de linha (corte, barba, combo, hidratação e coloração) |
 | Gerenciar Barbeiros | Cadastrar, editar e excluir barbeiros e ligar ou desligar a disponibilidade |
 | Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
 | Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e rankings: formas de pagamento, 5 serviços mais procurados e 5 barbeiros mais requisitados. Recortes: este mês, mês passado ou tudo |
@@ -440,6 +440,45 @@ Toda tela que carrega dados mostra um estado de erro com
 **"Tentar novamente"** quando o banco falha, em vez de um carregamento eterno.
 No pagamento, se só o saldo de pontos não carregar, o aviso aparece no lugar
 da oferta de resgate e o pagamento em dinheiro continua disponível.
+
+### Navegação
+
+O Início (`/home`) é a área principal do cliente e do administrador: embaixo
+fica a barra de navegação, com as abas **Início**, **Serviços**, **Agenda** e
+**Perfil**. Tocar na barra troca a aba sem abrir uma tela nova: a barra
+continua no lugar e uma pílula amarela desliza até a aba escolhida, enquanto o
+conteúdo da aba nova entra deslizando pelo mesmo lado. Cada aba relê o banco
+ao ser aberta. Os atalhos do Início (Serviços, Agenda e Perfil), o cartão do
+próximo horário e o "Agendamentos" do Perfil também trocam de aba. Fora do
+Início, o voltar do Android volta para o Início.
+
+Fidelidade, o painel administrativo e o agendamento (profissional, horário,
+revisão e pagamento) abrem por cima, sem a barra, com o botão de voltar. Ao
+terminar ou cancelar um agendamento, o app volta para o Início. Serviços,
+Meus agendamentos e Perfil abertos pela rota, fora da área principal (por
+exemplo, "Resgatar em um agendamento", na Fidelidade), também vêm por cima,
+com o botão de voltar. O barbeiro não tem a área principal: ele entra direto
+na própria agenda.
+
+### Identidade visual
+
+Tema escuro, com fundo grafite e destaque amarelo (`#FFD23F`), e uma fonte
+só, a Montserrat (embarcada, licença SIL Open Font License em
+`assets/fonts/Montserrat-OFL.txt`). As cores e o tema ficam em
+`lib/theme/app_theme.dart`, e os componentes em
+`lib/widgets/common_widgets.dart`:
+
+- ícones de linha (Material Icons), muitas vezes dentro de um círculo, no
+  lugar de emojis;
+- botões em pílula: o principal amarelo e o secundário translúcido;
+- botão redondo translúcido para voltar e para as ações da barra do topo
+  (como o "+" de Gerenciar Serviços e o sair do barbeiro);
+- abas e opções em pílula, com a escolhida em amarelo;
+- barra de navegação flutuante e translúcida, no Início.
+
+O ícone de cada serviço continua gravado no banco como um emoji (os dados de
+exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
+correspondente, e um valor fora dessa lista aparece como a tesoura.
 
 ### Suporte
 

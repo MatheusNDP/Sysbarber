@@ -94,14 +94,13 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     final r = _relatorio;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'RELATÓRIOS'),
+      appBar: const BarberAppBar(titulo: 'Relatórios'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null || r == null
                 ? EstadoErro(
@@ -109,7 +108,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                     onTentarNovamente: _carregar,
                   )
                 : RefreshIndicator(
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                     backgroundColor: AppColors.card,
                     onRefresh: _carregar,
                     child: ListView(
@@ -123,7 +122,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         const SizedBox(height: 18),
                         _destaqueFaturamento(r),
                         const SizedBox(height: 22),
-                        const SectionLabel('Financeiro'),
+                        const TituloSecao('Financeiro'),
                         const SizedBox(height: 12),
                         _grade([
                           _indicador(
@@ -155,10 +154,14 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                             ),
                         ]),
                         const SizedBox(height: 26),
-                        const SectionLabel('Agendamentos'),
+                        const TituloSecao('Agendamentos'),
                         const SizedBox(height: 12),
                         _grade([
-                          _indicador('Total', '${r.totalAgendamentos}', 'geral'),
+                          _indicador(
+                            'Total',
+                            '${r.totalAgendamentos}',
+                            'geral',
+                          ),
                           _indicador(
                             'Confirmados',
                             '${r.confirmados}',
@@ -184,7 +187,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                           ),
                         ]),
                         const SizedBox(height: 26),
-                        const SectionLabel('Clientes e fidelidade'),
+                        const TituloSecao('Clientes e fidelidade'),
                         const SizedBox(height: 12),
                         _grade([
                           _indicador(
@@ -210,7 +213,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         Text(
                           'Gerado em ${formatarDataHora(DateTime.now())}',
                           textAlign: TextAlign.center,
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 11,
                             color: AppColors.muted,
                           ),
@@ -229,30 +232,36 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.card2, AppColors.dark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold, width: 1.5),
+        color: AppColors.amarelo,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         children: [
-          const SectionLabel('Faturamento líquido'),
-          const SizedBox(height: 10),
+          Text(
+            'Faturamento líquido',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: Colors.black.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 8),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               formatarReal(r.faturamento),
               maxLines: 1,
-              style: AppTheme.serif(size: 40, color: AppColors.gold),
+              style: AppTheme.titulo(size: 38, color: Colors.black),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'Pagamentos e multas recebidos, menos estornos',
-            style: AppTheme.sans(size: 11, color: AppColors.muted),
+            textAlign: TextAlign.center,
+            style: AppTheme.texto(
+              size: 12,
+              color: Colors.black.withValues(alpha: 0.7),
+            ),
           ),
         ],
       ),
@@ -274,14 +283,11 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             label: Text(rotulos[p]!),
             selected: _periodo == p,
             onSelected: (_) => _mudarPeriodo(p),
-            selectedColor: AppColors.gold,
-            backgroundColor: AppColors.card,
-            labelStyle: AppTheme.sans(
-              size: 12,
-              weight: FontWeight.w700,
+            labelStyle: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
               color: _periodo == p ? Colors.black : AppColors.text,
             ),
-            side: const BorderSide(color: AppColors.border),
             showCheckmark: false,
           ),
       ],
@@ -294,9 +300,9 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     String rotulo,
     String valor,
     String legenda, {
-    Color cor = AppColors.gold,
+    Color cor = AppColors.amarelo,
   }) {
-    return GoldCard(
+    return Cartao(
       padding: const EdgeInsets.all(14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -307,7 +313,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             rotulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 11, color: AppColors.muted),
+            style: AppTheme.texto(size: 11, color: AppColors.muted),
           ),
           const SizedBox(height: 6),
           FittedBox(
@@ -316,7 +322,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             child: Text(
               valor,
               maxLines: 1,
-              style: AppTheme.serif(size: 22, color: cor),
+              style: AppTheme.titulo(size: 22, color: cor),
             ),
           ),
           const SizedBox(height: 2),
@@ -324,7 +330,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             legenda,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 10, color: AppColors.muted),
+            style: AppTheme.texto(size: 10, color: AppColors.muted),
           ),
         ],
       ),
@@ -345,20 +351,20 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(titulo),
+          TituloSecao(titulo),
           const SizedBox(height: 12),
           if (itens.isEmpty)
-            GoldCard(
+            Cartao(
               child: Text(
                 'Ainda sem dados suficientes',
-                style: AppTheme.sans(size: 12, color: AppColors.muted),
+                style: AppTheme.texto(size: 12, color: AppColors.muted),
               ),
             )
           else
             ...itens.map(
               (item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: GoldCard(
+                child: Cartao(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 12,
@@ -373,9 +379,9 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                               item.rotulo,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTheme.sans(
+                              style: AppTheme.texto(
                                 size: 13,
-                                weight: FontWeight.w700,
+                                weight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -384,10 +390,10 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                                 ? '${item.quantidade}× · '
                                       '${formatarReal(item.valor)}'
                                 : '${item.quantidade}×',
-                            style: AppTheme.sans(
+                            style: AppTheme.texto(
                               size: 12,
-                              weight: FontWeight.w700,
-                              color: AppColors.gold,
+                              weight: FontWeight.w600,
+                              color: AppColors.amarelo,
                             ),
                           ),
                         ],
@@ -398,9 +404,9 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         child: LinearProgressIndicator(
                           value: maior == 0 ? 0 : item.quantidade / maior,
                           minHeight: 6,
-                          backgroundColor: AppColors.background,
+                          backgroundColor: AppColors.card2,
                           valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.gold,
+                            AppColors.amarelo,
                           ),
                         ),
                       ),

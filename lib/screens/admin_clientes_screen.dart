@@ -89,18 +89,11 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border),
-          ),
           title: Row(
             children: [
-              GoldAvatar(texto: c.iniciais, tamanho: 42),
+              AvatarIniciais(texto: c.iniciais, tamanho: 42),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(c.nome, style: AppTheme.serif(size: 17)),
-              ),
+              Expanded(child: Text(c.nome, style: AppTheme.titulo(size: 17))),
             ],
           ),
           content: Column(
@@ -124,18 +117,18 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                 _liberarNovaSenha(c);
               },
               child: Text(
-                'LIBERAR NOVA SENHA',
-                style: AppTheme.sans(size: 13, color: AppColors.muted),
+                'Liberar nova senha',
+                style: AppTheme.texto(size: 13, color: AppColors.muted),
               ),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
-                'FECHAR',
-                style: AppTheme.sans(
+                'Fechar',
+                style: AppTheme.texto(
                   size: 13,
-                  weight: FontWeight.w700,
-                  color: AppColors.gold,
+                  weight: FontWeight.w600,
+                  color: AppColors.amarelo,
                 ),
               ),
             ),
@@ -156,34 +149,29 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Liberar nova senha?', style: AppTheme.serif(size: 18)),
+        title: Text('Liberar nova senha?', style: AppTheme.titulo(size: 18)),
         content: Text(
           'Confira se quem pediu é mesmo ${c.nome}. O app vai gerar um '
           'código provisório, que vale por $horas horas e uma vez só. Com '
           'ele no lugar da senha, o cliente entra e cria uma senha nova.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Cancelar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'LIBERAR',
-              style: AppTheme.sans(
+              'Liberar',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
-                color: AppColors.gold,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -202,12 +190,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Código provisório', style: AppTheme.serif(size: 18)),
+        title: Text('Código provisório', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -217,10 +200,10 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
               textAlign: TextAlign.center,
               // Sem serifa: os algarismos ficam da mesma altura, mais fáceis
               // de ditar ao cliente.
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 32,
-                weight: FontWeight.w700,
-                color: AppColors.gold,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
                 letterSpacing: 6,
               ),
             ),
@@ -230,7 +213,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
               'e-mail ${c.email} e este código no lugar da senha, e o app '
               'pede uma senha nova. Vale por $horas horas, uma vez só, e não '
               'aparece de novo.',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ],
         ),
@@ -238,11 +221,11 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'ENTENDI',
-              style: AppTheme.sans(
+              'Entendi',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
-                color: AppColors.gold,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -265,17 +248,18 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // A Montserrat é mais larga: com 130 o e-mail quebrava no meio.
           SizedBox(
-            width: 130,
+            width: 110,
             child: Text(
               rotulo,
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
           Expanded(
             child: Text(
               valor,
-              style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+              style: AppTheme.texto(size: 13, weight: FontWeight.w600),
             ),
           ),
         ],
@@ -288,23 +272,18 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     final lista = _filtrados;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'CLIENTES'),
+      appBar: const BarberAppBar(titulo: 'Clientes'),
       body: Column(
         children: [
-          const GoldDivider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: TextField(
               controller: _buscaCtrl,
               onChanged: (v) => setState(() => _busca = v),
-              style: AppTheme.sans(size: 14),
+              style: AppTheme.texto(size: 14),
               decoration: InputDecoration(
                 hintText: 'Buscar por nome, e-mail ou telefone',
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: AppColors.muted,
-                  size: 20,
-                ),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: _busca.isEmpty
                     ? null
                     : IconButton(
@@ -325,19 +304,19 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: SectionLabel('${lista.length} cliente(s)'),
+              child: RotuloCampo('${lista.length} cliente(s)'),
             ),
           ),
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : lista.isEmpty
                 ? EstadoVazio(
-                    icone: '👥',
+                    icone: Icons.people_outline_rounded,
                     titulo: _busca.isEmpty
                         ? 'Nenhum cliente'
                         : 'Nada encontrado',
@@ -351,11 +330,11 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
                       final c = lista[i];
-                      return GoldCard(
+                      return Cartao(
                         onTap: () => _abrirDetalhe(c),
                         child: Row(
                           children: [
-                            GoldAvatar(texto: c.iniciais, tamanho: 42),
+                            AvatarIniciais(texto: c.iniciais, tamanho: 44),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
@@ -365,9 +344,9 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                                     c.nome,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 14,
-                                      weight: FontWeight.w700,
+                                      weight: FontWeight.w600,
                                     ),
                                   ),
                                   const SizedBox(height: 3),
@@ -375,7 +354,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                                     c.email,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 12,
                                       color: AppColors.muted,
                                     ),
@@ -384,8 +363,8 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                               ),
                             ),
                             const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.gold,
+                              Icons.chevron_right_rounded,
+                              color: AppColors.muted,
                             ),
                           ],
                         ),

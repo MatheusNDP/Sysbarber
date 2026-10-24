@@ -27,6 +27,7 @@ class AgendamentosScreen extends StatefulWidget {
 class _AgendamentosScreenState extends State<AgendamentosScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _abas;
+
   /// Cada agendamento já vem com o seu pagamento (uma consulta só).
   List<Agendamento> _agendamentos = [];
   bool _carregando = true;
@@ -121,12 +122,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final metodo = await showDialog<MetodoPagamento>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Como o cliente pagou?', style: AppTheme.serif(size: 18)),
+        title: Text('Como o cliente pagou?', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +137,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                         '${a.cliente?.nome ?? 'este cliente'}. '
                         'Ao confirmar, o cliente recebe '
                         '${pagamento.valor.round()} pontos de fidelidade.',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
                 height: 1.4,
@@ -151,7 +147,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             ...MetodoPagamento.values.map(
               (m) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: GoldCard(
+                child: Cartao(
+                  cor: AppColors.card2,
                   onTap: () => Navigator.of(ctx).pop(m),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -159,20 +156,20 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   ),
                   child: Row(
                     children: [
-                      Text(
-                        switch (m) {
-                          MetodoPagamento.pix => '📱',
-                          MetodoPagamento.cartao => '💳',
-                          MetodoPagamento.dinheiro => '💵',
+                      IconeCirculo(
+                        icone: switch (m) {
+                          MetodoPagamento.pix => Icons.pix,
+                          MetodoPagamento.cartao => Icons.credit_card_rounded,
+                          MetodoPagamento.dinheiro => Icons.payments_outlined,
                         },
-                        style: const TextStyle(fontSize: 20),
+                        tamanho: 40,
                       ),
                       const SizedBox(width: 12),
                       Text(
                         m.label,
-                        style: AppTheme.sans(
+                        style: AppTheme.texto(
                           size: 14,
-                          weight: FontWeight.w700,
+                          weight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -186,8 +183,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'AGORA NÃO',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Agora não',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
         ],
@@ -250,12 +247,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Cancelar agendamento?', style: AppTheme.serif(size: 18)),
+        title: Text('Cancelar agendamento?', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +259,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                         'multa e recebe de volta o que já tiver pago.'
                   : 'O horário voltará a ficar disponível para outros '
                         'clientes.',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
                 height: 1.4,
@@ -281,8 +273,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.red),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,7 +294,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                                   'cobrada multa de '
                                   '${formatarReal(a.valor * DatabaseService.percentualMulta)}'
                                   ' (50% do serviço).',
-                        style: AppTheme.sans(
+                        style: AppTheme.texto(
                           size: 12,
                           color: AppColors.text,
                           height: 1.4,
@@ -320,17 +311,17 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
-              'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Voltar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
-              'CANCELAR AGENDAMENTO',
-              style: AppTheme.sans(
+              'Cancelar agendamento',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.red,
               ),
             ),
@@ -375,8 +366,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       if (r.multaAPagar > 0)
         'Multa de ${formatarReal(r.multaAPagar)} a pagar na barbearia',
       if (r.pontosAjustados > 0) '${r.pontosAjustados} pontos devolvidos',
-      if (r.pontosAjustados < 0)
-        '${r.pontosAjustados.abs()} pontos estornados',
+      if (r.pontosAjustados < 0) '${r.pontosAjustados.abs()} pontos estornados',
       if (r.pontosRetidos > 0)
         '${r.pontosRetidos} pontos do resgate não devolvidos',
     ];
@@ -384,11 +374,6 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text(
           titulo ??
               (r.comMulta
@@ -396,7 +381,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   : r.pontosRetidos > 0
                   ? 'Cancelado fora do prazo'
                   : 'Agendamento cancelado'),
-          style: AppTheme.serif(size: 18),
+          style: AppTheme.titulo(size: 18),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -408,11 +393,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('•  ', style: TextStyle(color: AppColors.gold)),
+                      const Text(
+                        '•  ',
+                        style: TextStyle(color: AppColors.amarelo),
+                      ),
                       Expanded(
                         child: Text(
                           l,
-                          style: AppTheme.sans(size: 13, height: 1.4),
+                          style: AppTheme.texto(size: 13, height: 1.4),
                         ),
                       ),
                     ],
@@ -425,11 +413,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'ENTENDI',
-              style: AppTheme.sans(
+              'Entendi',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
-                color: AppColors.gold,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -449,15 +437,15 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     return Scaffold(
       appBar: BarberAppBar(
         titulo: _agendaGeral
-            ? 'AGENDA GERAL'
+            ? 'Agenda geral'
             : _modoBarbeiro
-            ? 'MINHA AGENDA'
-            : 'MEUS AGENDAMENTOS',
+            ? 'Minha agenda'
+            : 'Meus agendamentos',
         acoes: _modoBarbeiro
             ? [
-                IconButton(
-                  tooltip: 'Sair',
-                  icon: const Icon(Icons.logout, color: AppColors.gold),
+                BotaoVidro(
+                  icone: Icons.logout_rounded,
+                  dica: 'Sair',
                   onPressed: _sair,
                 ),
               ]
@@ -465,24 +453,30 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       ),
       body: Column(
         children: [
-          const GoldDivider(),
           if (_modoBarbeiro) _faixaProfissional(),
-          TabBar(
-            controller: _abas,
-            indicatorColor: AppColors.gold,
-            labelColor: AppColors.gold,
-            unselectedLabelColor: AppColors.muted,
-            labelStyle: AppTheme.sans(size: 13, weight: FontWeight.w700),
-            unselectedLabelStyle: AppTheme.sans(size: 13),
-            tabs: [
-              Tab(text: _pelaBarbearia ? 'Em aberto' : 'Próximos'),
-              const Tab(text: 'Histórico'),
-            ],
+          // Abas em pílula, com o estilo do tema.
+          Container(
+            margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            padding: const EdgeInsets.all(4),
+            decoration: const ShapeDecoration(
+              color: AppColors.card,
+              shape: StadiumBorder(),
+            ),
+            child: TabBar(
+              controller: _abas,
+              tabs: [
+                Tab(
+                  height: 40,
+                  text: _pelaBarbearia ? 'Em aberto' : 'Próximos',
+                ),
+                const Tab(height: 40, text: 'Histórico'),
+              ],
+            ),
           ),
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -502,7 +496,9 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   Widget _lista(List<Agendamento> itens, {required bool primeiraAba}) {
     if (itens.isEmpty) {
       return EstadoVazio(
-        icone: primeiraAba ? '📅' : '🗂️',
+        icone: primeiraAba
+            ? Icons.event_available_outlined
+            : Icons.history_rounded,
         titulo: primeiraAba
             ? (_pelaBarbearia
                   ? 'Nenhum atendimento marcado'
@@ -520,12 +516,18 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     }
 
     return RefreshIndicator(
-      color: AppColors.gold,
+      color: AppColors.amarelo,
       backgroundColor: AppColors.card,
       onRefresh: _carregar,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: itens.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, i) => _card(itens[i]),
@@ -538,9 +540,9 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final aguardando = a.aguardandoConclusao(agora);
     final corStatus = switch (a.status) {
       StatusAgendamento.confirmado =>
-        aguardando ? AppColors.gold : AppColors.green,
+        aguardando ? AppColors.amarelo : AppColors.green,
       StatusAgendamento.cancelado => AppColors.red,
-      StatusAgendamento.finalizado => AppColors.gold,
+      StatusAgendamento.finalizado => AppColors.amarelo,
       StatusAgendamento.faltou => AppColors.red,
     };
 
@@ -552,7 +554,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         _acao(
           'Concluir',
           Icons.check_circle_outline,
-          AppColors.gold,
+          AppColors.amarelo,
           () => _finalizar(a),
         ),
       if (_pelaBarbearia && a.podeRegistrarFalta(agora))
@@ -571,24 +573,24 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         ),
     ];
 
-    return GoldCard(
+    return Cartao(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                a.servico?.icone ?? '💈',
-                style: const TextStyle(fontSize: 26),
+              IconeCirculo(
+                icone: iconeDoServico(a.servico?.icone ?? ''),
+                tamanho: 44,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   a.servico?.nome ?? 'Serviço',
-                  style: AppTheme.serif(size: 17),
+                  style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
                 ),
               ),
-              GoldBadge(
+              Etiqueta(
                 texto: aguardando ? 'Aguardando conclusão' : a.status.label,
                 cor: corStatus,
               ),
@@ -617,10 +619,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           const SizedBox(height: 6),
           _linha(Icons.event_outlined, formatarDataHora(a.data)),
           const SizedBox(height: 6),
-          _linha(
-            Icons.payments_outlined,
-            formatarReal(a.valor),
-          ),
+          _linha(Icons.payments_outlined, formatarReal(a.valor)),
           const SizedBox(height: 10),
           _statusPagamento(a),
           if (acoes.isNotEmpty) ...[
@@ -638,7 +637,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     return TextButton.icon(
       onPressed: onTap,
       icon: Icon(icone, size: 16, color: cor),
-      label: Text(texto, style: AppTheme.sans(size: 12, color: cor)),
+      label: Text(texto, style: AppTheme.texto(size: 12, color: cor)),
     );
   }
 
@@ -655,33 +654,28 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Registrar falta?', style: AppTheme.serif(size: 18)),
+        title: Text('Registrar falta?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '${a.cliente?.nome ?? 'O cliente'} não compareceu ao horário de '
           '${formatarHora(a.data)}. $penalidade, como num cancelamento '
           'fora do prazo.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Voltar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'REGISTRAR FALTA',
-              style: AppTheme.sans(
+              'Registrar falta',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.red,
               ),
             ),
@@ -716,36 +710,31 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: Text('Concluir atendimento?', style: AppTheme.serif(size: 18)),
+        title: Text('Concluir atendimento?', style: AppTheme.titulo(size: 18)),
         content: Text(
           pendente
               ? 'O pagamento deste atendimento ainda está pendente. '
                     'Conclua apenas se já registrou o recebimento.'
               : 'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
                     'marcado como concluído e sairá da lista de próximos.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              'Voltar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'CONCLUIR',
-              style: AppTheme.sans(
+              'Concluir',
+              style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
-                color: AppColors.gold,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -782,23 +771,27 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
     return Container(
       width: double.infinity,
-      color: AppColors.dark,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         children: [
-          GoldAvatar(texto: b?.iniciais ?? '?', tamanho: 42),
+          AvatarIniciais(texto: b?.iniciais ?? '?', tamanho: 44, large: true),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionLabel('Profissional'),
+                const RotuloCampo('Profissional'),
                 const SizedBox(height: 3),
                 Text(
                   b?.nome ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                 ),
               ],
             ),
@@ -808,11 +801,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             children: [
               Text(
                 '$doDia',
-                style: AppTheme.serif(size: 22, color: AppColors.gold),
+                style: AppTheme.titulo(size: 22, color: AppColors.amarelo),
               ),
               Text(
                 'hoje',
-                style: AppTheme.sans(size: 10, color: AppColors.muted),
+                style: AppTheme.texto(size: 11, color: AppColors.muted),
               ),
             ],
           ),
@@ -839,7 +832,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: Text(
               'Sem pagamento registrado',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -862,7 +855,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             child: Text(
               '${DatabaseService.pontosParaPremio} pontos do resgate não '
               'devolvidos',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -887,7 +880,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               Expanded(
                 child: Text(
                   descricao,
-                  style: AppTheme.sans(size: 12, color: AppColors.green),
+                  style: AppTheme.texto(size: 12, color: AppColors.green),
                 ),
               ),
             ],
@@ -904,7 +897,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   child: Text(
                     'Estornado ${formatarReal(a.valorEstornado)}'
                     '${a.valorEstornado < p.valor ? ' (multa retida)' : ''}',
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ),
               ],
@@ -922,7 +915,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: Text(
               'Pagamento cancelado — nada a pagar',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -934,15 +927,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     // Só a barbearia confirma o recebimento: quem está no caixa é quem dá a
     // baixa. O cliente apenas acompanha a situação.
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.amarelo.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule, size: 16, color: AppColors.gold),
+          const Icon(Icons.schedule, size: 16, color: AppColors.amarelo),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -958,7 +950,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   'Pague no balcão no dia do atendimento. Os '
                       '${p.valor.round()} pontos entram após a confirmação.',
               },
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 11,
                 color: AppColors.muted,
                 height: 1.35,
@@ -967,8 +959,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           ),
           if (_pelaBarbearia) ...[
             const SizedBox(width: 6),
-            GoldButton(
-              texto: 'RECEBER',
+            BotaoPrincipal(
+              texto: 'Receber',
               expandido: false,
               onPressed: () => _quitar(a),
             ),
@@ -987,7 +979,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         Expanded(
           child: Text(
             texto,
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
       ],

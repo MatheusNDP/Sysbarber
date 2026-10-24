@@ -11,6 +11,7 @@ import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/barbeiro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
+import 'package:sysbarber/screens/home_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
@@ -99,7 +100,7 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byType(EstadoErro), findsOneWidget);
-    expect(find.text('TENTAR NOVAMENTE'), findsOneWidget);
+    expect(find.text('Tentar novamente'), findsOneWidget);
     // Nenhum detalhe técnico na tela.
     expect(find.textContaining('database_closed'), findsNothing);
   });
@@ -114,7 +115,7 @@ void main() {
     // O banco volta a responder e o usuário tenta de novo.
     service.injetarBancoParaTeste(await bancoComSeed(tester));
     await tester.runAsync(() async {
-      await tester.tap(find.text('TENTAR NOVAMENTE'));
+      await tester.tap(find.text('Tentar novamente'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await tester.pump();
@@ -137,7 +138,7 @@ void main() {
   testWidgets('a grade de indicadores cresce com a fonte do sistema',
       (tester) async {
     celularPequeno(tester);
-    Widget card(String n) => GoldCard(
+    Widget card(String n) => Cartao(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +389,7 @@ void main() {
   Future<void> tentarDeNovoComBanco(WidgetTester tester) async {
     service.injetarBancoParaTeste(await bancoComSeed(tester));
     await tester.runAsync(() async {
-      await tester.tap(find.text('TENTAR NOVAMENTE'));
+      await tester.tap(find.text('Tentar novamente'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await tester.pump();
@@ -449,7 +450,7 @@ void main() {
 
     // Antes o resgate sumia sem nenhuma explicação.
     expect(find.textContaining('carregar seus pontos'), findsOneWidget);
-    expect(find.text('CONFIRMAR PAGAMENTO'), findsOneWidget);
+    expect(find.text('Confirmar pagamento'), findsOneWidget);
 
     await tentarDeNovoComBanco(tester);
 
@@ -484,7 +485,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Concluir atendimento?'), findsOneWidget);
-    expect(find.text('CONCLUIR'), findsOneWidget);
+    // O botão do card e o do diálogo.
+    expect(find.text('Concluir'), findsNWidgets(2));
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -592,7 +594,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500)); // fim da transição
 
-    expect(find.text('AGENDA GERAL'), findsOneWidget);
+    expect(find.text('Agenda geral'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -626,10 +628,10 @@ void main() {
 
     await abrir(tester, const AgendamentosScreen(agendaGeral: true));
 
-    expect(find.text('AGENDA GERAL'), findsOneWidget);
+    expect(find.text('Agenda geral'), findsOneWidget);
     expect(find.text('com Carlos Eduardo'), findsOneWidget);
     expect(find.text('com Rafael Souza'), findsOneWidget);
-    expect(find.text('RECEBER'), findsOneWidget);
+    expect(find.text('Receber'), findsOneWidget);
     expect(find.text('Concluir'), findsOneWidget);
     expect(find.text('Não compareceu'), findsOneWidget);
     expect(find.text('Cancelar'), findsOneWidget);
@@ -656,7 +658,7 @@ void main() {
     expect(find.textContaining('Será cobrada multa'), findsNothing);
 
     await tester.runAsync(() async {
-      await tester.tap(find.text('CANCELAR AGENDAMENTO'));
+      await tester.tap(find.text('Cancelar agendamento'));
       await Future<void>.delayed(const Duration(milliseconds: 500));
     });
     await tester.pump();
@@ -690,8 +692,9 @@ void main() {
 
     await abrir(tester, const AgendamentosScreen(agendaGeral: true));
 
-    expect(find.text('Acesso restrito'), findsOneWidget);
-    expect(find.text('AGENDA GERAL'), findsNothing);
+    // O título da tela e o aviso.
+    expect(find.text('Acesso restrito'), findsNWidgets(2));
+    expect(find.text('Agenda geral'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -779,8 +782,8 @@ void main() {
         home: Scaffold(
           body: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: GoldButton(
-              texto: 'RESERVAR E PAGAR NA BARBEARIA',
+            child: BotaoPrincipal(
+              texto: 'Reservar e pagar na barbearia',
               onPressed: () {},
             ),
           ),
@@ -790,7 +793,7 @@ void main() {
 
     // Antes o texto ficava numa linha só e estourava o botão.
     expect(tester.takeException(), isNull);
-    expect(find.text('RESERVAR E PAGAR NA BARBEARIA'), findsOneWidget);
+    expect(find.text('Reservar e pagar na barbearia'), findsOneWidget);
   });
 
   // -------------------------------------------------------------------------
@@ -824,9 +827,9 @@ void main() {
 
     await abrir(tester, const SplashScreen());
 
-    expect(find.text('CONFIGURAR BARBEARIA'), findsOneWidget);
-    expect(find.text('ENTRAR'), findsNothing);
-    expect(find.text('CRIAR CONTA'), findsNothing);
+    expect(find.text('Configurar barbearia'), findsOneWidget);
+    expect(find.text('Entrar'), findsNothing);
+    expect(find.text('Criar conta'), findsNothing);
   });
 
   testWidgets('a configuração cria o administrador e mostra como os '
@@ -851,9 +854,9 @@ void main() {
     await tester.tap(find.text('Começar com dados de exemplo'));
     await tester.pump();
 
-    await tester.ensureVisible(find.text('CONFIGURAR E ENTRAR'));
+    await tester.ensureVisible(find.text('Configurar e entrar'));
     await tester.runAsync(() async {
-      await tester.tap(find.text('CONFIGURAR E ENTRAR'));
+      await tester.tap(find.text('Configurar e entrar'));
       await Future<void>.delayed(const Duration(seconds: 1));
     });
     await tester.pump();
@@ -863,7 +866,7 @@ void main() {
     // A navegação depois do diálogo continua o código iniciado no relógio
     // real (o toque em "CONFIGURAR E ENTRAR"), então também roda nele.
     await tester.runAsync(() async {
-      await tester.tap(find.text('ENTENDI'));
+      await tester.tap(find.text('Entendi'));
       await Future<void>.delayed(const Duration(milliseconds: 100));
     });
     await tester.pumpAndSettle();
@@ -927,7 +930,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Esqueceu a senha?'), findsOneWidget);
-    expect(find.text('ENVIAR CÓDIGO'), findsOneWidget);
+    expect(find.text('Enviar código'), findsOneWidget);
     semantica.dispose();
   });
 
@@ -940,14 +943,14 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
     // O celular só aparece quando a pessoa escolhe receber por SMS.
-    expect(find.text('CELULAR CADASTRADO'), findsNothing);
+    expect(find.text('Celular cadastrado'), findsNothing);
     await tester.tap(find.text('Por SMS'));
     await tester.pump();
-    expect(find.text('CELULAR CADASTRADO'), findsOneWidget);
+    expect(find.text('Celular cadastrado'), findsOneWidget);
     await tester.enterText(find.byType(TextField).at(1), '67999990000');
-    await tocarEsperando(tester, find.text('ENVIAR CÓDIGO'));
+    await tocarEsperando(tester, find.text('Enviar código'));
 
-    expect(find.text('SMS SIMULADO'), findsOneWidget);
+    expect(find.text('SMS simulado'), findsOneWidget);
     expect(find.textContaining('(67) •••••-0000'), findsWidgets);
     final codigo = RegExp(
       r'\d{6}',
@@ -957,7 +960,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(0), codigo);
     await tester.enterText(find.byType(TextField).at(1), 'senhaNova1');
     await tester.enterText(find.byType(TextField).at(2), 'senhaNova1');
-    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tocarEsperando(tester, find.text('Salvar e entrar'));
     await tester.pumpAndSettle();
 
     expect(find.text('INÍCIO'), findsOneWidget);
@@ -973,13 +976,13 @@ void main() {
     await abrirComHome(tester, const RecuperarSenhaScreen());
 
     // Por e-mail é a opção inicial, e o celular não é pedido.
-    expect(find.text('CELULAR CADASTRADO'), findsNothing);
+    expect(find.text('Celular cadastrado'), findsNothing);
     await tester.enterText(find.byType(TextField).at(0), 'c@teste.com');
-    await tocarEsperando(tester, find.text('ENVIAR CÓDIGO'));
+    await tocarEsperando(tester, find.text('Enviar código'));
 
-    expect(find.text('E-MAIL SIMULADO'), findsOneWidget);
+    expect(find.text('E-mail simulado'), findsOneWidget);
     expect(find.textContaining('c•••@teste.com'), findsWidgets);
-    expect(find.text('CÓDIGO DO E-MAIL'), findsOneWidget);
+    expect(find.text('Código do e-mail'), findsOneWidget);
     final codigo = RegExp(
       r'\d{6}',
     ).firstMatch(EmailSimulado.instance.ultimo.value!.texto)!.group(0)!;
@@ -987,7 +990,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(0), codigo);
     await tester.enterText(find.byType(TextField).at(1), 'senhaNova1');
     await tester.enterText(find.byType(TextField).at(2), 'senhaNova1');
-    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tocarEsperando(tester, find.text('Salvar e entrar'));
     await tester.pumpAndSettle();
 
     expect(find.text('INÍCIO'), findsOneWidget);
@@ -1011,7 +1014,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), codigo);
     await tocarEsperando(
       tester,
-      find.widgetWithText(GoldButton, 'ENTRAR'),
+      find.widgetWithText(BotaoPrincipal, 'Entrar'),
     );
     await tester.pumpAndSettle();
 
@@ -1020,7 +1023,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'minhaSenha1');
     await tester.enterText(find.byType(TextField).at(1), 'minhaSenha1');
-    await tocarEsperando(tester, find.text('SALVAR E ENTRAR'));
+    await tocarEsperando(tester, find.text('Salvar e entrar'));
     await tester.pumpAndSettle();
 
     expect(find.text('INÍCIO'), findsOneWidget);
@@ -1035,11 +1038,11 @@ void main() {
     await abrir(tester, const AdminClientesScreen());
 
     await tocarEsperando(tester, find.text('c@teste.com'));
-    await tocarEsperando(tester, find.text('LIBERAR NOVA SENHA'));
+    await tocarEsperando(tester, find.text('Liberar nova senha'));
     await tester.pumpAndSettle();
     expect(find.text('Liberar nova senha?'), findsOneWidget);
 
-    await tocarEsperando(tester, find.text('LIBERAR'));
+    await tocarEsperando(tester, find.text('Liberar'));
     await tester.pumpAndSettle();
 
     expect(find.text('Código provisório'), findsOneWidget);
@@ -1080,7 +1083,7 @@ void main() {
   /// perto da tela).
   Future<void> rolarAteOSuporte(WidgetTester tester) async {
     await tester.scrollUntilVisible(
-      find.text('E-MAIL'),
+      find.text('E-mail'),
       200,
       scrollable: find.byType(Scrollable).last,
     );
@@ -1103,15 +1106,15 @@ void main() {
     final abertos = await abrirPerfil(tester);
 
     await rolarAteOSuporte(tester);
-    expect(find.text('SUPORTE'), findsOneWidget);
-    expect(find.text('E-MAIL'), findsOneWidget);
+    expect(find.text('Suporte'), findsOneWidget);
+    expect(find.text('E-mail'), findsOneWidget);
     // No fim da tela, depois do SAIR.
     expect(
-      tester.getTopLeft(find.text('SUPORTE')).dy,
-      greaterThan(tester.getTopLeft(find.text('SAIR')).dy),
+      tester.getTopLeft(find.text('Suporte')).dy,
+      greaterThan(tester.getTopLeft(find.text('Sair')).dy),
     );
 
-    await tester.tap(find.text('WHATSAPP'));
+    await tester.tap(find.text('WhatsApp'));
     await tester.pump();
 
     expect(abertos.single.host, 'wa.me');
@@ -1130,7 +1133,7 @@ void main() {
 
     await rolarAteOSuporte(tester);
     expect(find.text('Área administrativa'), findsOneWidget);
-    await tocarEsperando(tester, find.text('E-MAIL'));
+    await tocarEsperando(tester, find.text('E-mail'));
 
     expect(abertos.single.scheme, 'mailto');
     expect(abertos.single.path, ContatoSuporte.email);
@@ -1150,7 +1153,7 @@ void main() {
     await abrirPerfil(tester, abre: false);
 
     await rolarAteOSuporte(tester);
-    await tocarEsperando(tester, find.text('WHATSAPP'));
+    await tocarEsperando(tester, find.text('WhatsApp'));
     expect(
       find.text(
         'Não foi possível abrir o WhatsApp. Tente falar com o suporte por '
@@ -1159,7 +1162,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tocarEsperando(tester, find.text('E-MAIL'));
+    await tocarEsperando(tester, find.text('E-mail'));
     expect(
       find.text(
         'Não há app de e-mail neste aparelho. Escreva para '
@@ -1189,7 +1192,7 @@ void main() {
 
     await rolarAteOSuporte(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('WHATSAPP'), findsOneWidget);
+    expect(find.text('WhatsApp'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -1228,6 +1231,102 @@ void main() {
     // Antes: "4.9 (128 avaliações)", com uma estrela.
     expect(find.textContaining('avaliações'), findsNothing);
     expect(find.byIcon(Icons.star_outline), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // Novo visual — ícones de linha no lugar dos emojis
+  // -------------------------------------------------------------------------
+
+  test('cada ícone de serviço vira o seu ícone de linha, e um valor fora da '
+      'lista mostra a tesoura', () {
+    for (final (valor, icone, _) in iconesDeServico) {
+      expect(iconeDoServico(valor), icone);
+    }
+    // Gravado antes da lista existir, quando o administrador digitava o emoji.
+    expect(iconeDoServico('🪞'), Icons.content_cut_rounded);
+  });
+
+  testWidgets('o administrador escolhe o ícone do serviço entre os ícones de '
+      'linha, e o banco guarda a opção escolhida', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminServicosScreen());
+
+    await tester.tap(find.text('Corte de Cabelo'));
+    await tester.pumpAndSettle();
+    // Antes era um campo de texto "Ícone (emoji)".
+    expect(find.text('Ícone (emoji)'), findsNothing);
+    final coloracao = find.bySemanticsLabel('Ícone Coloração');
+    await tester.ensureVisible(coloracao);
+    await tester.tap(coloracao);
+    await tester.pump();
+    await tocarEsperando(tester, find.text('Salvar'));
+
+    late List<Servico> servicos;
+    await tester.runAsync(
+      () async => servicos = await service.listarServicos(),
+    );
+    expect(servicos.firstWhere((s) => s.nome == 'Corte de Cabelo').icone, '🎨');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // Navegação principal com abas
+  // -------------------------------------------------------------------------
+
+  /// O botão [rotulo] da barra de navegação (e não o atalho de mesmo nome).
+  Finder botaoDaBarra(String rotulo) => find.descendant(
+    of: find.byType(BarraNavegacao),
+    matching: find.text(rotulo),
+  );
+
+  /// Toca em [alvo] e espera a aba nova carregar do banco. A aba faz
+  /// várias consultas seguidas, e cada uma precisa do relógio real.
+  Future<void> trocarDeAba(WidgetTester tester, Finder alvo) async {
+    await tester.tap(alvo);
+    await tester.pump(); // monta a aba nova
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+    await tester.pump(BarraNavegacao.duracao); // fim da animação
+  }
+
+  int abaMarcada(WidgetTester tester) =>
+      tester.widget<BarraNavegacao>(find.byType(BarraNavegacao)).atual;
+
+  testWidgets('a barra de navegação fica fixa: cada botão troca a aba, e o '
+      'voltar do Android leva de volta ao Início', (tester) async {
+    await clienteLogado(tester);
+    await abrir(tester, const HomeScreen());
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+
+    // Antes cada botão abria uma tela nova, por cima, e a barra sumia.
+    await trocarDeAba(tester, botaoDaBarra('Serviços'));
+    expect(find.byType(ServicosScreen), findsOneWidget);
+    expect(find.byType(BarraNavegacao), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaServicos);
+
+    await trocarDeAba(tester, botaoDaBarra('Perfil'));
+    expect(find.byType(PerfilScreen), findsOneWidget);
+    expect(find.byType(BarraNavegacao), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaPerfil);
+
+    // O atalho do Perfil para os agendamentos troca para a aba Agenda.
+    await trocarDeAba(tester, find.bySemanticsLabel(RegExp('^Agendamentos')));
+    expect(find.byType(AgendamentosScreen), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaAgenda);
+
+    await tester.runAsync(() => tester.binding.handlePopRoute());
+    // A animação começa a contar no quadro seguinte, e a aba que saiu só é
+    // desmontada no quadro depois do fim.
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(BarraNavegacao.duracao);
+    }
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+    expect(find.byType(AgendamentosScreen), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

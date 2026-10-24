@@ -56,9 +56,8 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _abrir(Widget tela) async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => tela));
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => tela));
     if (mounted) _carregar();
   }
 
@@ -67,15 +66,14 @@ class _AdminScreenState extends State<AdminScreen> {
     final resumo = _resumo;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'ADMINISTRAÇÃO'),
+      appBar: const BarberAppBar(titulo: 'Administração'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             // Antes uma falha deixava o carregamento girando para sempre.
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null || resumo == null
                 ? EstadoErro(
@@ -83,7 +81,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     onTentarNovamente: _carregar,
                   )
                 : RefreshIndicator(
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                     backgroundColor: AppColors.card,
                     onRefresh: _carregar,
                     child: ListView(
@@ -93,7 +91,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         vertical: 24,
                       ),
                       children: [
-                        const SectionLabel('Modo administrador'),
+                        const RotuloCampo('Modo administrador'),
                         const SizedBox(height: 6),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -101,7 +99,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             Flexible(
                               child: Text(
                                 'Painel de Controle',
-                                style: AppTheme.serif(size: 24),
+                                style: AppTheme.titulo(size: 22),
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -111,7 +109,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Movimento de ${formatarDataExtenso(DateTime.now())}',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 12,
                             color: AppColors.muted,
                           ),
@@ -122,21 +120,21 @@ class _AdminScreenState extends State<AdminScreen> {
                         GradeDuasColunas(
                           filhos: [
                             _estatistica(
-                              '📋',
+                              Icons.event_note_outlined,
                               resumo.agendamentosHoje,
                               'Agendamentos',
                               resumo.agendamentosTotal,
                               'no total',
                             ),
                             _estatistica(
-                              '✂️',
+                              Icons.content_cut_rounded,
                               resumo.barbeirosHoje,
                               'Barbeiros',
                               resumo.barbeirosTotal,
                               'na equipe',
                             ),
                             _estatistica(
-                              '👥',
+                              Icons.people_outline_rounded,
                               resumo.clientesHoje,
                               'Clientes',
                               resumo.clientesTotal,
@@ -145,7 +143,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                   : 'cadastrados',
                             ),
                             _estatistica(
-                              '💈',
+                              Icons.design_services_outlined,
                               resumo.servicosHoje,
                               'Serviços',
                               resumo.servicosTotal,
@@ -154,10 +152,10 @@ class _AdminScreenState extends State<AdminScreen> {
                           ],
                         ),
                         const SizedBox(height: 28),
-                        const SectionLabel('Gerenciamento'),
+                        const TituloSecao('Gerenciamento'),
                         const SizedBox(height: 12),
                         _itemGerenciar(
-                          '📅',
+                          Icons.calendar_month_outlined,
                           'Agenda geral',
                           'Todos os atendimentos: receber, concluir e faltas',
                           () => _abrir(
@@ -165,25 +163,25 @@ class _AdminScreenState extends State<AdminScreen> {
                           ),
                         ),
                         _itemGerenciar(
-                          '💈',
+                          Icons.design_services_outlined,
                           'Gerenciar Serviços',
                           'Cadastrar, editar e excluir serviços',
                           () => _abrir(const AdminServicosScreen()),
                         ),
                         _itemGerenciar(
-                          '✂️',
+                          Icons.content_cut_rounded,
                           'Gerenciar Barbeiros',
                           'Equipe, acesso e salários',
                           () => _abrir(const AdminBarbeirosScreen()),
                         ),
                         _itemGerenciar(
-                          '👥',
+                          Icons.people_outline_rounded,
                           'Gerenciar Clientes',
                           'Cadastros, agendamentos e pontos',
                           () => _abrir(const AdminClientesScreen()),
                         ),
                         _itemGerenciar(
-                          '📊',
+                          Icons.bar_chart_rounded,
                           'Relatórios',
                           'Faturamento e indicadores',
                           () => _abrir(const AdminRelatoriosScreen()),
@@ -201,18 +199,16 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _seloHoje() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold),
+      decoration: const ShapeDecoration(
+        color: AppColors.amarelo,
+        shape: StadiumBorder(),
       ),
       child: Text(
-        'HOJE',
-        style: AppTheme.sans(
-          size: 11,
-          weight: FontWeight.w700,
-          color: AppColors.gold,
-          letterSpacing: 1.2,
+        'Hoje',
+        style: AppTheme.texto(
+          size: 12,
+          weight: FontWeight.w600,
+          color: Colors.black,
         ),
       ),
     );
@@ -220,42 +216,42 @@ class _AdminScreenState extends State<AdminScreen> {
 
   /// Card com o número do dia em destaque e o total geral como referência.
   Widget _estatistica(
-    String icone,
+    IconData icone,
     int hoje,
     String rotulo,
     int total,
     String legendaTotal,
   ) {
-    return GoldCard(
+    return Cartao(
       padding: const EdgeInsets.all(14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icone, style: const TextStyle(fontSize: 18)),
-          const SizedBox(height: 5),
+          IconeCirculo(icone: icone, tamanho: 36, cor: AppColors.amarelo),
+          const SizedBox(height: 10),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               '$hoje',
               maxLines: 1,
-              style: AppTheme.serif(size: 25, color: AppColors.gold),
+              style: AppTheme.titulo(size: 25, color: AppColors.amarelo),
             ),
           ),
           Text(
             rotulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 11, weight: FontWeight.w700),
+            style: AppTheme.texto(size: 12, weight: FontWeight.w600),
           ),
           const SizedBox(height: 2),
           Text(
             '$total $legendaTotal',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 10, color: AppColors.muted),
+            style: AppTheme.texto(size: 11, color: AppColors.muted),
           ),
         ],
       ),
@@ -263,18 +259,18 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _itemGerenciar(
-    String icone,
+    IconData icone,
     String titulo,
     String descricao,
     VoidCallback onTap,
   ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         onTap: onTap,
         child: Row(
           children: [
-            Text(icone, style: const TextStyle(fontSize: 22)),
+            IconeCirculo(icone: icone, tamanho: 44),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -282,17 +278,17 @@ class _AdminScreenState extends State<AdminScreen> {
                 children: [
                   Text(
                     titulo,
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     descricao,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.gold),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),
