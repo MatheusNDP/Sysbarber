@@ -5,9 +5,12 @@ import 'package:sysbarber/services/validators.dart';
 /// Testes do Suporte do Perfil: o contato, a mensagem pronta e os links do
 /// WhatsApp e do e-mail.
 void main() {
-  test('o contato do suporte tem o formato que os links exigem', () {
-    // O wa.me só aceita dígitos, com o código do país (55) e o DDD.
+  test('o contato do suporte é o do Matheus, no formato que os links '
+      'exigem', () {
+    // (67) 99895-5038; o wa.me só aceita dígitos, com o código do país (55).
+    expect(ContatoSuporte.whatsapp, '5567998955038');
     expect(ContatoSuporte.whatsapp, matches(RegExp(r'^55\d{10,11}$')));
+    expect(ContatoSuporte.email, 'matheusnunesdepaula33@gmail.com');
     expect(Validators.emailValido(ContatoSuporte.email), isTrue);
   });
 

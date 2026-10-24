@@ -11,13 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 class ContatoSuporte {
   ContatoSuporte._();
 
-  /// WhatsApp, só com dígitos: código do país (55), DDD e número.
-  ///
-  /// Provisório: o DDD 00 não existe, então o link não leva a ninguém.
-  static const String whatsapp = '5500000000000';
+  /// WhatsApp do Matheus, só com dígitos: código do país (55), DDD e número.
+  static const String whatsapp = '5567998955038';
 
-  /// Provisório: o domínio `.example` é reservado e não recebe e-mail.
-  static const String email = 'suporte@sysbarber.example';
+  /// E-mail do Matheus.
+  static const String email = 'matheusnunesdepaula33@gmail.com';
 
   /// Assunto do e-mail ao suporte.
   static const String assunto = 'Suporte SysBarber';

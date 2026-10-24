@@ -441,7 +441,9 @@ da oferta de resgate e o pagamento em dinheiro continua disponível.
 No fim do Perfil, a seção **Suporte** tem os botões **WhatsApp** e
 **E-mail**, para falar com o suporte do SysBarber: quem mantém o app, e não a
 barbearia. O contato é fixo no código (`ContatoSuporte`, em
-`lib/services/suporte.dart`), o mesmo em qualquer instalação. Os botões abrem
+`lib/services/suporte.dart`), o mesmo em qualquer instalação: o WhatsApp
+(67) 99895-5038 e o e-mail `matheusnunesdepaula33@gmail.com`, do Matheus.
+Os botões abrem
 o WhatsApp (pelo link `wa.me`; sem o WhatsApp instalado, a página dele no
 navegador) ou o app de e-mail do aparelho, já com a mensagem "Olá! Sou
 Fulano (cliente) e preciso de ajuda com o SysBarber." (ou "(administrador)")
@@ -514,10 +516,6 @@ Login com o e-mail e o código → Crie sua nova senha → entra no app
   que a pessoa informou, mesmo errado. Nesse caso, o administrador libera uma
   nova senha para o cliente, ou define uma para o barbeiro.
 - Não há troca de e-mail nem exclusão de conta pelo próprio cliente.
-- O WhatsApp e o e-mail do [Suporte](#suporte) ainda são provisórios e não
-  levam a ninguém: o DDD 00 não existe, e o domínio `.example` é reservado e
-  não recebe e-mail. O contato definitivo entra em `ContatoSuporte`
-  (`lib/services/suporte.dart`).
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).
 - Instalações feitas antes da configuração inicial mantêm a conta de
