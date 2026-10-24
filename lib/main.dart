@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'screens/acesso_negado_screen.dart';
@@ -96,6 +97,9 @@ class _FalhaAoIniciarApp extends StatelessWidget {
       title: 'SysBarber',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.tema,
+      locale: SysBarberApp.idioma,
+      supportedLocales: const [SysBarberApp.idioma],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: const Scaffold(
         body: SafeArea(
           child: EstadoErro(
@@ -112,6 +116,9 @@ class _FalhaAoIniciarApp extends StatelessWidget {
 
 class SysBarberApp extends StatelessWidget {
   const SysBarberApp({super.key});
+
+  /// Os textos do Material (calendário, menus, dicas) saem em português.
+  static const idioma = Locale('pt', 'BR');
 
   static final Map<String, WidgetBuilder> _telas = {
     '/': (_) => const SplashScreen(),
@@ -149,6 +156,9 @@ class SysBarberApp extends StatelessWidget {
       title: 'SysBarber',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.tema,
+      locale: idioma,
+      supportedLocales: const [idioma],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       initialRoute: '/',
       onGenerateRoute: _gerarRota,
     );

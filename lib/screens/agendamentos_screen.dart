@@ -14,14 +14,46 @@ import 'acesso_negado_screen.dart';
 /// barbeiro logado (ambos em `/agendamentos`) e, com [agendaGeral], a agenda
 /// de todos os barbeiros, aberta pelo administrador a partir do painel.
 class AgendamentosScreen extends StatefulWidget {
-  const AgendamentosScreen({super.key, this.agendaGeral = false});
+  const AgendamentosScreen({
+    super.key,
+    this.agendaGeral = false,
+    this.escolherPeriodo = escolherPeriodoNoCalendario,
+  });
 
   /// Agenda geral do administrador: todos os atendimentos, de todos os
   /// barbeiros, com as mesmas ações do barbeiro.
   final bool agendaGeral;
 
+  /// Abre o calendário do filtro de período da agenda geral (os testes
+  /// trocam por um falso).
+  final EscolherPeriodo escolherPeriodo;
+
   @override
   State<AgendamentosScreen> createState() => _AgendamentosScreenState();
+}
+
+/// Escolhe um período, de um dia até outro, a partir do [atual].
+typedef EscolherPeriodo = Future<DateTimeRange?> Function(
+  BuildContext context,
+  DateTimeRange? atual,
+);
+
+/// Calendário do Material, em português: vai até o último dia que aceita
+/// reserva.
+Future<DateTimeRange?> escolherPeriodoNoCalendario(
+  BuildContext context,
+  DateTimeRange? atual,
+) {
+  final hoje = DateTime.now();
+  return showDateRangePicker(
+    context: context,
+    firstDate: DateTime(2020),
+    lastDate: DatabaseService.ultimoDiaDaAgenda(hoje),
+    currentDate: hoje,
+    initialDateRange: atual,
+    helpText: 'Escolha o período',
+    saveText: 'Filtrar',
+  );
 }
 
 class _AgendamentosScreenState extends State<AgendamentosScreen>
@@ -32,6 +64,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   List<Agendamento> _agendamentos = [];
   bool _carregando = true;
   String? _erro;
+
+  /// Barbeiros da barbearia, para o filtro da agenda geral.
+  List<Barbeiro> _barbeiros = [];
+
+  /// Filtros da agenda geral, nas duas abas: o barbeiro e o período (de um
+  /// dia até outro). `null` mostra todos.
+  int? _filtroBarbeiro;
+  DateTimeRange? _periodo;
 
   @override
   void initState() {
@@ -85,10 +125,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           : _modoBarbeiro
           ? await db.listarAgendamentosBarbeiro(idBarbeiro!)
           : await db.listarAgendamentosCliente(usuario!.id!);
+      final barbeiros = _agendaGeral
+          ? await db.listarBarbeiros()
+          : const <Barbeiro>[];
 
       if (!mounted) return;
       setState(() {
         _agendamentos = lista;
+        _barbeiros = barbeiros;
         _carregando = false;
       });
     } catch (e) {
@@ -473,6 +517,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ],
             ),
           ),
+          if (_agendaGeral && !_carregando && _erro == null) _filtros(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -483,8 +528,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 : TabBarView(
                     controller: _abas,
                     children: [
-                      _lista(_proximos, primeiraAba: true),
-                      _lista(_historico, primeiraAba: false),
+                      _aba(_proximos, primeiraAba: true),
+                      _aba(_historico, primeiraAba: false),
                     ],
                   ),
           ),
@@ -493,7 +538,200 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     );
   }
 
-  Widget _lista(List<Agendamento> itens, {required bool primeiraAba}) {
+  static DateTime _dia(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Filtros da agenda geral: o barbeiro num select e, ao lado, o calendário
+  /// do período. Com um período escolhido, ele aparece embaixo, com o botão
+  /// de limpar.
+  Widget _filtros() {
+    final periodo = _periodo;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _selectBarbeiro()),
+              const SizedBox(width: 10),
+              _botaoCalendario(),
+            ],
+          ),
+          if (periodo != null) ...[
+            const SizedBox(height: 10),
+            _etiquetaPeriodo(periodo),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _selectBarbeiro() {
+    // Um barbeiro que saiu da lista volta o filtro para todos.
+    final valor = _barbeiros.any((b) => b.id == _filtroBarbeiro)
+        ? _filtroBarbeiro
+        : null;
+    final opcoes = <(int?, String)>[
+      (null, 'Todos os barbeiros'),
+      for (final b in _barbeiros) (b.id, b.nome),
+    ];
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.only(left: 14, right: 8),
+      decoration: BoxDecoration(
+        color: AppColors.card2,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: valor,
+          isExpanded: true,
+          dropdownColor: AppColors.card2,
+          borderRadius: BorderRadius.circular(16),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.muted,
+          ),
+          style: AppTheme.texto(size: 14, weight: FontWeight.w600),
+          items: [
+            for (final (id, nome) in opcoes)
+              DropdownMenuItem(
+                value: id,
+                child: Row(
+                  children: [
+                    Icon(
+                      id == null
+                          ? Icons.groups_outlined
+                          : Icons.person_outline_rounded,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(nome, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          onChanged: (id) => setState(() => _filtroBarbeiro = id),
+        ),
+      ),
+    );
+  }
+
+  /// Fica amarelo enquanto há um período escolhido.
+  Widget _botaoCalendario() {
+    final ativo = _periodo != null;
+    return Tooltip(
+      message: 'Escolher período',
+      child: Semantics(
+        button: true,
+        label: 'Escolher período',
+        excludeSemantics: true,
+        child: Material(
+          color: ativo ? AppColors.amarelo : AppColors.card2,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _escolherPeriodo,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(
+                Icons.calendar_month_outlined,
+                color: ativo ? Colors.black : AppColors.text,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _escolherPeriodo() async {
+    final periodo = await widget.escolherPeriodo(context, _periodo);
+    if (periodo == null || !mounted) return;
+    setState(() => _periodo = periodo);
+  }
+
+  /// "24/10/2026 até 27/10/2026" (ou só a data, num dia só) e o botão de
+  /// limpar o período.
+  Widget _etiquetaPeriodo(DateTimeRange periodo) {
+    final inicio = formatarDataCurta(periodo.start);
+    final fim = formatarDataCurta(periodo.end);
+    return Container(
+      padding: const EdgeInsets.only(left: 14),
+      decoration: ShapeDecoration(
+        color: AppColors.amarelo.withValues(alpha: 0.14),
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.date_range_outlined,
+            size: 16,
+            color: AppColors.amarelo,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            inicio == fim ? inicio : '$inicio até $fim',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Limpar período',
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.amarelo,
+            ),
+            onPressed: () => setState(() => _periodo = null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Uma aba da agenda. Na agenda geral, só com o barbeiro e o período
+  /// escolhidos nos filtros.
+  Widget _aba(List<Agendamento> itens, {required bool primeiraAba}) {
+    if (!_agendaGeral) return _lista(itens, primeiraAba: primeiraAba);
+
+    final periodo = _periodo;
+    final filtrados = itens.where((a) {
+      if (_filtroBarbeiro != null && a.idBarbeiro != _filtroBarbeiro) {
+        return false;
+      }
+      if (periodo == null) return true;
+      final dia = _dia(a.data);
+      return !dia.isBefore(_dia(periodo.start)) &&
+          !dia.isAfter(_dia(periodo.end));
+    }).toList();
+
+    return _lista(
+      filtrados,
+      primeiraAba: primeiraAba,
+      vazioPeloFiltro: itens.isNotEmpty && filtrados.isEmpty,
+    );
+  }
+
+  Widget _lista(
+    List<Agendamento> itens, {
+    required bool primeiraAba,
+    bool vazioPeloFiltro = false,
+  }) {
+    if (vazioPeloFiltro) {
+      return const EstadoVazio(
+        icone: Icons.filter_alt_off_outlined,
+        titulo: 'Nada com esses filtros',
+        descricao: 'Escolha outro barbeiro ou outro período.',
+      );
+    }
     if (itens.isEmpty) {
       return EstadoVazio(
         icone: primeiraAba
