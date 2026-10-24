@@ -160,8 +160,6 @@ class Barbeiro {
   final int? id;
   final String nome;
   final String especialidade;
-  final double avaliacao;
-  final int avaliacoes;
   final String iniciais;
 
   /// Dados de contato e acesso do profissional.
@@ -178,8 +176,6 @@ class Barbeiro {
     this.id,
     required this.nome,
     required this.especialidade,
-    required this.avaliacao,
-    required this.avaliacoes,
     required this.iniciais,
     this.telefone = '',
     this.email = '',
@@ -192,8 +188,6 @@ class Barbeiro {
     'id': id,
     'nome': nome,
     'especialidade': especialidade,
-    'avaliacao': avaliacao,
-    'avaliacoes': avaliacoes,
     'iniciais': iniciais,
     'telefone': telefone,
     'email': email,
@@ -206,8 +200,6 @@ class Barbeiro {
     id: map['id'] as int?,
     nome: map['nome'] as String,
     especialidade: map['especialidade'] as String,
-    avaliacao: (map['avaliacao'] as num).toDouble(),
-    avaliacoes: (map['avaliacoes'] as num).toInt(),
     iniciais: map['iniciais'] as String,
     telefone: (map['telefone'] as String?) ?? '',
     email: (map['email'] as String?) ?? '',
@@ -221,8 +213,6 @@ class Barbeiro {
     int? id,
     String? nome,
     String? especialidade,
-    double? avaliacao,
-    int? avaliacoes,
     String? iniciais,
     String? telefone,
     String? email,
@@ -233,8 +223,6 @@ class Barbeiro {
     id: id ?? this.id,
     nome: nome ?? this.nome,
     especialidade: especialidade ?? this.especialidade,
-    avaliacao: avaliacao ?? this.avaliacao,
-    avaliacoes: avaliacoes ?? this.avaliacoes,
     iniciais: iniciais ?? this.iniciais,
     telefone: telefone ?? this.telefone,
     email: email ?? this.email,

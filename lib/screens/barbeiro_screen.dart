@@ -185,30 +185,10 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
                   b.especialidade,
                   style: AppTheme.sans(size: 12, color: AppColors.muted),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('⭐', style: TextStyle(fontSize: 12)),
-                    const SizedBox(width: 4),
-                    Text(
-                      b.avaliacao.toStringAsFixed(1),
-                      style: AppTheme.sans(
-                        size: 12,
-                        weight: FontWeight.w700,
-                        color: AppColors.gold,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '(${b.avaliacoes})',
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
-                    ),
-                    if (selecionado) ...[
-                      const SizedBox(width: 10),
-                      const GoldBadge(texto: 'Selecionado ✓'),
-                    ],
-                  ],
-                ),
+                if (selecionado) ...[
+                  const SizedBox(height: 8),
+                  const GoldBadge(texto: 'Selecionado ✓'),
+                ],
               ],
             ),
           ),

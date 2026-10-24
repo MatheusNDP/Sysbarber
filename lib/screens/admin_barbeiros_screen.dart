@@ -278,11 +278,6 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
           _linha(Icons.mail_outline, b.email.isEmpty ? '—' : b.email),
           const SizedBox(height: 6),
           _linha(Icons.payments_outlined, formatarReal(b.salario)),
-          const SizedBox(height: 6),
-          _linha(
-            Icons.star_outline,
-            '${b.avaliacao.toStringAsFixed(1)} (${b.avaliacoes} avaliações)',
-          ),
         ],
       ),
     );
@@ -405,8 +400,6 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
         id: anterior?.id,
         nome: _nome.text.trim(),
         especialidade: _especialidade.text.trim(),
-        avaliacao: anterior?.avaliacao ?? 0,
-        avaliacoes: anterior?.avaliacoes ?? 0,
         iniciais: Barbeiro.iniciaisDe(_nome.text),
         telefone: _telefone.text.trim(),
         email: email,

@@ -190,6 +190,7 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT NOT NULL,
         especialidade TEXT NOT NULL,
+        -- Sem uso: o app não tem avaliação dos barbeiros.
         avaliacao REAL NOT NULL DEFAULT 0,
         avaliacoes INTEGER NOT NULL DEFAULT 0,
         iniciais TEXT NOT NULL,
@@ -492,8 +493,6 @@ class DatabaseService {
     Barbeiro(
       nome: 'Carlos Eduardo',
       especialidade: 'Especialista em barba',
-      avaliacao: 4.9,
-      avaliacoes: 128,
       iniciais: 'CE',
       telefone: '(67) 99101-1001',
       email: 'carlos.eduardo@sysbarber.com',
@@ -502,8 +501,6 @@ class DatabaseService {
     Barbeiro(
       nome: 'Rafael Souza',
       especialidade: 'Cortes modernos',
-      avaliacao: 4.7,
-      avaliacoes: 95,
       iniciais: 'RS',
       telefone: '(67) 99202-2002',
       email: 'rafael.souza@sysbarber.com',
@@ -512,8 +509,6 @@ class DatabaseService {
     Barbeiro(
       nome: 'Marcos Lima',
       especialidade: 'Coloração e Corte',
-      avaliacao: 4.8,
-      avaliacoes: 74,
       iniciais: 'ML',
       telefone: '(67) 99303-3003',
       email: 'marcos.lima@sysbarber.com',
@@ -1440,8 +1435,6 @@ class DatabaseService {
         b.id            AS b_id,
         b.nome          AS b_nome,
         b.especialidade AS b_especialidade,
-        b.avaliacao     AS b_avaliacao,
-        b.avaliacoes    AS b_avaliacoes,
         b.iniciais      AS b_iniciais,
         s.id            AS s_id,
         s.nome          AS s_nome,
@@ -1474,8 +1467,6 @@ class DatabaseService {
         'id': linha['b_id'],
         'nome': linha['b_nome'],
         'especialidade': linha['b_especialidade'],
-        'avaliacao': linha['b_avaliacao'],
-        'avaliacoes': linha['b_avaliacoes'],
         'iniciais': linha['b_iniciais'],
       });
 
@@ -1557,8 +1548,6 @@ class DatabaseService {
         b.id            AS b_id,
         b.nome          AS b_nome,
         b.especialidade AS b_especialidade,
-        b.avaliacao     AS b_avaliacao,
-        b.avaliacoes    AS b_avaliacoes,
         b.iniciais      AS b_iniciais,
         c.id            AS c_id,
         c.nome          AS c_nome,
