@@ -1,10 +1,15 @@
-# SysBarber — Sistema de Gestão de Barbearia
+# SysBarber — Barbearia portátil
 
 Trabalho de Conclusão de Curso — Engenharia de Software.
 Aplicativo mobile em **Flutter/Dart** com banco **SQLite local** (sem Firebase) e
 autenticação própria com senhas em **PBKDF2-HMAC-SHA256** e salt individual.
 Todos os dados ficam no aparelho: o sistema completo funciona em **um aparelho
 compartilhado** (veja [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)).
+
+**Por que "portátil":** o SysBarber é 100% mobile, sem versão web, e a
+barbearia inteira funciona num celular ou tablet. É feito para barbearias
+pequenas e médias em fase de crescimento, que não têm verba para sistemas
+grandes.
 
 ---
 
