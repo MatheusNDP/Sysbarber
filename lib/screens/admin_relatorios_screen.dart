@@ -113,9 +113,13 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                     onRefresh: _carregar,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 24,
+                      // Embaixo, o espaço da barra de navegação quando a tela
+                      // é uma aba.
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        24,
+                        20,
+                        24 + MediaQuery.paddingOf(context).bottom,
                       ),
                       children: [
                         _seletorPeriodo(),

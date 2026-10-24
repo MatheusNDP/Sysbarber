@@ -830,6 +830,35 @@ class DatabaseService {
     );
   }
 
+  /// Troca a senha do barbeiro, exigindo a senha atual (no Perfil dele).
+  Future<void> alterarSenhaBarbeiro(
+    int id, {
+    required String senhaAtual,
+    required String novaSenha,
+  }) async {
+    final barbeiro = await buscarBarbeiroPorId(id);
+    if (barbeiro == null) {
+      throw const RegraNegocioException('Conta não encontrada');
+    }
+    if (barbeiro.senhaHash.isEmpty ||
+        !await Senhas.conferirEmSegundoPlano(senhaAtual, barbeiro.senhaHash)) {
+      throw const RegraNegocioException('Senha atual incorreta');
+    }
+    if (!Validators.senhaValida(novaSenha)) {
+      throw const RegraNegocioException(
+        'A nova senha deve ter no mínimo 6 caracteres',
+      );
+    }
+    final hash = await Senhas.gerarHashEmSegundoPlano(novaSenha);
+    final db = await database;
+    await db.update(
+      'barbeiro',
+      {'senha_hash': hash},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // -------------------------------------------------------------------------
   // RECUPERAÇÃO DE SENHA
   // -------------------------------------------------------------------------
@@ -1298,9 +1327,14 @@ class DatabaseService {
     return Sqflite.firstIntValue(r) ?? 0;
   }
 
+  /// Clientes da barbearia. O administrador não entra: ele só gerencia.
   Future<List<Cliente>> listarClientes() async {
     final db = await database;
-    final linhas = await db.query('cliente', orderBy: 'nome COLLATE NOCASE');
+    final linhas = await db.query(
+      'cliente',
+      where: 'admin = 0',
+      orderBy: 'nome COLLATE NOCASE',
+    );
     return linhas.map(Cliente.fromMap).toList();
   }
 
@@ -1766,6 +1800,20 @@ class DatabaseService {
     int? idCliente,
     DateTime? agora,
   }) async {
+    // O administrador só gerencia a barbearia: não agenda serviços.
+    if (idCliente != null) {
+      final cliente = await db.query(
+        'cliente',
+        columns: ['admin'],
+        where: 'id = ?',
+        whereArgs: [idCliente],
+        limit: 1,
+      );
+      if (cliente.isNotEmpty && (cliente.first['admin'] as num).toInt() == 1) {
+        return 'O administrador não agenda serviços';
+      }
+    }
+
     final barbeiro = await db.query(
       'barbeiro',
       columns: ['nome', 'ativo'],
@@ -2381,12 +2429,16 @@ class DatabaseService {
         ['$dia%', cancelado],
       ),
       barbeirosTotal: await conta('SELECT COUNT(*) FROM barbeiro'),
+      // O administrador não conta como cliente.
       clientesHoje: await conta(
-        'SELECT COUNT(DISTINCT id_cliente) FROM agendamento '
-        'WHERE data_hora LIKE ? AND status != ?',
+        'SELECT COUNT(DISTINCT a.id_cliente) FROM agendamento a '
+        'JOIN cliente c ON c.id = a.id_cliente '
+        'WHERE a.data_hora LIKE ? AND a.status != ? AND c.admin = 0',
         ['$dia%', cancelado],
       ),
-      clientesTotal: await conta('SELECT COUNT(*) FROM cliente'),
+      clientesTotal: await conta(
+        'SELECT COUNT(*) FROM cliente WHERE admin = 0',
+      ),
       servicosHoje: await conta(
         'SELECT COUNT(DISTINCT id_servico) FROM agendamento '
         'WHERE data_hora LIKE ? AND status != ?',
@@ -2503,8 +2555,14 @@ class DatabaseService {
       cancelados: await agendamentos('cancelado'),
       finalizados: await agendamentos('finalizado'),
       faltas: await agendamentos('faltou'),
-      totalClientes: await conta('SELECT COUNT(*) FROM cliente'),
-      pontosEmCirculacao: await conta('SELECT SUM(pontos) FROM fidelidade'),
+      // O administrador não conta como cliente, nem os pontos dele.
+      totalClientes: await conta(
+        'SELECT COUNT(*) FROM cliente WHERE admin = 0',
+      ),
+      pontosEmCirculacao: await conta(
+        'SELECT SUM(f.pontos) FROM fidelidade f '
+        'JOIN cliente c ON c.id = f.id_cliente WHERE c.admin = 0',
+      ),
       porMetodo: porMetodo
           .map(
             (l) => ItemRelatorio(

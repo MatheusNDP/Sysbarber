@@ -54,6 +54,13 @@ void main() {
 
   tearDown(() async => await service.resetarParaTeste());
 
+  /// Todas as contas da tabela de clientes, inclusive a do administrador,
+  /// que [DatabaseService.listarClientes] deixa de fora.
+  Future<List<Cliente>> todasAsContas() async {
+    final db = await service.database;
+    return (await db.query('cliente')).map(Cliente.fromMap).toList();
+  }
+
   /// Cadastra um cliente auxiliar e devolve o id gerado.
   Future<int> criarClienteTeste({
     String email = 'novo@teste.com',
@@ -114,9 +121,9 @@ void main() {
     });
 
     test('a conta administradora é a única com privilégio', () async {
-      final clientes = await service.listarClientes();
-      expect(clientes.where((c) => c.admin).length, 1);
-      expect(clientes.firstWhere((c) => c.admin).email,
+      final contas = await todasAsContas();
+      expect(contas.where((c) => c.admin).length, 1);
+      expect(contas.firstWhere((c) => c.admin).email,
           emailAdmin);
     });
   });
@@ -2310,7 +2317,8 @@ void main() {
       expect(auth.barbeiroAtual!.nome, 'Rafael Souza');
       // E não existe mais um "cliente" falso com id nulo.
       expect(auth.usuarioAtual, isNull);
-      expect(auth.rotaInicial, '/agendamentos');
+      // A área principal, com as abas dele (Agenda e Perfil).
+      expect(auth.rotaInicial, '/home');
     });
 
     test('a sessão do cliente continua sendo restaurada', () async {
@@ -2366,19 +2374,35 @@ void main() {
       expect(auth.podeAcessar('/home'), isTrue);
       expect(auth.podeAcessar('/pagamento'), isTrue);
       expect(auth.podeAcessar('/agendamentos'), isTrue);
+      expect(auth.podeAcessar('/fidelidade'), isTrue);
+      expect(auth.podeAcessar('/perfil'), isTrue);
       expect(auth.podeAcessar('/admin'), isFalse);
 
-      // Administrador.
+      // Administrador: só gerencia, não agenda nem tem Fidelidade.
       await auth.login(emailAdmin, senhaAdmin);
+      expect(auth.podeAcessar('/home'), isTrue);
       expect(auth.podeAcessar('/admin'), isTrue);
+      expect(auth.podeAcessar('/perfil'), isTrue);
+      for (final rota in [
+        '/servicos',
+        '/barbeiro',
+        '/horario',
+        '/confirmacao',
+        '/pagamento',
+        '/fidelidade',
+        '/agendamentos',
+      ]) {
+        expect(auth.podeAcessar(rota), isFalse, reason: rota);
+      }
 
-      // Barbeiro: só a própria agenda.
+      // Barbeiro: a própria agenda e o Perfil (sem Suporte, que é da tela).
       await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      expect(auth.podeAcessar('/home'), isTrue);
       expect(auth.podeAcessar('/agendamentos'), isTrue);
-      expect(auth.podeAcessar('/home'), isFalse);
+      expect(auth.podeAcessar('/perfil'), isTrue);
+      expect(auth.podeAcessar('/servicos'), isFalse);
+      expect(auth.podeAcessar('/fidelidade'), isFalse);
       expect(auth.podeAcessar('/admin'), isFalse);
-      // Nem o Perfil (e o Suporte dele): o barbeiro fala com o administrador.
-      expect(auth.podeAcessar('/perfil'), isFalse);
     });
   });
 
@@ -2996,7 +3020,7 @@ void main() {
       // Antes: já nascia com admin@sysbarber.com / admin1234 e três
       // barbeiros fictícios.
       expect(await service.barbeariaConfigurada(), isFalse);
-      expect(await service.listarClientes(), isEmpty);
+      expect(await todasAsContas(), isEmpty);
       expect(await service.listarBarbeiros(), isEmpty);
       expect(await service.listarServicos(), isEmpty);
     });
@@ -3006,7 +3030,7 @@ void main() {
       final admin = await configurar();
 
       expect(await service.barbeariaConfigurada(), isTrue);
-      final clientes = await service.listarClientes();
+      final clientes = await todasAsContas();
       expect(clientes.single.id, admin.id);
       expect(clientes.single.admin, isTrue);
       expect(clientes.single.email, 'dono@barbearia.com');
@@ -3044,7 +3068,7 @@ void main() {
         configurar(email: 'outro@barbearia.com'),
         throwsA(isA<RegraNegocioException>()),
       );
-      final clientes = await service.listarClientes();
+      final clientes = await todasAsContas();
       expect(clientes.length, 1);
       expect(clientes.where((c) => c.admin).length, 1);
     });
@@ -3065,7 +3089,7 @@ void main() {
       );
 
       expect(await service.barbeariaConfigurada(), isFalse);
-      expect(await service.listarClientes(), isEmpty);
+      expect(await todasAsContas(), isEmpty);
       expect(await service.listarBarbeiros(), isEmpty);
     });
 
@@ -3653,6 +3677,95 @@ void main() {
 
       expect(r.sucesso, isFalse);
       expect(r.criarNovaSenha, isFalse);
+    });
+  });
+
+  group('P30 — telas de cada perfil', () {
+    Future<Cliente> administrador() async =>
+        (await service.buscarClientePorEmail(emailAdmin))!;
+
+    test('o administrador não agenda: o banco recusa a reserva e nada é '
+        'gravado', () async {
+      final admin = await administrador();
+      final antes = await service.listarTodosAgendamentos();
+
+      await expectLater(
+        service.reservar(
+          idCliente: admin.id!,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: proximoDiaAs(9),
+          modo: ModoReserva.pagarNaBarbearia,
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'O administrador não agenda serviços',
+          ),
+        ),
+      );
+      expect(await service.listarTodosAgendamentos(), hasLength(antes.length));
+      // A revisão do agendamento também avisa, antes do pagamento.
+      expect(
+        await service.verificarReserva(
+          idBarbeiro: 1,
+          dataHora: proximoDiaAs(9),
+          idServico: 1,
+          idCliente: admin.id,
+        ),
+        'O administrador não agenda serviços',
+      );
+    });
+
+    test('o administrador não conta como cliente: fica fora da lista, do '
+        'painel e dos relatórios', () async {
+      final admin = await administrador();
+      await service.adicionarPontos(admin.id!, 120, 'Pontos antigos');
+      final idCliente = await criarClienteTeste();
+      await service.adicionarPontos(idCliente, 30, 'Pontos do cliente');
+
+      final clientes = await service.listarClientes();
+      expect(clientes.map((c) => c.id), [idCliente]);
+      expect((await service.resumoDoDia()).clientesTotal, 1);
+      final relatorio = await service.gerarRelatorio();
+      expect(relatorio.totalClientes, 1);
+      expect(relatorio.pontosEmCirculacao, 30);
+    });
+
+    test('o barbeiro troca a própria senha no Perfil, conferindo a atual',
+        () async {
+      final auth = AuthService.instance;
+      SharedPreferences.setMockInitialValues({});
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+
+      final errada = await auth.alterarSenha(
+        senhaAtual: 'naoEhEssa',
+        novaSenha: 'novaSenha1',
+      );
+      expect(errada.sucesso, isFalse);
+      expect(errada.erro, 'Senha atual incorreta');
+
+      final certa = await auth.alterarSenha(
+        senhaAtual: 'barbeiro123',
+        novaSenha: 'novaSenha1',
+      );
+      expect(certa.sucesso, isTrue);
+      expect(
+        await service.autenticarBarbeiro(
+          'rafael.souza@sysbarber.com',
+          'novaSenha1',
+        ),
+        isNotNull,
+      );
+      expect(
+        await service.autenticarBarbeiro(
+          'rafael.souza@sysbarber.com',
+          'barbeiro123',
+        ),
+        isNull,
+      );
+      await auth.logout();
     });
   });
 }

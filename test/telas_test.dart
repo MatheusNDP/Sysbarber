@@ -725,8 +725,9 @@ void main() {
   // -------------------------------------------------------------------------
 
   testWidgets('o painel usa o singular com um cliente só', (tester) async {
-    // O seed tem um único cliente: a conta administradora.
+    // Um cliente só: o administrador não conta como cliente.
     service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(cadastrarClienteTeste);
 
     await abrir(tester, const AdminScreen());
 
@@ -737,6 +738,7 @@ void main() {
   testWidgets('os relatórios usam o singular com um cliente só',
       (tester) async {
     service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(cadastrarClienteTeste);
     await abrir(tester, const AdminRelatoriosScreen());
 
     await tester.scrollUntilVisible(
@@ -1132,7 +1134,8 @@ void main() {
     final abertos = await abrirPerfil(tester);
 
     await rolarAteOSuporte(tester);
-    expect(find.text('Área administrativa'), findsOneWidget);
+    // O painel é uma aba do administrador: o Perfil não leva mais a ele.
+    expect(find.text('Área administrativa'), findsNothing);
     await tocarEsperando(tester, find.text('E-mail'));
 
     expect(abertos.single.scheme, 'mailto');
@@ -1291,33 +1294,42 @@ void main() {
       );
       await tester.pump();
     }
-    await tester.pump(BarraNavegacao.duracao); // fim da animação
+    // Fim da animação: ela começa a contar num quadro, e a aba que saiu só
+    // é desmontada no quadro depois do fim.
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(BarraNavegacao.duracao);
+    }
   }
 
-  int abaMarcada(WidgetTester tester) =>
-      tester.widget<BarraNavegacao>(find.byType(BarraNavegacao)).atual;
+  /// A aba marcada na barra de navegação.
+  Aba abaMarcada(WidgetTester tester) {
+    final atual = tester
+        .widget<BarraNavegacao>(find.byType(BarraNavegacao))
+        .atual;
+    return HomeScreen.abasDoPerfil(AuthService.instance)[atual].$1;
+  }
 
   testWidgets('a barra de navegação fica fixa: cada botão troca a aba, e o '
       'voltar do Android leva de volta ao Início', (tester) async {
     await clienteLogado(tester);
     await abrir(tester, const HomeScreen());
-    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+    expect(abaMarcada(tester), Aba.inicio);
 
     // Antes cada botão abria uma tela nova, por cima, e a barra sumia.
     await trocarDeAba(tester, botaoDaBarra('Serviços'));
     expect(find.byType(ServicosScreen), findsOneWidget);
     expect(find.byType(BarraNavegacao), findsOneWidget);
-    expect(abaMarcada(tester), NavegacaoPrincipal.abaServicos);
+    expect(abaMarcada(tester), Aba.servicos);
 
     await trocarDeAba(tester, botaoDaBarra('Perfil'));
     expect(find.byType(PerfilScreen), findsOneWidget);
     expect(find.byType(BarraNavegacao), findsOneWidget);
-    expect(abaMarcada(tester), NavegacaoPrincipal.abaPerfil);
+    expect(abaMarcada(tester), Aba.perfil);
 
     // O atalho do Perfil para os agendamentos troca para a aba Agenda.
     await trocarDeAba(tester, find.bySemanticsLabel(RegExp('^Agendamentos')));
     expect(find.byType(AgendamentosScreen), findsOneWidget);
-    expect(abaMarcada(tester), NavegacaoPrincipal.abaAgenda);
+    expect(abaMarcada(tester), Aba.agenda);
 
     await tester.runAsync(() => tester.binding.handlePopRoute());
     // A animação começa a contar no quadro seguinte, e a aba que saiu só é
@@ -1325,8 +1337,66 @@ void main() {
     for (var i = 0; i < 3; i++) {
       await tester.pump(BarraNavegacao.duracao);
     }
-    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+    expect(abaMarcada(tester), Aba.inicio);
     expect(find.byType(AgendamentosScreen), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P30 — telas de cada perfil
+  // -------------------------------------------------------------------------
+
+  testWidgets('o administrador entra no painel, com as abas Painel, Agenda, '
+      'Relatórios e Perfil, e não agenda', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const HomeScreen());
+
+    // Antes ele via o Início do cliente, com Serviços e Fidelidade.
+    expect(find.byType(AdminScreen), findsOneWidget);
+    for (final rotulo in ['Painel', 'Agenda', 'Relatórios', 'Perfil']) {
+      expect(botaoDaBarra(rotulo), findsOneWidget, reason: rotulo);
+    }
+    expect(botaoDaBarra('Início'), findsNothing);
+    expect(botaoDaBarra('Serviços'), findsNothing);
+
+    // A Agenda do administrador é a agenda geral.
+    await trocarDeAba(tester, botaoDaBarra('Agenda'));
+    expect(abaMarcada(tester), Aba.agenda);
+    expect(find.text('Agenda geral'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o barbeiro tem as abas Agenda e Perfil, e o Perfil troca a '
+      'senha, sem Suporte', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const HomeScreen());
+
+    expect(find.text('Minha agenda'), findsOneWidget);
+    expect(botaoDaBarra('Agenda'), findsOneWidget);
+    expect(botaoDaBarra('Perfil'), findsOneWidget);
+    expect(botaoDaBarra('Início'), findsNothing);
+
+    // Antes o barbeiro não tinha Perfil.
+    await trocarDeAba(tester, botaoDaBarra('Perfil'));
+    expect(find.byType(PerfilScreen), findsOneWidget);
+    expect(find.text('Carlos Eduardo'), findsOneWidget);
+    expect(find.text('Especialidade'), findsOneWidget);
+    expect(find.text('Alterar senha'), findsOneWidget);
+    // Os dados dele são do administrador, em Gerenciar Barbeiros.
+    expect(find.text('Editar dados'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Sair'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Suporte'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }
