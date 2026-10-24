@@ -9,6 +9,7 @@ import 'package:sysbarber/screens/admin_relatorios_screen.dart';
 import 'package:sysbarber/screens/admin_screen.dart';
 import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
+import 'package:sysbarber/screens/barbeiro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
@@ -180,8 +181,6 @@ void main() {
         const Barbeiro(
           nome: 'Carlos Eduardo de Albuquerque Figueiredo Santos Junior',
           especialidade: 'Barba',
-          avaliacao: 5,
-          avaliacoes: 1,
           iniciais: 'CJ',
           salario: 2000,
         ),
@@ -1191,6 +1190,44 @@ void main() {
     await rolarAteOSuporte(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('WHATSAPP'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P23 — sem nota dos barbeiros
+  // -------------------------------------------------------------------------
+
+  testWidgets('a escolha do profissional não mostra nota dos barbeiros', (
+    tester,
+  ) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    BookingFlow.limpar();
+
+    await abrir(tester, const BarbeiroScreen());
+
+    expect(find.text('Carlos Eduardo'), findsOneWidget);
+    // Antes: "⭐ 4.9 (128)", números fixos dos barbeiros de exemplo.
+    expect(find.textContaining('⭐'), findsNothing);
+    expect(find.text('4.9'), findsNothing);
+    expect(find.text('(128)'), findsNothing);
+
+    // O selo de selecionado continua aparecendo no card escolhido.
+    await tester.tap(find.text('Carlos Eduardo'));
+    await tester.pump();
+    expect(find.text('Selecionado ✓'), findsOneWidget);
+  });
+
+  testWidgets('Gerenciar Barbeiros não mostra nota dos barbeiros', (
+    tester,
+  ) async {
+    await adminLogado(tester);
+
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    expect(find.text('Carlos Eduardo'), findsOneWidget);
+    // Antes: "4.9 (128 avaliações)", com uma estrela.
+    expect(find.textContaining('avaliações'), findsNothing);
+    expect(find.byIcon(Icons.star_outline), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

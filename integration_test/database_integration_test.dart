@@ -87,7 +87,6 @@ void main() {
       final barbeiros = await service.listarBarbeiros();
       expect(barbeiros.length, 3);
       expect(barbeiros.first.nome, 'Carlos Eduardo');
-      expect(barbeiros.first.avaliacao, 4.9);
       expect(barbeiros.first.iniciais, 'CE');
     });
 
@@ -304,8 +303,6 @@ void main() {
         Barbeiro(
           nome: 'Pedro Alves',
           especialidade: 'Degradê',
-          avaliacao: 0,
-          avaliacoes: 0,
           iniciais: Barbeiro.iniciaisDe('Pedro Alves'),
           telefone: '(67) 99404-4004',
           email: 'pedro.alves@sysbarber.com',
@@ -1800,8 +1797,6 @@ void main() {
           id: inativo.id,
           nome: inativo.nome,
           especialidade: 'Coloração, Corte e Barba',
-          avaliacao: inativo.avaliacao,
-          avaliacoes: inativo.avaliacoes,
           iniciais: inativo.iniciais,
           telefone: inativo.telefone,
           email: inativo.email,
@@ -2344,8 +2339,6 @@ void main() {
         Barbeiro(
           nome: 'Pedro Alves',
           especialidade: 'Degradê',
-          avaliacao: 0,
-          avaliacoes: 0,
           iniciais: 'PA',
           email: 'pedro@sysbarber.com',
           senhaHash: DatabaseService.hashSenha('senha123'),
@@ -2538,8 +2531,6 @@ void main() {
           Barbeiro(
             nome: 'Outro Rafael',
             especialidade: 'Corte',
-            avaliacao: 0,
-            avaliacoes: 0,
             iniciais: 'OR',
             email: 'Rafael.Souza@sysbarber.com',
             senhaHash: DatabaseService.hashSenha('senha123'),
@@ -3083,8 +3074,6 @@ void main() {
         const Barbeiro(
           nome: 'Pedro Alves',
           especialidade: 'Degradê',
-          avaliacao: 0,
-          avaliacoes: 0,
           iniciais: 'PA',
           salario: 2000,
         ),
@@ -3506,8 +3495,6 @@ void main() {
         const Barbeiro(
           nome: 'Novo Barbeiro',
           especialidade: 'Cortes',
-          avaliacao: 0,
-          avaliacoes: 0,
           iniciais: 'NB',
           telefone: '(67) 99555-5555',
           email: 'novo.barbeiro@sysbarber.com',
