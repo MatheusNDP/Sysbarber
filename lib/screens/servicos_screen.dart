@@ -76,9 +76,12 @@ class _ServicosScreenState extends State<ServicosScreen> {
                         'que apareçam aqui.',
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
+                    // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      20,
+                      20,
+                      20 + MediaQuery.paddingOf(context).bottom,
                     ),
                     itemCount: _servicos.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),

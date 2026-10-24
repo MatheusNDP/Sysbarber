@@ -11,6 +11,7 @@ import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/barbeiro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
+import 'package:sysbarber/screens/home_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
@@ -1266,6 +1267,61 @@ void main() {
       () async => servicos = await service.listarServicos(),
     );
     expect(servicos.firstWhere((s) => s.nome == 'Corte de Cabelo').icone, '🎨');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // Navegação principal com abas
+  // -------------------------------------------------------------------------
+
+  /// O botão [rotulo] da barra de navegação (e não o atalho de mesmo nome).
+  Finder botaoDaBarra(String rotulo) => find.descendant(
+    of: find.byType(BarraNavegacao),
+    matching: find.text(rotulo),
+  );
+
+  /// Toca em [alvo] e espera a aba nova carregar do banco. A aba faz
+  /// várias consultas seguidas, e cada uma precisa do relógio real.
+  Future<void> trocarDeAba(WidgetTester tester, Finder alvo) async {
+    await tester.tap(alvo);
+    await tester.pump(); // monta a aba nova
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+  }
+
+  int abaMarcada(WidgetTester tester) =>
+      tester.widget<BarraNavegacao>(find.byType(BarraNavegacao)).atual;
+
+  testWidgets('a barra de navegação fica fixa: cada botão troca a aba, e o '
+      'voltar do Android leva de volta ao Início', (tester) async {
+    await clienteLogado(tester);
+    await abrir(tester, const HomeScreen());
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+
+    // Antes cada botão abria uma tela nova, por cima, e a barra sumia.
+    await trocarDeAba(tester, botaoDaBarra('Serviços'));
+    expect(find.byType(ServicosScreen), findsOneWidget);
+    expect(find.byType(BarraNavegacao), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaServicos);
+
+    await trocarDeAba(tester, botaoDaBarra('Perfil'));
+    expect(find.byType(PerfilScreen), findsOneWidget);
+    expect(find.byType(BarraNavegacao), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaPerfil);
+
+    // O atalho do Perfil para os agendamentos troca para a aba Agenda.
+    await trocarDeAba(tester, find.bySemanticsLabel(RegExp('^Agendamentos')));
+    expect(find.byType(AgendamentosScreen), findsOneWidget);
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaAgenda);
+
+    await tester.runAsync(() => tester.binding.handlePopRoute());
+    await tester.pump();
+    expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
+    expect(find.byType(AgendamentosScreen), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

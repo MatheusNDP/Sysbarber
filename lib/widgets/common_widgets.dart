@@ -526,6 +526,40 @@ class BarraNavegacao extends StatelessWidget {
   }
 }
 
+/// Liga as abas da área principal (Início) à barra de navegação: uma tela
+/// que está numa aba usa [abrir] para trocar de aba em vez de abrir uma tela
+/// nova por cima.
+class NavegacaoPrincipal extends InheritedWidget {
+  static const abaInicio = 0;
+  static const abaServicos = 1;
+  static const abaAgenda = 2;
+  static const abaPerfil = 3;
+
+  final ValueChanged<int> irParaAba;
+
+  const NavegacaoPrincipal({
+    super.key,
+    required this.irParaAba,
+    required super.child,
+  });
+
+  /// Dentro da área principal, troca para a [aba]; fora dela (a tela foi
+  /// aberta por cima, como rota), abre a [rota].
+  static Future<void> abrir(BuildContext context, int aba, String rota) async {
+    final navegacao = context
+        .getInheritedWidgetOfExactType<NavegacaoPrincipal>();
+    if (navegacao != null) {
+      navegacao.irParaAba(aba);
+      return;
+    }
+    await Navigator.of(context).pushNamed(rota);
+  }
+
+  @override
+  bool updateShouldNotify(NavegacaoPrincipal oldWidget) =>
+      irParaAba != oldWidget.irParaAba;
+}
+
 /// Estado vazio reutilizado nas listagens.
 class EstadoVazio extends StatelessWidget {
   final IconData icone;

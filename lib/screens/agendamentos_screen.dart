@@ -521,7 +521,13 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       onRefresh: _carregar,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: itens.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, i) => _card(itens[i]),

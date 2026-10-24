@@ -6,8 +6,13 @@ import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'agendamentos_screen.dart';
+import 'perfil_screen.dart';
+import 'servicos_screen.dart';
 
-/// Tela principal (`/home`).
+/// Área principal (`/home`): as abas Início, Serviços, Agenda e Perfil, com a
+/// barra de navegação fixa embaixo. Trocar de aba não abre uma tela nova:
+/// a barra continua no lugar e marca a aba atual.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,6 +21,58 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _aba = NavegacaoPrincipal.abaInicio;
+
+  void _irParaAba(int aba) => setState(() => _aba = aba);
+
+  @override
+  Widget build(BuildContext context) {
+    // A aba é montada de novo a cada troca e relê o banco: o que mudou em
+    // outra aba (um cancelamento, por exemplo) já aparece.
+    final aba = switch (_aba) {
+      NavegacaoPrincipal.abaServicos => const ServicosScreen(),
+      NavegacaoPrincipal.abaAgenda => const AgendamentosScreen(),
+      NavegacaoPrincipal.abaPerfil => const PerfilScreen(),
+      _ => const _Inicio(),
+    };
+
+    return PopScope(
+      // O voltar do Android, fora do Início, volta para o Início.
+      canPop: _aba == NavegacaoPrincipal.abaInicio,
+      onPopInvokedWithResult: (saiu, _) {
+        if (!saiu) _irParaAba(NavegacaoPrincipal.abaInicio);
+      },
+      child: NavegacaoPrincipal(
+        irParaAba: _irParaAba,
+        child: Scaffold(
+          // O conteúdo passa por trás da barra de navegação translúcida.
+          extendBody: true,
+          body: KeyedSubtree(key: ValueKey(_aba), child: aba),
+          bottomNavigationBar: BarraNavegacao(
+            atual: _aba,
+            onTap: _irParaAba,
+            itens: const [
+              (Icons.home_rounded, 'Início'),
+              (Icons.content_cut_rounded, 'Serviços'),
+              (Icons.calendar_month_outlined, 'Agenda'),
+              (Icons.person_outline_rounded, 'Perfil'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Aba Início: próximo horário, pontos e acesso rápido.
+class _Inicio extends StatefulWidget {
+  const _Inicio();
+
+  @override
+  State<_Inicio> createState() => _InicioState();
+}
+
+class _InicioState extends State<_Inicio> {
   final _db = DatabaseService.instance;
 
   Agendamento? _proximo;
@@ -79,29 +136,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _carregarDados();
   }
 
-  void _aoTocarNavegacao(int indice) {
-    switch (indice) {
-      case 1:
-        _irPara('/servicos');
-        break;
-      case 2:
-        _irPara('/agendamentos');
-        break;
-      case 3:
-        _irPara('/perfil');
-        break;
-      default:
-        _carregarDados();
-    }
-  }
+  /// Troca para outra aba da navegação principal.
+  void _irParaAba(int aba, String rota) =>
+      NavegacaoPrincipal.abrir(context, aba, rota);
 
   @override
   Widget build(BuildContext context) {
     final usuario = AuthService.instance.usuarioAtual;
 
     return Scaffold(
-      // O conteúdo passa por trás da barra de navegação translúcida.
-      extendBody: true,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -110,7 +153,13 @@ class _HomeScreenState extends State<HomeScreen> {
           onRefresh: _carregarDados,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+            // Embaixo, o espaço da barra de navegação, que fica por cima.
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              20 + MediaQuery.paddingOf(context).bottom,
+            ),
             children: [
               _saudacao(usuario),
               const SizedBox(height: 24),
@@ -136,16 +185,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: BarraNavegacao(
-        atual: 0,
-        onTap: _aoTocarNavegacao,
-        itens: const [
-          (Icons.home_rounded, 'Início'),
-          (Icons.content_cut_rounded, 'Serviços'),
-          (Icons.calendar_month_outlined, 'Agenda'),
-          (Icons.person_outline_rounded, 'Perfil'),
-        ],
-      ),
     );
   }
 
@@ -157,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Abrir perfil',
           excludeSemantics: true,
           child: GestureDetector(
-            onTap: () => _irPara('/perfil'),
+            onTap: () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
             child: AvatarIniciais(
               texto: usuario?.iniciais ?? '?',
               tamanho: 52,
@@ -258,7 +297,9 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _irPara(proximo == null ? '/servicos' : '/agendamentos'),
+        onTap: () => proximo == null
+            ? _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos')
+            : _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
         child: Stack(
           children: [
             // Tesoura grande e apagada no canto, no lugar de uma foto.
@@ -338,14 +379,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _atalhos() {
     // A administração só aparece para a conta administradora.
     final ehAdmin = AuthService.instance.podeAdministrar;
-    final itens = [
-      (Icons.content_cut_rounded, 'Serviços', '/servicos'),
-      (Icons.calendar_month_outlined, 'Agenda', '/agendamentos'),
-      (Icons.star_outline_rounded, 'Fidelidade', '/fidelidade'),
+    // Serviços, Agenda e Perfil são abas; Fidelidade e Painel abrem por cima.
+    final itens = <(IconData, String, VoidCallback)>[
+      (
+        Icons.content_cut_rounded,
+        'Serviços',
+        () => _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos'),
+      ),
+      (
+        Icons.calendar_month_outlined,
+        'Agenda',
+        () => _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
+      ),
+      (Icons.star_outline_rounded, 'Fidelidade', () => _irPara('/fidelidade')),
       if (ehAdmin)
-        (Icons.admin_panel_settings_outlined, 'Painel', '/admin')
+        (Icons.admin_panel_settings_outlined, 'Painel', () => _irPara('/admin'))
       else
-        (Icons.person_outline_rounded, 'Perfil', '/perfil'),
+        (
+          Icons.person_outline_rounded,
+          'Perfil',
+          () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
+        ),
     ];
 
     return Row(
@@ -356,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: AtalhoCirculo(
               icone: item.$1,
               rotulo: item.$2,
-              onTap: () => _irPara(item.$3),
+              onTap: item.$3,
             ),
           ),
       ],

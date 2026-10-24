@@ -163,9 +163,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 28,
+                    // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      28,
+                      20,
+                      28 + MediaQuery.paddingOf(context).bottom,
                     ),
                     children: [
                       Center(
@@ -279,7 +282,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 Icons.calendar_month_outlined,
                 'Agendamentos',
                 '$_totalAgendamentos',
-                () => Navigator.of(context).pushNamed('/agendamentos'),
+                () => NavegacaoPrincipal.abrir(
+                  context,
+                  NavegacaoPrincipal.abaAgenda,
+                  '/agendamentos',
+                ),
               ),
             ),
             const VerticalDivider(width: 1, color: AppColors.border),
