@@ -14,14 +14,46 @@ import 'acesso_negado_screen.dart';
 /// barbeiro logado (ambos em `/agendamentos`) e, com [agendaGeral], a agenda
 /// de todos os barbeiros, aberta pelo administrador a partir do painel.
 class AgendamentosScreen extends StatefulWidget {
-  const AgendamentosScreen({super.key, this.agendaGeral = false});
+  const AgendamentosScreen({
+    super.key,
+    this.agendaGeral = false,
+    this.escolherPeriodo = escolherPeriodoNoCalendario,
+  });
 
   /// Agenda geral do administrador: todos os atendimentos, de todos os
   /// barbeiros, com as mesmas ações do barbeiro.
   final bool agendaGeral;
 
+  /// Abre o calendário do filtro de período da agenda geral (os testes
+  /// trocam por um falso).
+  final EscolherPeriodo escolherPeriodo;
+
   @override
   State<AgendamentosScreen> createState() => _AgendamentosScreenState();
+}
+
+/// Escolhe um período, de um dia até outro, a partir do [atual].
+typedef EscolherPeriodo = Future<DateTimeRange?> Function(
+  BuildContext context,
+  DateTimeRange? atual,
+);
+
+/// Calendário do Material, em português: vai até o último dia que aceita
+/// reserva.
+Future<DateTimeRange?> escolherPeriodoNoCalendario(
+  BuildContext context,
+  DateTimeRange? atual,
+) {
+  final hoje = DateTime.now();
+  return showDateRangePicker(
+    context: context,
+    firstDate: DateTime(2020),
+    lastDate: DatabaseService.ultimoDiaDaAgenda(hoje),
+    currentDate: hoje,
+    initialDateRange: atual,
+    helpText: 'Escolha o período',
+    saveText: 'Filtrar',
+  );
 }
 
 class _AgendamentosScreenState extends State<AgendamentosScreen>
@@ -36,12 +68,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// Barbeiros da barbearia, para o filtro da agenda geral.
   List<Barbeiro> _barbeiros = [];
 
-  /// Filtro de barbeiro da agenda geral, nas duas abas; `null` mostra todos.
+  /// Filtros da agenda geral, nas duas abas: o barbeiro e o período (de um
+  /// dia até outro). `null` mostra todos.
   int? _filtroBarbeiro;
-
-  /// Filtro de dia da agenda geral, um por aba (os dias de cada aba são
-  /// outros); `null` mostra todos.
-  final List<DateTime?> _filtroDia = [null, null];
+  DateTimeRange? _periodo;
 
   @override
   void initState() {
@@ -487,17 +517,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ],
             ),
           ),
-          if (_agendaGeral && !_carregando && _erro == null) ...[
-            const SizedBox(height: 12),
-            FiltroEmPilulas<int?>(
-              opcoes: [
-                (null, 'Todos os barbeiros'),
-                for (final b in _barbeiros) (b.id, b.nome),
-              ],
-              selecionada: _filtroBarbeiro,
-              onChanged: (id) => setState(() => _filtroBarbeiro = id),
-            ),
-          ],
+          if (_agendaGeral && !_carregando && _erro == null) _filtros(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -520,77 +540,196 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   static DateTime _dia(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// "Hoje", "Amanhã", "Ontem" ou, nos outros dias, "Seg, 27/10".
-  static String _rotuloDoDia(DateTime dia) {
-    final agora = DateTime.now();
-    final dias = DateTime.utc(
-      dia.year,
-      dia.month,
-      dia.day,
-    ).difference(DateTime.utc(agora.year, agora.month, agora.day)).inDays;
-    if (dias == 0) return 'Hoje';
-    if (dias == 1) return 'Amanhã';
-    if (dias == -1) return 'Ontem';
-    final semana = abreviacaoDiaSemana(dia);
-    final dataCurta = formatarDataCurta(dia).substring(0, 5);
-    return '${semana[0]}${semana.substring(1).toLowerCase()}, $dataCurta';
+  /// Filtros da agenda geral: o barbeiro num select e, ao lado, o calendário
+  /// do período. Com um período escolhido, ele aparece embaixo, com o botão
+  /// de limpar.
+  Widget _filtros() {
+    final periodo = _periodo;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _selectBarbeiro()),
+              const SizedBox(width: 10),
+              _botaoCalendario(),
+            ],
+          ),
+          if (periodo != null) ...[
+            const SizedBox(height: 10),
+            _etiquetaPeriodo(periodo),
+          ],
+        ],
+      ),
+    );
   }
 
-  /// Uma aba da agenda. Na agenda geral, com os filtros de barbeiro (acima
-  /// das abas) e de dia: só aparecem os dias que têm atendimento, na ordem
-  /// da aba.
+  Widget _selectBarbeiro() {
+    // Um barbeiro que saiu da lista volta o filtro para todos.
+    final valor = _barbeiros.any((b) => b.id == _filtroBarbeiro)
+        ? _filtroBarbeiro
+        : null;
+    final opcoes = <(int?, String)>[
+      (null, 'Todos os barbeiros'),
+      for (final b in _barbeiros) (b.id, b.nome),
+    ];
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.only(left: 14, right: 8),
+      decoration: BoxDecoration(
+        color: AppColors.card2,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: valor,
+          isExpanded: true,
+          dropdownColor: AppColors.card2,
+          borderRadius: BorderRadius.circular(16),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.muted,
+          ),
+          style: AppTheme.texto(size: 14, weight: FontWeight.w600),
+          items: [
+            for (final (id, nome) in opcoes)
+              DropdownMenuItem(
+                value: id,
+                child: Row(
+                  children: [
+                    Icon(
+                      id == null
+                          ? Icons.groups_outlined
+                          : Icons.person_outline_rounded,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(nome, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          onChanged: (id) => setState(() => _filtroBarbeiro = id),
+        ),
+      ),
+    );
+  }
+
+  /// Fica amarelo enquanto há um período escolhido.
+  Widget _botaoCalendario() {
+    final ativo = _periodo != null;
+    return Tooltip(
+      message: 'Escolher período',
+      child: Semantics(
+        button: true,
+        label: 'Escolher período',
+        excludeSemantics: true,
+        child: Material(
+          color: ativo ? AppColors.amarelo : AppColors.card2,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _escolherPeriodo,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(
+                Icons.calendar_month_outlined,
+                color: ativo ? Colors.black : AppColors.text,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _escolherPeriodo() async {
+    final periodo = await widget.escolherPeriodo(context, _periodo);
+    if (periodo == null || !mounted) return;
+    setState(() => _periodo = periodo);
+  }
+
+  /// "24/10/2026 até 27/10/2026" (ou só a data, num dia só) e o botão de
+  /// limpar o período.
+  Widget _etiquetaPeriodo(DateTimeRange periodo) {
+    final inicio = formatarDataCurta(periodo.start);
+    final fim = formatarDataCurta(periodo.end);
+    return Container(
+      padding: const EdgeInsets.only(left: 14),
+      decoration: ShapeDecoration(
+        color: AppColors.amarelo.withValues(alpha: 0.14),
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.date_range_outlined,
+            size: 16,
+            color: AppColors.amarelo,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            inicio == fim ? inicio : '$inicio até $fim',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Limpar período',
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.amarelo,
+            ),
+            onPressed: () => setState(() => _periodo = null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Uma aba da agenda. Na agenda geral, só com o barbeiro e o período
+  /// escolhidos nos filtros.
   Widget _aba(List<Agendamento> itens, {required bool primeiraAba}) {
     if (!_agendaGeral) return _lista(itens, primeiraAba: primeiraAba);
 
-    final indice = primeiraAba ? 0 : 1;
-    final doBarbeiro = _filtroBarbeiro == null
-        ? itens
-        : itens.where((a) => a.idBarbeiro == _filtroBarbeiro).toList();
-    final dias = {for (final a in doBarbeiro) _dia(a.data)}.toList();
-    // O dia escolhido pode não ter atendimento do barbeiro escolhido depois.
-    final dia = dias.contains(_filtroDia[indice]) ? _filtroDia[indice] : null;
-    final filtrados = dia == null
-        ? doBarbeiro
-        : doBarbeiro.where((a) => _dia(a.data) == dia).toList();
+    final periodo = _periodo;
+    final filtrados = itens.where((a) {
+      if (_filtroBarbeiro != null && a.idBarbeiro != _filtroBarbeiro) {
+        return false;
+      }
+      if (periodo == null) return true;
+      final dia = _dia(a.data);
+      return !dia.isBefore(_dia(periodo.start)) &&
+          !dia.isAfter(_dia(periodo.end));
+    }).toList();
 
-    return Column(
-      children: [
-        if (dias.length > 1) ...[
-          const SizedBox(height: 8),
-          FiltroEmPilulas<DateTime?>(
-            opcoes: [
-              (null, 'Todos os dias'),
-              for (final d in dias) (d, _rotuloDoDia(d)),
-            ],
-            selecionada: dia,
-            onChanged: (d) => setState(() => _filtroDia[indice] = d),
-          ),
-        ],
-        Expanded(
-          child: _lista(
-            filtrados,
-            primeiraAba: primeiraAba,
-            semAtendimentoDoBarbeiro: itens.isNotEmpty && doBarbeiro.isEmpty,
-          ),
-        ),
-      ],
+    return _lista(
+      filtrados,
+      primeiraAba: primeiraAba,
+      vazioPeloFiltro: itens.isNotEmpty && filtrados.isEmpty,
     );
   }
 
   Widget _lista(
     List<Agendamento> itens, {
     required bool primeiraAba,
-    bool semAtendimentoDoBarbeiro = false,
+    bool vazioPeloFiltro = false,
   }) {
-    if (semAtendimentoDoBarbeiro) {
-      final nome = _barbeiros
-          .where((b) => b.id == _filtroBarbeiro)
-          .map((b) => b.nome)
-          .firstOrNull;
-      return EstadoVazio(
+    if (vazioPeloFiltro) {
+      return const EstadoVazio(
         icone: Icons.filter_alt_off_outlined,
-        titulo: 'Nada de ${nome ?? 'este barbeiro'} aqui',
-        descricao: 'Escolha outro barbeiro ou "Todos os barbeiros".',
+        titulo: 'Nada com esses filtros',
+        descricao: 'Escolha outro barbeiro ou outro período.',
       );
     }
     if (itens.isEmpty) {

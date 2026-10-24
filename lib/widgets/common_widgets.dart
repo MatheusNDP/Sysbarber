@@ -603,51 +603,6 @@ class NavegacaoPrincipal extends InheritedWidget {
       irParaAba != oldWidget.irParaAba || abas != oldWidget.abas;
 }
 
-/// Filtro em pílulas numa linha que rola de lado. A opção escolhida fica
-/// amarela.
-class FiltroEmPilulas<T> extends StatelessWidget {
-  final List<(T, String)> opcoes;
-  final T selecionada;
-  final ValueChanged<T> onChanged;
-
-  const FiltroEmPilulas({
-    super.key,
-    required this.opcoes,
-    required this.selecionada,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: opcoes.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final (valor, rotulo) = opcoes[i];
-          final escolhida = valor == selecionada;
-          return Center(
-            child: ChoiceChip(
-              label: Text(rotulo),
-              selected: escolhida,
-              showCheckmark: false,
-              onSelected: (_) => onChanged(valor),
-              labelStyle: AppTheme.texto(
-                size: 13,
-                weight: FontWeight.w600,
-                color: escolhida ? Colors.black : AppColors.text,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 /// Estado vazio reutilizado nas listagens.
 class EstadoVazio extends StatelessWidget {
   final IconData icone;
