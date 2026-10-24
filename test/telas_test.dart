@@ -13,6 +13,7 @@ import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
+import 'package:sysbarber/screens/perfil_screen.dart';
 import 'package:sysbarber/screens/recuperar_senha_screen.dart';
 import 'package:sysbarber/screens/servicos_screen.dart';
 import 'package:sysbarber/screens/splash_screen.dart';
@@ -22,6 +23,7 @@ import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
+import 'package:sysbarber/services/suporte.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
 
 /// Administrador criado pela configuração inicial nos testes (desde a P22 o
@@ -1052,6 +1054,143 @@ void main() {
       () => service.database.then((db) => db.query('codigo_senha')),
     );
     expect(gravado!.single['origem'], 'barbearia');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P26 — Suporte no Perfil
+  // -------------------------------------------------------------------------
+
+  /// Abre o Perfil de quem está logado. Os links que ele abriria ficam na
+  /// lista devolvida; com [abre] falso, é como um aparelho sem o app.
+  Future<List<Uri>> abrirPerfil(WidgetTester tester, {bool abre = true}) async {
+    final abertos = <Uri>[];
+    await abrir(
+      tester,
+      PerfilScreen(
+        abrirLink: (link) async {
+          abertos.add(link);
+          return abre;
+        },
+      ),
+    );
+    return abertos;
+  }
+
+  /// Rola o Perfil até o Suporte, no fim da lista (que só monta o que está
+  /// perto da tela).
+  Future<void> rolarAteOSuporte(WidgetTester tester) async {
+    await tester.scrollUntilVisible(
+      find.text('E-MAIL'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    // O scrollUntilVisible termina num ensureVisible sem redesenhar a tela.
+    await tester.pump();
+  }
+
+  Future<void> clienteLogado(WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await cadastrarClienteTeste();
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+  }
+
+  testWidgets('o Perfil termina com o Suporte, e o WhatsApp abre com a '
+      'mensagem pronta do cliente', (tester) async {
+    await clienteLogado(tester);
+    final abertos = await abrirPerfil(tester);
+
+    await rolarAteOSuporte(tester);
+    expect(find.text('SUPORTE'), findsOneWidget);
+    expect(find.text('E-MAIL'), findsOneWidget);
+    // No fim da tela, depois do SAIR.
+    expect(
+      tester.getTopLeft(find.text('SUPORTE')).dy,
+      greaterThan(tester.getTopLeft(find.text('SAIR')).dy),
+    );
+
+    await tester.tap(find.text('WHATSAPP'));
+    await tester.pump();
+
+    expect(abertos.single.host, 'wa.me');
+    expect(abertos.single.path, '/${ContatoSuporte.whatsapp}');
+    expect(
+      abertos.single.queryParameters['text'],
+      'Olá! Sou Cliente (cliente) e preciso de ajuda com o SysBarber.',
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o administrador também tem o Suporte, e o e-mail vai com o '
+      'assunto e a mensagem pronta dele', (tester) async {
+    await adminLogado(tester);
+    final abertos = await abrirPerfil(tester);
+
+    await rolarAteOSuporte(tester);
+    expect(find.text('Área administrativa'), findsOneWidget);
+    await tocarEsperando(tester, find.text('E-MAIL'));
+
+    expect(abertos.single.scheme, 'mailto');
+    expect(abertos.single.path, ContatoSuporte.email);
+    expect(abertos.single.queryParameters['subject'], 'Suporte SysBarber');
+    expect(
+      abertos.single.queryParameters['body'],
+      'Olá! Sou Administrador (administrador) e preciso de ajuda com o '
+      'SysBarber.',
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('sem app para abrir o WhatsApp ou o e-mail, o Perfil avisa', (
+    tester,
+  ) async {
+    await clienteLogado(tester);
+    await abrirPerfil(tester, abre: false);
+
+    await rolarAteOSuporte(tester);
+    await tocarEsperando(tester, find.text('WHATSAPP'));
+    expect(
+      find.text(
+        'Não foi possível abrir o WhatsApp. Tente falar com o suporte por '
+        'e-mail.',
+      ),
+      findsOneWidget,
+    );
+
+    await tocarEsperando(tester, find.text('E-MAIL'));
+    expect(
+      find.text(
+        'Não há app de e-mail neste aparelho. Escreva para '
+        '${ContatoSuporte.email} ou use o WhatsApp.',
+      ),
+      findsOneWidget,
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('os botões do Suporte cabem lado a lado em celular pequeno com '
+      'fonte grande', (tester) async {
+    celularPequeno(tester);
+    await clienteLogado(tester);
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+            child: PerfilScreen(abrirLink: (_) async => true),
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+
+    await rolarAteOSuporte(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('WHATSAPP'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 }
