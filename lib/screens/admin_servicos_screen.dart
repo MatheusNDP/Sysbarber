@@ -83,24 +83,24 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Excluir serviço?', style: AppTheme.serif(size: 18)),
+        title: Text('Excluir serviço?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '"${s.nome}" será removido permanentemente.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'EXCLUIR',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
                 color: AppColors.red,
@@ -132,7 +132,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
         acoes: [
           IconButton(
             tooltip: 'Novo serviço',
-            icon: const Icon(Icons.add, color: AppColors.gold),
+            icon: const Icon(Icons.add, color: AppColors.amarelo),
             onPressed: () => _abrirFormulario(),
           ),
         ],
@@ -143,7 +143,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -162,7 +162,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) {
                       final s = _servicos[i];
-                      return GoldCard(
+                      return Cartao(
                         onTap: () => _abrirFormulario(servico: s),
                         child: Row(
                           children: [
@@ -174,7 +174,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                                 children: [
                                   Text(
                                     s.nome,
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 14,
                                       weight: FontWeight.w700,
                                     ),
@@ -183,7 +183,7 @@ class _AdminServicosScreenState extends State<AdminServicosScreen> {
                                   Text(
                                     '${formatarReal(s.preco)}  ·  '
                                     '${s.duracaoMinutos} min',
-                                    style: AppTheme.sans(
+                                    style: AppTheme.texto(
                                       size: 12,
                                       color: AppColors.muted,
                                     ),
@@ -324,7 +324,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
       ),
       title: Text(
         _editando ? 'Editar serviço' : 'Novo serviço',
-        style: AppTheme.serif(size: 18),
+        style: AppTheme.titulo(size: 18),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -348,17 +348,17 @@ class _FormularioServicoState extends State<_FormularioServico> {
           onPressed: _salvando ? null : () => Navigator.of(context).pop(false),
           child: Text(
             'CANCELAR',
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
         TextButton(
           onPressed: _salvando ? null : _salvar,
           child: Text(
             _salvando ? 'SALVANDO...' : 'SALVAR',
-            style: AppTheme.sans(
+            style: AppTheme.texto(
               size: 13,
               weight: FontWeight.w700,
-              color: AppColors.gold,
+              color: AppColors.amarelo,
             ),
           ),
         ),
@@ -382,7 +382,7 @@ class _FormularioServicoState extends State<_FormularioServico> {
             ? TextCapitalization.sentences
             : TextCapitalization.none,
         inputFormatters: formatters?.cast(),
-        style: AppTheme.sans(size: 14),
+        style: AppTheme.texto(size: 14),
         decoration: InputDecoration(labelText: rotulo),
       ),
     );

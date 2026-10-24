@@ -126,7 +126,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Como o cliente pagou?', style: AppTheme.serif(size: 18)),
+        title: Text('Como o cliente pagou?', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +141,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                         '${a.cliente?.nome ?? 'este cliente'}. '
                         'Ao confirmar, o cliente recebe '
                         '${pagamento.valor.round()} pontos de fidelidade.',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
                 height: 1.4,
@@ -151,7 +151,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             ...MetodoPagamento.values.map(
               (m) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: GoldCard(
+                child: Cartao(
                   onTap: () => Navigator.of(ctx).pop(m),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -170,7 +170,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                       const SizedBox(width: 12),
                       Text(
                         m.label,
-                        style: AppTheme.sans(
+                        style: AppTheme.texto(
                           size: 14,
                           weight: FontWeight.w700,
                         ),
@@ -187,7 +187,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'AGORA NÃO',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
         ],
@@ -255,7 +255,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Cancelar agendamento?', style: AppTheme.serif(size: 18)),
+        title: Text('Cancelar agendamento?', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +267,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                         'multa e recebe de volta o que já tiver pago.'
                   : 'O horário voltará a ficar disponível para outros '
                         'clientes.',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
                 height: 1.4,
@@ -303,7 +303,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                                   'cobrada multa de '
                                   '${formatarReal(a.valor * DatabaseService.percentualMulta)}'
                                   ' (50% do serviço).',
-                        style: AppTheme.sans(
+                        style: AppTheme.texto(
                           size: 12,
                           color: AppColors.text,
                           height: 1.4,
@@ -321,14 +321,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
               'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               'CANCELAR AGENDAMENTO',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
                 color: AppColors.red,
@@ -396,7 +396,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   : r.pontosRetidos > 0
                   ? 'Cancelado fora do prazo'
                   : 'Agendamento cancelado'),
-          style: AppTheme.serif(size: 18),
+          style: AppTheme.titulo(size: 18),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -408,11 +408,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('•  ', style: TextStyle(color: AppColors.gold)),
+                      const Text('•  ', style: TextStyle(color: AppColors.amarelo)),
                       Expanded(
                         child: Text(
                           l,
-                          style: AppTheme.sans(size: 13, height: 1.4),
+                          style: AppTheme.texto(size: 13, height: 1.4),
                         ),
                       ),
                     ],
@@ -426,10 +426,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'ENTENDI',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -457,7 +457,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             ? [
                 IconButton(
                   tooltip: 'Sair',
-                  icon: const Icon(Icons.logout, color: AppColors.gold),
+                  icon: const Icon(Icons.logout, color: AppColors.amarelo),
                   onPressed: _sair,
                 ),
               ]
@@ -469,11 +469,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           if (_modoBarbeiro) _faixaProfissional(),
           TabBar(
             controller: _abas,
-            indicatorColor: AppColors.gold,
-            labelColor: AppColors.gold,
+            indicatorColor: AppColors.amarelo,
+            labelColor: AppColors.amarelo,
             unselectedLabelColor: AppColors.muted,
-            labelStyle: AppTheme.sans(size: 13, weight: FontWeight.w700),
-            unselectedLabelStyle: AppTheme.sans(size: 13),
+            labelStyle: AppTheme.texto(size: 13, weight: FontWeight.w700),
+            unselectedLabelStyle: AppTheme.texto(size: 13),
             tabs: [
               Tab(text: _pelaBarbearia ? 'Em aberto' : 'Próximos'),
               const Tab(text: 'Histórico'),
@@ -482,7 +482,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -520,7 +520,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     }
 
     return RefreshIndicator(
-      color: AppColors.gold,
+      color: AppColors.amarelo,
       backgroundColor: AppColors.card,
       onRefresh: _carregar,
       child: ListView.separated(
@@ -538,9 +538,9 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final aguardando = a.aguardandoConclusao(agora);
     final corStatus = switch (a.status) {
       StatusAgendamento.confirmado =>
-        aguardando ? AppColors.gold : AppColors.green,
+        aguardando ? AppColors.amarelo : AppColors.green,
       StatusAgendamento.cancelado => AppColors.red,
-      StatusAgendamento.finalizado => AppColors.gold,
+      StatusAgendamento.finalizado => AppColors.amarelo,
       StatusAgendamento.faltou => AppColors.red,
     };
 
@@ -552,7 +552,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         _acao(
           'Concluir',
           Icons.check_circle_outline,
-          AppColors.gold,
+          AppColors.amarelo,
           () => _finalizar(a),
         ),
       if (_pelaBarbearia && a.podeRegistrarFalta(agora))
@@ -571,7 +571,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         ),
     ];
 
-    return GoldCard(
+    return Cartao(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -585,10 +585,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               Expanded(
                 child: Text(
                   a.servico?.nome ?? 'Serviço',
-                  style: AppTheme.serif(size: 17),
+                  style: AppTheme.titulo(size: 17),
                 ),
               ),
-              GoldBadge(
+              Etiqueta(
                 texto: aguardando ? 'Aguardando conclusão' : a.status.label,
                 cor: corStatus,
               ),
@@ -638,7 +638,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     return TextButton.icon(
       onPressed: onTap,
       icon: Icon(icone, size: 16, color: cor),
-      label: Text(texto, style: AppTheme.sans(size: 12, color: cor)),
+      label: Text(texto, style: AppTheme.texto(size: 12, color: cor)),
     );
   }
 
@@ -660,26 +660,26 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Registrar falta?', style: AppTheme.serif(size: 18)),
+        title: Text('Registrar falta?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '${a.cliente?.nome ?? 'O cliente'} não compareceu ao horário de '
           '${formatarHora(a.data)}. $penalidade, como num cancelamento '
           'fora do prazo.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'REGISTRAR FALTA',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
                 color: AppColors.red,
@@ -721,31 +721,31 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Concluir atendimento?', style: AppTheme.serif(size: 18)),
+        title: Text('Concluir atendimento?', style: AppTheme.titulo(size: 18)),
         content: Text(
           pendente
               ? 'O pagamento deste atendimento ainda está pendente. '
                     'Conclua apenas se já registrou o recebimento.'
               : 'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
                     'marcado como concluído e sairá da lista de próximos.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'VOLTAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'CONCLUIR',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -786,19 +786,19 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          GoldAvatar(texto: b?.iniciais ?? '?', tamanho: 42),
+          AvatarIniciais(texto: b?.iniciais ?? '?', tamanho: 42),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionLabel('Profissional'),
+                const TituloSecao('Profissional'),
                 const SizedBox(height: 3),
                 Text(
                   b?.nome ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                 ),
               ],
             ),
@@ -808,11 +808,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             children: [
               Text(
                 '$doDia',
-                style: AppTheme.serif(size: 22, color: AppColors.gold),
+                style: AppTheme.titulo(size: 22, color: AppColors.amarelo),
               ),
               Text(
                 'hoje',
-                style: AppTheme.sans(size: 10, color: AppColors.muted),
+                style: AppTheme.texto(size: 10, color: AppColors.muted),
               ),
             ],
           ),
@@ -839,7 +839,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: Text(
               'Sem pagamento registrado',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -862,7 +862,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             child: Text(
               '${DatabaseService.pontosParaPremio} pontos do resgate não '
               'devolvidos',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -887,7 +887,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               Expanded(
                 child: Text(
                   descricao,
-                  style: AppTheme.sans(size: 12, color: AppColors.green),
+                  style: AppTheme.texto(size: 12, color: AppColors.green),
                 ),
               ),
             ],
@@ -904,7 +904,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   child: Text(
                     'Estornado ${formatarReal(a.valorEstornado)}'
                     '${a.valorEstornado < p.valor ? ' (multa retida)' : ''}',
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ),
               ],
@@ -922,7 +922,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Expanded(
             child: Text(
               'Pagamento cancelado — nada a pagar',
-              style: AppTheme.sans(size: 12, color: AppColors.muted),
+              style: AppTheme.texto(size: 12, color: AppColors.muted),
             ),
           ),
         ],
@@ -936,13 +936,13 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.08),
+        color: AppColors.amarelo.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule, size: 16, color: AppColors.gold),
+          const Icon(Icons.schedule, size: 16, color: AppColors.amarelo),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -958,7 +958,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                   'Pague no balcão no dia do atendimento. Os '
                       '${p.valor.round()} pontos entram após a confirmação.',
               },
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 11,
                 color: AppColors.muted,
                 height: 1.35,
@@ -967,7 +967,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           ),
           if (_pelaBarbearia) ...[
             const SizedBox(width: 6),
-            GoldButton(
+            BotaoPrincipal(
               texto: 'RECEBER',
               expandido: false,
               onPressed: () => _quitar(a),
@@ -987,7 +987,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         Expanded(
           child: Text(
             texto,
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
       ],

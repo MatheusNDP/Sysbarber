@@ -68,13 +68,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   Text(
                     'Bem-vindo à barbearia',
                     textAlign: TextAlign.center,
-                    style: AppTheme.serif(size: 22),
+                    style: AppTheme.titulo(size: 22),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Preencha seus dados para começar',
                     textAlign: TextAlign.center,
-                    style: AppTheme.sans(size: 13, color: AppColors.muted),
+                    style: AppTheme.texto(size: 13, color: AppColors.muted),
                   ),
                   const SizedBox(height: 28),
                   _campo(
@@ -119,7 +119,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  GoldButton(
+                  BotaoPrincipal(
                     texto: _carregando ? 'CADASTRANDO...' : 'CADASTRAR',
                     onPressed: _carregando ? null : _cadastrar,
                   ),
@@ -129,7 +129,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     children: [
                       Text(
                         'Já tem conta? ',
-                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                        style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
                       // Botão de verdade (foco, leitor de tela e área de toque),
                       // e não um texto com GestureDetector.
@@ -141,10 +141,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         ),
                         child: Text(
                           'Entrar',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 13,
                             weight: FontWeight.w700,
-                            color: AppColors.gold,
+                            color: AppColors.amarelo,
                           ),
                         ),
                       ),
@@ -174,7 +174,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(rotulo),
+          TituloSecao(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -182,7 +182,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
             obscureText: obscuro,
             inputFormatters: formatters,
             autocorrect: false,
-            style: AppTheme.sans(size: 14),
+            style: AppTheme.texto(size: 14),
             decoration: InputDecoration(
               hintText: hint,
               prefixIcon: Icon(icone, color: AppColors.muted, size: 20),

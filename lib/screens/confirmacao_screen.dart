@@ -86,12 +86,12 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.gold.withValues(alpha: 0.12),
-                      border: Border.all(color: AppColors.gold, width: 1.5),
+                      color: AppColors.amarelo.withValues(alpha: 0.12),
+                      border: Border.all(color: AppColors.amarelo, width: 1.5),
                     ),
                     child: const Icon(
                       Icons.check,
-                      color: AppColors.gold,
+                      color: AppColors.amarelo,
                       size: 34,
                     ),
                   ),
@@ -100,13 +100,13 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
                 Text(
                   'Revise seu agendamento',
                   textAlign: TextAlign.center,
-                  style: AppTheme.serif(size: 22),
+                  style: AppTheme.titulo(size: 22),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Confira os dados antes de confirmar',
                   textAlign: TextAlign.center,
-                  style: AppTheme.sans(size: 13, color: AppColors.muted),
+                  style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 28),
                 _linhaResumo(
@@ -137,15 +137,15 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.card2,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.gold, width: 1.5),
+                    border: Border.all(color: AppColors.amarelo, width: 1.5),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SectionLabel('Valor total'),
+                      const TituloSecao('Valor total'),
                       Text(
                         formatarReal(servico?.preco ?? 0),
-                        style: AppTheme.serif(size: 26, color: AppColors.gold),
+                        style: AppTheme.titulo(size: 26, color: AppColors.amarelo),
                       ),
                     ],
                   ),
@@ -157,14 +157,14 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: Column(
               children: [
-                GoldButton(
+                BotaoPrincipal(
                   texto: _verificando
                       ? 'VERIFICANDO...'
                       : 'CONTINUAR PARA O PAGAMENTO',
                   onPressed: _verificando ? null : _continuar,
                 ),
                 const SizedBox(height: 10),
-                GoldOutlineButton(
+                BotaoSecundario(
                   texto: 'CANCELAR',
                   onPressed: _verificando ? null : _cancelar,
                 ),
@@ -182,7 +182,7 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     String? detalhe,
     String? icone,
   }) {
-    return GoldCard(
+    return Cartao(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -194,17 +194,17 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionLabel(rotulo),
+                TituloSecao(rotulo),
                 const SizedBox(height: 6),
                 Text(
                   valor,
-                  style: AppTheme.sans(size: 15, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 15, weight: FontWeight.w700),
                 ),
                 if (detalhe != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     detalhe,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ],

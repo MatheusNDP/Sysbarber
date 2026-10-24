@@ -137,7 +137,7 @@ void main() {
   testWidgets('a grade de indicadores cresce com a fonte do sistema',
       (tester) async {
     celularPequeno(tester);
-    Widget card(String n) => GoldCard(
+    Widget card(String n) => Cartao(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -779,7 +779,7 @@ void main() {
         home: Scaffold(
           body: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: GoldButton(
+            child: BotaoPrincipal(
               texto: 'RESERVAR E PAGAR NA BARBEARIA',
               onPressed: () {},
             ),
@@ -1011,7 +1011,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), codigo);
     await tocarEsperando(
       tester,
-      find.widgetWithText(GoldButton, 'ENTRAR'),
+      find.widgetWithText(BotaoPrincipal, 'ENTRAR'),
     );
     await tester.pumpAndSettle();
 

@@ -100,22 +100,22 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
             borderRadius: BorderRadius.circular(14),
             side: const BorderSide(color: AppColors.border),
           ),
-          title: Text('Não é possível excluir', style: AppTheme.serif(size: 18)),
+          title: Text('Não é possível excluir', style: AppTheme.titulo(size: 18)),
           content: Text(
             '${b.nome} possui $vinculados agendamento(s) registrado(s). '
             'Excluí-lo faria esses atendimentos desaparecerem do histórico '
             'dos clientes.',
-            style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+            style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
                 'ENTENDI',
-                style: AppTheme.sans(
+                style: AppTheme.texto(
                   size: 13,
                   weight: FontWeight.w700,
-                  color: AppColors.gold,
+                  color: AppColors.amarelo,
                 ),
               ),
             ),
@@ -133,24 +133,24 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Excluir barbeiro?', style: AppTheme.serif(size: 18)),
+        title: Text('Excluir barbeiro?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '"${b.nome}" será removido permanentemente da equipe.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'EXCLUIR',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
                 color: AppColors.red,
@@ -182,7 +182,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
         acoes: [
           IconButton(
             tooltip: 'Novo barbeiro',
-            icon: const Icon(Icons.add, color: AppColors.gold),
+            icon: const Icon(Icons.add, color: AppColors.amarelo),
             onPressed: () => _abrirFormulario(),
           ),
         ],
@@ -193,7 +193,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -219,28 +219,28 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
   }
 
   Widget _card(Barbeiro b) {
-    return GoldCard(
+    return Cartao(
       onTap: () => _abrirFormulario(barbeiro: b),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              GoldAvatar(texto: b.iniciais, tamanho: 46),
+              AvatarIniciais(texto: b.iniciais, tamanho: 46),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.nome, style: AppTheme.serif(size: 16)),
+                    Text(b.nome, style: AppTheme.titulo(size: 16)),
                     const SizedBox(height: 3),
                     Text(
                       b.especialidade,
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                      style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                     if (!b.ativo) ...[
                       const SizedBox(height: 6),
-                      const GoldBadge(
+                      const Etiqueta(
                         texto: 'Indisponível',
                         cor: AppColors.muted,
                       ),
@@ -293,7 +293,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
             texto,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 12, color: AppColors.muted),
+            style: AppTheme.texto(size: 12, color: AppColors.muted),
           ),
         ),
       ],
@@ -438,7 +438,7 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
       ),
       title: Text(
         _editando ? 'Editar barbeiro' : 'Novo barbeiro',
-        style: AppTheme.serif(size: 18),
+        style: AppTheme.titulo(size: 18),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -488,17 +488,17 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
           onPressed: _salvando ? null : () => Navigator.of(context).pop(false),
           child: Text(
             'CANCELAR',
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
         TextButton(
           onPressed: _salvando ? null : _salvar,
           child: Text(
             _salvando ? 'SALVANDO...' : 'SALVAR',
-            style: AppTheme.sans(
+            style: AppTheme.texto(
               size: 13,
               weight: FontWeight.w700,
-              color: AppColors.gold,
+              color: AppColors.amarelo,
             ),
           ),
         ),
@@ -525,7 +525,7 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
             ? TextCapitalization.words
             : TextCapitalization.none,
         inputFormatters: formatters?.cast(),
-        style: AppTheme.sans(size: 14),
+        style: AppTheme.texto(size: 14),
         decoration: InputDecoration(labelText: rotulo, suffixIcon: sufixo),
       ),
     );

@@ -186,28 +186,28 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         ),
         title: Text(
           'Não foi possível agendar',
-          style: AppTheme.serif(size: 18),
+          style: AppTheme.titulo(size: 18),
         ),
         content: Text(
           '$mensagem. Nenhuma cobrança foi feita.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
               'FECHAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               'ESCOLHER OUTRO HORÁRIO',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -242,7 +242,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             Text(
               'Prêmio resgatado!',
               textAlign: TextAlign.center,
-              style: AppTheme.serif(size: 19),
+              style: AppTheme.titulo(size: 19),
             ),
           ],
         ),
@@ -251,11 +251,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           '${resultado.pontosDebitados} pontos do seu saldo, que agora '
           'é de ${resultado.saldoPontos} pontos.',
           textAlign: TextAlign.center,
-          style: AppTheme.sans(size: 13, color: AppColors.muted, height: 1.4),
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          GoldButton(
+          BotaoPrincipal(
             texto: 'OK',
             expandido: false,
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -290,15 +290,15 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (antecipado ? AppColors.green : AppColors.gold)
+                color: (antecipado ? AppColors.green : AppColors.amarelo)
                     .withValues(alpha: 0.15),
                 border: Border.all(
-                  color: antecipado ? AppColors.green : AppColors.gold,
+                  color: antecipado ? AppColors.green : AppColors.amarelo,
                 ),
               ),
               child: Icon(
                 antecipado ? Icons.check : Icons.schedule,
-                color: antecipado ? AppColors.green : AppColors.gold,
+                color: antecipado ? AppColors.green : AppColors.amarelo,
                 size: 30,
               ),
             ),
@@ -306,7 +306,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             Text(
               antecipado ? 'Pagamento confirmado!' : 'Agendamento reservado!',
               textAlign: TextAlign.center,
-              style: AppTheme.serif(size: 19),
+              style: AppTheme.titulo(size: 19),
             ),
           ],
         ),
@@ -320,7 +320,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                         'pendente até a barbearia confirmar o recebimento '
                         'no balcão.',
               textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
             const SizedBox(height: 14),
             Container(
@@ -329,7 +329,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 vertical: 10,
               ),
               decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.1),
+                color: AppColors.amarelo.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.border),
               ),
@@ -339,10 +339,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                     : '⭐ ${resultado.valor.round()} pontos liberados após '
                           'o pagamento',
                 textAlign: TextAlign.center,
-                style: AppTheme.sans(
+                style: AppTheme.texto(
                   size: 13,
                   weight: FontWeight.w700,
-                  color: AppColors.gold,
+                  color: AppColors.amarelo,
                 ),
               ),
             ),
@@ -350,7 +350,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          GoldButton(
+          BotaoPrincipal(
             texto: 'OK',
             expandido: false,
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -388,13 +388,13 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 ],
                 if (!_usarPontos) ...[
                   const SizedBox(height: 26),
-                  const SectionLabel('Quando pagar'),
+                  const TituloSecao('Quando pagar'),
                   const SizedBox(height: 12),
                   ...TipoPagamento.values.map(_opcaoTipo),
                 ],
                 if (!_usarPontos && antecipado) ...[
                   const SizedBox(height: 26),
-                  const SectionLabel('Forma de pagamento'),
+                  const TituloSecao('Forma de pagamento'),
                   const SizedBox(height: 12),
                   _opcaoMetodo(MetodoPagamento.pix, '📱', 'Pix', 'QR Code'),
                   const SizedBox(height: 10),
@@ -418,7 +418,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: GoldButton(
+            child: BotaoPrincipal(
               texto: _processando
                   ? 'PROCESSANDO...'
                   : _usarPontos
@@ -445,16 +445,16 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       ),
       child: Column(
         children: [
-          const SectionLabel('Valor total'),
+          const TituloSecao('Valor total'),
           const SizedBox(height: 10),
           Text(
             formatarReal(servico?.preco ?? 0),
-            style: AppTheme.serif(size: 40, color: AppColors.gold),
+            style: AppTheme.titulo(size: 40, color: AppColors.amarelo),
           ),
           const SizedBox(height: 6),
           Text(
             servico?.nome ?? '',
-            style: AppTheme.sans(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ],
       ),
@@ -464,7 +464,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   /// No lugar da oferta de resgate quando o saldo não carregou. Não ocupa a
   /// tela inteira: pagar em dinheiro continua possível.
   Widget _avisoPontosIndisponiveis(String mensagem) {
-    return GoldCard(
+    return Cartao(
       child: Row(
         children: [
           const Icon(Icons.info_outline, color: AppColors.muted, size: 20),
@@ -472,7 +472,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           Expanded(
             child: Text(
               mensagem,
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 12,
                 color: AppColors.muted,
                 height: 1.3,
@@ -483,10 +483,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             onPressed: _carregarPontos,
             child: Text(
               'TENTAR NOVAMENTE',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 12,
                 weight: FontWeight.w700,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -499,7 +499,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   Widget _cardResgate() {
     final saldoRestante = _pontos - DatabaseService.pontosParaPremio;
 
-    return GoldCard(
+    return Cartao(
       selected: _usarPontos,
       onTap: () => setState(() => _usarPontos = !_usarPontos),
       child: Row(
@@ -512,10 +512,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               children: [
                 Text(
                   'Usar ${DatabaseService.pontosParaPremio} pontos',
-                  style: AppTheme.sans(
+                  style: AppTheme.texto(
                     size: 14,
                     weight: FontWeight.w700,
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -524,7 +524,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                       ? 'Serviço gratuito. Saldo após o resgate: '
                             '$saldoRestante pts'
                       : 'Você tem $_pontos pts — troque por este serviço',
-                  style: AppTheme.sans(
+                  style: AppTheme.texto(
                     size: 12,
                     color: AppColors.muted,
                     height: 1.3,
@@ -540,9 +540,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _usarPontos ? AppColors.gold : Colors.transparent,
+              color: _usarPontos ? AppColors.amarelo : Colors.transparent,
               border: Border.all(
-                color: _usarPontos ? AppColors.gold : AppColors.muted,
+                color: _usarPontos ? AppColors.amarelo : AppColors.muted,
                 width: 1.5,
               ),
             ),
@@ -559,7 +559,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     final selecionado = _tipo == tipo;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         selected: selecionado,
         onTap: () => setState(() => _tipo = tipo),
         child: Row(
@@ -575,12 +575,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 children: [
                   Text(
                     tipo.label,
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     tipo.descricao,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ),
@@ -602,7 +602,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     String descricao,
   ) {
     final selecionado = _metodo == metodo;
-    return GoldCard(
+    return Cartao(
       selected: selecionado,
       onTap: () => setState(() => _metodo = metodo),
       child: Row(
@@ -615,12 +615,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               children: [
                 Text(
                   titulo,
-                  style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   descricao,
-                  style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  style: AppTheme.texto(size: 12, color: AppColors.muted),
                 ),
               ],
             ),
@@ -640,7 +640,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: selecionado ? AppColors.gold : AppColors.muted,
+          color: selecionado ? AppColors.amarelo : AppColors.muted,
           width: 1.5,
         ),
       ),
@@ -650,7 +650,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               height: 11,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             )
           : null,
@@ -692,7 +692,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           const SizedBox(height: 16),
           Text(
             'Aponte a câmera para o QR Code',
-            style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+            style: AppTheme.texto(size: 13, weight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           Container(
@@ -709,7 +709,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                     _payloadPix,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.sans(size: 11, color: AppColors.muted),
+                    style: AppTheme.texto(size: 11, color: AppColors.muted),
                   ),
                 ),
                 IconButton(
@@ -717,7 +717,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   icon: const Icon(
                     Icons.copy,
                     size: 18,
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                   ),
                   onPressed: () async {
                     await Clipboard.setData(
@@ -813,7 +813,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(rotulo),
+          TituloSecao(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -822,7 +822,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             textCapitalization: capitalizar
                 ? TextCapitalization.characters
                 : TextCapitalization.none,
-            style: AppTheme.sans(size: 14),
+            style: AppTheme.texto(size: 14),
             decoration: InputDecoration(hintText: hint),
           ),
         ],
@@ -834,14 +834,14 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.07),
+        color: AppColors.amarelo.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, color: AppColors.gold, size: 20),
+          const Icon(Icons.info_outline, color: AppColors.amarelo, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -849,10 +849,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               children: [
                 Text(
                   'Pagamento pendente',
-                  style: AppTheme.sans(
+                  style: AppTheme.texto(
                     size: 13,
                     weight: FontWeight.w700,
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -860,7 +860,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   'Seu horário fica reservado. Você paga no balcão no dia do '
                   'atendimento e a barbearia confirma o recebimento — só '
                   'então os pontos de fidelidade são creditados.',
-                  style: AppTheme.sans(
+                  style: AppTheme.texto(
                     size: 12,
                     color: AppColors.muted,
                     height: 1.4,
@@ -885,7 +885,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           Expanded(
             child: Text(
               texto,
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 11,
                 color: AppColors.muted,
                 height: 1.4,

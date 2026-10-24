@@ -73,7 +73,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -89,7 +89,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: GoldButton(
+            child: BotaoPrincipal(
               texto: 'CONTINUAR',
               onPressed: _selecionado == null ? null : _continuar,
             ),
@@ -112,18 +112,18 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionLabel('Serviço escolhido'),
+                const TituloSecao('Serviço escolhido'),
                 const SizedBox(height: 3),
                 Text(
                   servico.nome,
-                  style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                 ),
               ],
             ),
           ),
           Text(
             formatarReal(servico.preco),
-            style: AppTheme.serif(size: 17, color: AppColors.gold),
+            style: AppTheme.titulo(size: 17, color: AppColors.amarelo),
           ),
         ],
       ),
@@ -138,23 +138,23 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
     if (!b.ativo) {
       return Opacity(
         opacity: 0.45,
-        child: GoldCard(
+        child: Cartao(
           child: Row(
             children: [
-              GoldAvatar(texto: b.iniciais, tamanho: 52),
+              AvatarIniciais(texto: b.iniciais, tamanho: 52),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.nome, style: AppTheme.serif(size: 17)),
+                    Text(b.nome, style: AppTheme.titulo(size: 17)),
                     const SizedBox(height: 3),
                     Text(
                       b.especialidade,
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                      style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                     const SizedBox(height: 8),
-                    const GoldBadge(
+                    const Etiqueta(
                       texto: 'Indisponível',
                       cor: AppColors.muted,
                     ),
@@ -168,26 +168,26 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
       );
     }
 
-    return GoldCard(
+    return Cartao(
       selected: selecionado,
       onTap: () => setState(() => _selecionado = b),
       child: Row(
         children: [
-          GoldAvatar(texto: b.iniciais, tamanho: 52),
+          AvatarIniciais(texto: b.iniciais, tamanho: 52),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(b.nome, style: AppTheme.serif(size: 17)),
+                Text(b.nome, style: AppTheme.titulo(size: 17)),
                 const SizedBox(height: 3),
                 Text(
                   b.especialidade,
-                  style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  style: AppTheme.texto(size: 12, color: AppColors.muted),
                 ),
                 if (selecionado) ...[
                   const SizedBox(height: 8),
-                  const GoldBadge(texto: 'Selecionado ✓'),
+                  const Etiqueta(texto: 'Selecionado ✓'),
                 ],
               ],
             ),
@@ -198,9 +198,9 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: selecionado ? AppColors.gold : Colors.transparent,
+              color: selecionado ? AppColors.amarelo : Colors.transparent,
               border: Border.all(
-                color: selecionado ? AppColors.gold : AppColors.muted,
+                color: selecionado ? AppColors.amarelo : AppColors.muted,
                 width: 1.5,
               ),
             ),

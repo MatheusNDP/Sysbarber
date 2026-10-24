@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 '✂️',
                 style: TextStyle(
                   fontSize: 180,
-                  color: AppColors.gold.withValues(alpha: 0.04),
+                  color: AppColors.amarelo.withValues(alpha: 0.04),
                 ),
               ),
             ),
@@ -73,15 +73,15 @@ class _SplashScreenState extends State<SplashScreen> {
                       children: [
                         TextSpan(
                           text: 'SYS',
-                          style: AppTheme.serif(
+                          style: AppTheme.titulo(
                             size: 40,
-                            color: AppColors.gold,
+                            color: AppColors.amarelo,
                             letterSpacing: 4,
                           ),
                         ),
                         TextSpan(
                           text: 'BARBER',
-                          style: AppTheme.serif(
+                          style: AppTheme.titulo(
                             size: 40,
                             color: AppColors.text,
                             letterSpacing: 4,
@@ -95,7 +95,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   const SizedBox(height: 18),
                   Text(
                     'SISTEMA DE BARBEARIA',
-                    style: AppTheme.sans(
+                    style: AppTheme.texto(
                       size: 11,
                       color: AppColors.muted,
                       letterSpacing: 3,
@@ -110,13 +110,13 @@ class _SplashScreenState extends State<SplashScreen> {
                           height: 26,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: AppColors.gold,
+                            color: AppColors.amarelo,
                           ),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'Entrando como ${nome ?? ''}...',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 13,
                             color: AppColors.muted,
                           ),
@@ -128,27 +128,27 @@ class _SplashScreenState extends State<SplashScreen> {
                       'Primeiro acesso: crie a conta de administrador da '
                       'barbearia para começar.',
                       textAlign: TextAlign.center,
-                      style: AppTheme.sans(
+                      style: AppTheme.texto(
                         size: 13,
                         color: AppColors.muted,
                         height: 1.4,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    GoldButton(
+                    BotaoPrincipal(
                       texto: 'CONFIGURAR BARBEARIA',
                       onPressed: () => Navigator.of(
                         context,
                       ).pushNamed(AuthService.rotaConfiguracao),
                     ),
                   ] else ...[
-                    GoldButton(
+                    BotaoPrincipal(
                       texto: 'ENTRAR',
                       onPressed: () =>
                           Navigator.of(context).pushNamed('/login'),
                     ),
                     const SizedBox(height: 12),
-                    GoldOutlineButton(
+                    BotaoSecundario(
                       texto: 'CRIAR CONTA',
                       onPressed: () =>
                           Navigator.of(context).pushNamed('/cadastro'),

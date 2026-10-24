@@ -104,17 +104,17 @@ class _HorarioScreenState extends State<HorarioScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               children: [
-                const SectionLabel('Escolha o dia'),
+                const TituloSecao('Escolha o dia'),
                 const SizedBox(height: 12),
                 _reguaDias(),
                 const SizedBox(height: 28),
-                const SectionLabel('Horários disponíveis'),
+                const TituloSecao('Horários disponíveis'),
                 const SizedBox(height: 12),
                 if (_carregando)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 30),
                     child: Center(
-                      child: CircularProgressIndicator(color: AppColors.gold),
+                      child: CircularProgressIndicator(color: AppColors.amarelo),
                     ),
                   )
                 else if (_erro != null)
@@ -137,7 +137,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                         Text(
                           'Nenhum horário disponível neste dia',
                           textAlign: TextAlign.center,
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 13,
                             weight: FontWeight.w700,
                           ),
@@ -146,7 +146,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                         Text(
                           'Escolha outra data na régua acima.',
                           textAlign: TextAlign.center,
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 12,
                             color: AppColors.muted,
                           ),
@@ -158,13 +158,13 @@ class _HorarioScreenState extends State<HorarioScreen> {
                   _chipsHorarios(),
                 const SizedBox(height: 28),
                 if (_horaSelecionada != null)
-                  GoldCard(
+                  Cartao(
                     selected: true,
                     child: Row(
                       children: [
                         const Icon(
                           Icons.event_available,
-                          color: AppColors.gold,
+                          color: AppColors.amarelo,
                           size: 22,
                         ),
                         const SizedBox(width: 14),
@@ -174,7 +174,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                             children: [
                               Text(
                                 barbeiro?.nome ?? 'Profissional',
-                                style: AppTheme.sans(
+                                style: AppTheme.texto(
                                   size: 14,
                                   weight: FontWeight.w700,
                                 ),
@@ -182,7 +182,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                               const SizedBox(height: 3),
                               Text(
                                 formatarDataExtenso(_dataSelecionada),
-                                style: AppTheme.sans(
+                                style: AppTheme.texto(
                                   size: 12,
                                   color: AppColors.muted,
                                 ),
@@ -192,9 +192,9 @@ class _HorarioScreenState extends State<HorarioScreen> {
                         ),
                         Text(
                           _horaSelecionada!,
-                          style: AppTheme.serif(
+                          style: AppTheme.titulo(
                             size: 22,
-                            color: AppColors.gold,
+                            color: AppColors.amarelo,
                           ),
                         ),
                       ],
@@ -205,7 +205,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: GoldButton(
+            child: BotaoPrincipal(
               texto: 'CONFIRMAR',
               onPressed: _horaSelecionada == null ? null : _confirmar,
             ),
@@ -241,10 +241,10 @@ class _HorarioScreenState extends State<HorarioScreen> {
                 width: 62,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: selecionado ? AppColors.gold : AppColors.card,
+                  color: selecionado ? AppColors.amarelo : AppColors.card,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: selecionado ? AppColors.gold : AppColors.border,
+                    color: selecionado ? AppColors.amarelo : AppColors.border,
                   ),
                 ),
                 child: Column(
@@ -252,7 +252,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                   children: [
                     Text(
                       abreviacaoDiaSemana(dia),
-                      style: AppTheme.sans(
+                      style: AppTheme.texto(
                         size: 10,
                         weight: FontWeight.w700,
                         color: selecionado ? Colors.black : AppColors.muted,
@@ -262,7 +262,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                     const SizedBox(height: 6),
                     Text(
                       '${dia.day}',
-                      style: AppTheme.serif(
+                      style: AppTheme.titulo(
                         size: 20,
                         color: selecionado ? Colors.black : AppColors.text,
                       ),
@@ -293,15 +293,15 @@ class _HorarioScreenState extends State<HorarioScreen> {
               // recomendados.
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: BoxDecoration(
-                color: selecionado ? AppColors.gold : AppColors.card,
+                color: selecionado ? AppColors.amarelo : AppColors.card,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: selecionado ? AppColors.gold : AppColors.border,
+                  color: selecionado ? AppColors.amarelo : AppColors.border,
                 ),
               ),
               child: Text(
                 hora,
-                style: AppTheme.sans(
+                style: AppTheme.texto(
                   size: 14,
                   weight: FontWeight.w700,
                   color: selecionado ? Colors.black : AppColors.text,

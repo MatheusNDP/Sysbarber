@@ -75,7 +75,7 @@ class _AdminScreenState extends State<AdminScreen> {
             // Antes uma falha deixava o carregamento girando para sempre.
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null || resumo == null
                 ? EstadoErro(
@@ -83,7 +83,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     onTentarNovamente: _carregar,
                   )
                 : RefreshIndicator(
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                     backgroundColor: AppColors.card,
                     onRefresh: _carregar,
                     child: ListView(
@@ -93,7 +93,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         vertical: 24,
                       ),
                       children: [
-                        const SectionLabel('Modo administrador'),
+                        const TituloSecao('Modo administrador'),
                         const SizedBox(height: 6),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -101,7 +101,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             Flexible(
                               child: Text(
                                 'Painel de Controle',
-                                style: AppTheme.serif(size: 24),
+                                style: AppTheme.titulo(size: 24),
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -111,7 +111,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Movimento de ${formatarDataExtenso(DateTime.now())}',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 12,
                             color: AppColors.muted,
                           ),
@@ -154,7 +154,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           ],
                         ),
                         const SizedBox(height: 28),
-                        const SectionLabel('Gerenciamento'),
+                        const TituloSecao('Gerenciamento'),
                         const SizedBox(height: 12),
                         _itemGerenciar(
                           '📅',
@@ -202,16 +202,16 @@ class _AdminScreenState extends State<AdminScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.15),
+        color: AppColors.amarelo.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold),
+        border: Border.all(color: AppColors.amarelo),
       ),
       child: Text(
         'HOJE',
-        style: AppTheme.sans(
+        style: AppTheme.texto(
           size: 11,
           weight: FontWeight.w700,
-          color: AppColors.gold,
+          color: AppColors.amarelo,
           letterSpacing: 1.2,
         ),
       ),
@@ -226,7 +226,7 @@ class _AdminScreenState extends State<AdminScreen> {
     int total,
     String legendaTotal,
   ) {
-    return GoldCard(
+    return Cartao(
       padding: const EdgeInsets.all(14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -241,21 +241,21 @@ class _AdminScreenState extends State<AdminScreen> {
             child: Text(
               '$hoje',
               maxLines: 1,
-              style: AppTheme.serif(size: 25, color: AppColors.gold),
+              style: AppTheme.titulo(size: 25, color: AppColors.amarelo),
             ),
           ),
           Text(
             rotulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 11, weight: FontWeight.w700),
+            style: AppTheme.texto(size: 11, weight: FontWeight.w700),
           ),
           const SizedBox(height: 2),
           Text(
             '$total $legendaTotal',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.sans(size: 10, color: AppColors.muted),
+            style: AppTheme.texto(size: 10, color: AppColors.muted),
           ),
         ],
       ),
@@ -270,7 +270,7 @@ class _AdminScreenState extends State<AdminScreen> {
   ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         onTap: onTap,
         child: Row(
           children: [
@@ -282,17 +282,17 @@ class _AdminScreenState extends State<AdminScreen> {
                 children: [
                   Text(
                     titulo,
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     descricao,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.gold),
+            const Icon(Icons.chevron_right, color: AppColors.amarelo),
           ],
         ),
       ),

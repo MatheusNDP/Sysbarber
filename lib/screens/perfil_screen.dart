@@ -91,24 +91,24 @@ class _PerfilScreenState extends State<PerfilScreen> {
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Sair da conta?', style: AppTheme.serif(size: 18)),
+        title: Text('Sair da conta?', style: AppTheme.titulo(size: 18)),
         content: Text(
           'Você precisará entrar novamente para acessar seus agendamentos.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
               'CANCELAR',
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               'SAIR',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
                 color: AppColors.red,
@@ -164,7 +164,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -175,7 +175,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     ),
                     children: [
                       Center(
-                        child: GoldAvatar(
+                        child: AvatarIniciais(
                           texto: usuario?.iniciais ?? '?',
                           tamanho: 92,
                           large: true,
@@ -185,13 +185,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       Text(
                         usuario?.nome ?? 'Visitante',
                         textAlign: TextAlign.center,
-                        style: AppTheme.serif(size: 24),
+                        style: AppTheme.titulo(size: 24),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         usuario?.email ?? '',
                         textAlign: TextAlign.center,
-                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                        style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
                       const SizedBox(height: 32),
                       _item(
@@ -234,7 +234,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                               Navigator.of(context).pushNamed('/admin'),
                         ),
                       const SizedBox(height: 28),
-                      GoldOutlineButton(texto: 'SAIR', onPressed: _sair),
+                      BotaoSecundario(texto: 'SAIR', onPressed: _sair),
                       const SizedBox(height: 36),
                       _suporte(),
                     ],
@@ -251,17 +251,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel('Suporte'),
+        const TituloSecao('Suporte'),
         const SizedBox(height: 6),
         Text(
           'Dúvidas ou problemas com o app? Fale com o suporte do SysBarber.',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
-              child: GoldOutlineButton(
+              child: BotaoSecundario(
                 texto: 'WHATSAPP',
                 icone: Icons.chat_outlined,
                 onPressed: _whatsappDoSuporte,
@@ -269,7 +269,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GoldOutlineButton(
+              child: BotaoSecundario(
                 texto: 'E-MAIL',
                 icone: Icons.email_outlined,
                 onPressed: _emailDoSuporte,
@@ -289,11 +289,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         onTap: onTap,
         child: Row(
           children: [
-            Icon(icone, color: AppColors.gold, size: 20),
+            Icon(icone, color: AppColors.amarelo, size: 20),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -301,18 +301,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 children: [
                   Text(
                     rotulo,
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     valor,
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                   ),
                 ],
               ),
             ),
             if (onTap != null)
-              const Icon(Icons.chevron_right, color: AppColors.gold),
+              const Icon(Icons.chevron_right, color: AppColors.amarelo),
           ],
         ),
       ),
@@ -338,7 +338,7 @@ AlertDialog _dialogo({
       borderRadius: BorderRadius.circular(14),
       side: const BorderSide(color: AppColors.border),
     ),
-    title: Text(titulo, style: AppTheme.serif(size: 18)),
+    title: Text(titulo, style: AppTheme.titulo(size: 18)),
     content: SingleChildScrollView(
       child: Column(mainAxisSize: MainAxisSize.min, children: campos),
     ),
@@ -347,17 +347,17 @@ AlertDialog _dialogo({
         onPressed: salvando ? null : () => Navigator.of(context).pop(false),
         child: Text(
           'CANCELAR',
-          style: AppTheme.sans(size: 13, color: AppColors.muted),
+          style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
       ),
       TextButton(
         onPressed: salvando ? null : onSalvar,
         child: Text(
           salvando ? 'SALVANDO...' : 'SALVAR',
-          style: AppTheme.sans(
+          style: AppTheme.texto(
             size: 13,
             weight: FontWeight.w700,
-            color: AppColors.gold,
+            color: AppColors.amarelo,
           ),
         ),
       ),
@@ -379,7 +379,7 @@ Widget _campo(
       keyboardType: teclado,
       inputFormatters: formatters,
       obscureText: obscuro,
-      style: AppTheme.sans(size: 14),
+      style: AppTheme.texto(size: 14),
       decoration: InputDecoration(labelText: rotulo),
     ),
   );

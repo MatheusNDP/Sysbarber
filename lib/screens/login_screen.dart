@@ -79,14 +79,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   _cabecalho(),
                   const SizedBox(height: 28),
-                  const SectionLabel('E-mail'),
+                  const TituloSecao('E-mail'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
-                    style: AppTheme.sans(size: 14),
+                    style: AppTheme.texto(size: 14),
                     decoration: const InputDecoration(
                       hintText: 'seu@email.com',
                       prefixIcon: Icon(
@@ -97,14 +97,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const SectionLabel('Senha'),
+                  const TituloSecao('Senha'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _senhaCtrl,
                     obscureText: _ocultarSenha,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _carregando ? null : _entrar(),
-                    style: AppTheme.sans(size: 14),
+                    style: AppTheme.texto(size: 14),
                     decoration: InputDecoration(
                       hintText: '••••••••',
                       prefixIcon: const Icon(
@@ -138,16 +138,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Text(
                         'Esqueci minha senha',
-                        style: AppTheme.sans(
+                        style: AppTheme.texto(
                           size: 13,
                           weight: FontWeight.w700,
-                          color: AppColors.gold,
+                          color: AppColors.amarelo,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  GoldButton(
+                  BotaoPrincipal(
                     texto: _carregando ? 'ENTRANDO...' : 'ENTRAR',
                     onPressed: _carregando ? null : _entrar,
                   ),
@@ -157,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Text(
                         'Não tem conta? ',
-                        style: AppTheme.sans(size: 13, color: AppColors.muted),
+                        style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
                       // Botão de verdade (foco, leitor de tela e área de toque),
                       // e não um texto com GestureDetector.
@@ -170,10 +170,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: Text(
                           'Criar conta',
-                          style: AppTheme.sans(
+                          style: AppTheme.texto(
                             size: 13,
                             weight: FontWeight.w700,
-                            color: AppColors.gold,
+                            color: AppColors.amarelo,
                           ),
                         ),
                       ),
@@ -198,23 +198,23 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.gold, width: 1.5),
+            border: Border.all(color: AppColors.amarelo, width: 1.5),
           ),
           child: const Text('✂️', style: TextStyle(fontSize: 28)),
         ),
         const SizedBox(height: 16),
         Text(
           'SYSBARBER',
-          style: AppTheme.serif(
+          style: AppTheme.titulo(
             size: 26,
-            color: AppColors.gold,
+            color: AppColors.amarelo,
             letterSpacing: 3,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           'FAÇA SEU LOGIN',
-          style: AppTheme.sans(
+          style: AppTheme.texto(
             size: 11,
             color: AppColors.muted,
             letterSpacing: 2,

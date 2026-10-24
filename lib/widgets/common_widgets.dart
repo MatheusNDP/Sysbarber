@@ -5,13 +5,13 @@ import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 
 /// Botão principal: preenchido em dourado com texto preto.
-class GoldButton extends StatelessWidget {
+class BotaoPrincipal extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
   final bool expandido;
   final IconData? icone;
 
-  const GoldButton({
+  const BotaoPrincipal({
     super.key,
     required this.texto,
     required this.onPressed,
@@ -24,7 +24,7 @@ class GoldButton extends StatelessWidget {
     final rotulo = Text(
       texto,
       textAlign: TextAlign.center,
-      style: AppTheme.sans(
+      style: AppTheme.texto(
         size: 14,
         weight: FontWeight.w700,
         color: onPressed == null ? AppColors.muted : Colors.black,
@@ -34,7 +34,7 @@ class GoldButton extends StatelessWidget {
     final botao = ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.gold,
+        backgroundColor: AppColors.amarelo,
         foregroundColor: Colors.black,
         disabledBackgroundColor: AppColors.card2,
         disabledForegroundColor: AppColors.muted,
@@ -59,13 +59,13 @@ class GoldButton extends StatelessWidget {
 }
 
 /// Botão secundário: apenas contorno dourado.
-class GoldOutlineButton extends StatelessWidget {
+class BotaoSecundario extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
   final bool expandido;
   final IconData? icone;
 
-  const GoldOutlineButton({
+  const BotaoSecundario({
     super.key,
     required this.texto,
     required this.onPressed,
@@ -78,18 +78,18 @@ class GoldOutlineButton extends StatelessWidget {
     final rotulo = Text(
       texto,
       textAlign: TextAlign.center,
-      style: AppTheme.sans(
+      style: AppTheme.texto(
         size: 14,
         weight: FontWeight.w700,
-        color: AppColors.gold,
+        color: AppColors.amarelo,
         letterSpacing: 1,
       ),
     );
     final botao = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.gold,
-        side: const BorderSide(color: AppColors.gold, width: 1.5),
+        foregroundColor: AppColors.amarelo,
+        side: const BorderSide(color: AppColors.amarelo, width: 1.5),
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -101,7 +101,7 @@ class GoldOutlineButton extends StatelessWidget {
               children: [
                 Icon(icone, size: 18),
                 const SizedBox(width: 8),
-                // Como no GoldButton: com a largura toda, o texto quebra a
+                // Como no BotaoPrincipal: com a largura toda, o texto quebra a
                 // linha em vez de estourar o botão.
                 if (expandido) Flexible(child: rotulo) else rotulo,
               ],
@@ -112,14 +112,14 @@ class GoldOutlineButton extends StatelessWidget {
 }
 
 /// Cartão padrão do app. Com [selected] a borda vira dourada.
-class GoldCard extends StatelessWidget {
+class Cartao extends StatelessWidget {
   final Widget child;
   final bool selected;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
   final Color? cor;
 
-  const GoldCard({
+  const Cartao({
     super.key,
     required this.child,
     this.selected = false,
@@ -142,7 +142,7 @@ class GoldCard extends StatelessWidget {
             color: cor ?? AppColors.card,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.gold : AppColors.border,
+              color: selected ? AppColors.amarelo : AppColors.border,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -154,11 +154,11 @@ class GoldCard extends StatelessWidget {
 }
 
 /// Pílula colorida usada para status.
-class GoldBadge extends StatelessWidget {
+class Etiqueta extends StatelessWidget {
   final String texto;
   final Color cor;
 
-  const GoldBadge({super.key, required this.texto, this.cor = AppColors.gold});
+  const Etiqueta({super.key, required this.texto, this.cor = AppColors.amarelo});
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +171,7 @@ class GoldBadge extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: AppTheme.sans(
+        style: AppTheme.texto(
           size: 11,
           weight: FontWeight.w700,
           color: cor,
@@ -183,12 +183,12 @@ class GoldBadge extends StatelessWidget {
 }
 
 /// Avatar circular. Com [large] recebe o gradiente dourado.
-class GoldAvatar extends StatelessWidget {
+class AvatarIniciais extends StatelessWidget {
   final String texto;
   final double tamanho;
   final bool large;
 
-  const GoldAvatar({
+  const AvatarIniciais({
     super.key,
     required this.texto,
     this.tamanho = 48,
@@ -205,7 +205,7 @@ class GoldAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: large
             ? const LinearGradient(
-                colors: [AppColors.goldLight, AppColors.gold],
+                colors: [AppColors.amareloClaro, AppColors.amarelo],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
@@ -214,13 +214,13 @@ class GoldAvatar extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-        border: large ? null : Border.all(color: AppColors.gold, width: 1.2),
+        border: large ? null : Border.all(color: AppColors.amarelo, width: 1.2),
       ),
       child: Text(
         texto,
-        style: AppTheme.serif(
+        style: AppTheme.titulo(
           size: tamanho * 0.36,
-          color: large ? Colors.black : AppColors.gold,
+          color: large ? Colors.black : AppColors.amarelo,
         ),
       ),
     );
@@ -240,7 +240,7 @@ class GoldDivider extends StatelessWidget {
       width: largura,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.gold, Colors.transparent],
+          colors: [AppColors.amarelo, Colors.transparent],
         ),
       ),
     );
@@ -248,19 +248,19 @@ class GoldDivider extends StatelessWidget {
 }
 
 /// Rótulo de seção em caixa alta.
-class SectionLabel extends StatelessWidget {
+class TituloSecao extends StatelessWidget {
   final String texto;
 
-  const SectionLabel(this.texto, {super.key});
+  const TituloSecao(this.texto, {super.key});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       texto.toUpperCase(),
-      style: AppTheme.sans(
+      style: AppTheme.texto(
         size: 11,
         weight: FontWeight.w700,
-        color: AppColors.gold,
+        color: AppColors.amarelo,
         letterSpacing: 1.5,
       ),
     );
@@ -289,7 +289,7 @@ class BarberAppBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: mostrarVoltar,
       title: Text(
         titulo,
-        style: AppTheme.serif(size: 20, color: AppColors.gold),
+        style: AppTheme.titulo(size: 20, color: AppColors.amarelo),
       ),
       actions: acoes,
     );
@@ -319,12 +319,12 @@ class EstadoVazio extends StatelessWidget {
           children: [
             Text(icone, style: const TextStyle(fontSize: 56)),
             const SizedBox(height: 16),
-            Text(titulo, style: AppTheme.serif(size: 18)),
+            Text(titulo, style: AppTheme.titulo(size: 18)),
             const SizedBox(height: 8),
             Text(
               descricao,
               textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ],
         ),
@@ -396,17 +396,17 @@ class EstadoErro extends StatelessWidget {
           children: [
             const Text('⚠️', style: TextStyle(fontSize: 48)),
             const SizedBox(height: 16),
-            Text('Algo deu errado', style: AppTheme.serif(size: 18)),
+            Text('Algo deu errado', style: AppTheme.titulo(size: 18)),
             const SizedBox(height: 8),
             Text(
               mensagem,
               textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 13, color: AppColors.muted),
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: 240,
-              child: GoldOutlineButton(
+              child: BotaoSecundario(
                 texto: 'TENTAR NOVAMENTE',
                 onPressed: onTentarNovamente,
               ),
@@ -434,7 +434,7 @@ void mostrarErro(BuildContext context, String mensagem) {
             Expanded(
               child: Text(
                 mensagem,
-                style: AppTheme.sans(size: 13, color: Colors.white),
+                style: AppTheme.texto(size: 13, color: Colors.white),
               ),
             ),
           ],
@@ -458,7 +458,7 @@ void mostrarSucesso(BuildContext context, String mensagem) {
             Expanded(
               child: Text(
                 mensagem,
-                style: AppTheme.sans(size: 13, color: Colors.black),
+                style: AppTheme.texto(size: 13, color: Colors.black),
               ),
             ),
           ],
@@ -477,7 +477,7 @@ void mostrarInfo(BuildContext context, String mensagem) {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         content: Text(
           mensagem,
-          style: AppTheme.sans(size: 13, color: AppColors.text),
+          style: AppTheme.texto(size: 13, color: AppColors.text),
         ),
       ),
     );

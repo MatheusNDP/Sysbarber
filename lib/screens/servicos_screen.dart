@@ -64,7 +64,7 @@ class _ServicosScreenState extends State<ServicosScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
@@ -92,7 +92,7 @@ class _ServicosScreenState extends State<ServicosScreen> {
   }
 
   Widget _cardServico(Servico s) {
-    return GoldCard(
+    return Cartao(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -102,18 +102,18 @@ class _ServicosScreenState extends State<ServicosScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.nome, style: AppTheme.serif(size: 17)),
+                Text(s.nome, style: AppTheme.titulo(size: 17)),
                 const SizedBox(height: 4),
                 Text(
                   s.descricao,
-                  style: AppTheme.sans(size: 12, color: AppColors.muted),
+                  style: AppTheme.texto(size: 12, color: AppColors.muted),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Text(
                       formatarReal(s.preco),
-                      style: AppTheme.serif(size: 18, color: AppColors.gold),
+                      style: AppTheme.titulo(size: 18, color: AppColors.amarelo),
                     ),
                     const SizedBox(width: 14),
                     const Icon(
@@ -124,7 +124,7 @@ class _ServicosScreenState extends State<ServicosScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '${s.duracaoMinutos} min',
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                      style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -132,7 +132,7 @@ class _ServicosScreenState extends State<ServicosScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          GoldButton(
+          BotaoPrincipal(
             texto: 'Agendar',
             expandido: false,
             onPressed: () => _agendar(s),

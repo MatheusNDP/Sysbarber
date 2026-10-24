@@ -89,7 +89,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: Text('Dados de exemplo criados', style: AppTheme.serif(size: 18)),
+        title: Text('Dados de exemplo criados', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,7 +98,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
               'Foram criados 5 serviços e 3 barbeiros. Os barbeiros entram '
               'com estes e-mails e a senha '
               '${DatabaseService.senhaBarbeirosDeExemplo}:',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
                 height: 1.4,
@@ -110,14 +110,14 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   '•  $email',
-                  style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 13, weight: FontWeight.w700),
                 ),
               ),
             const SizedBox(height: 10),
             Text(
               'Marcos Lima começa indisponível. Ao cadastrar a sua equipe, '
               'troque as senhas ou exclua esses barbeiros em Administração.',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 12,
                 color: AppColors.muted,
                 height: 1.4,
@@ -130,10 +130,10 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'ENTENDI',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 13,
                 weight: FontWeight.w700,
-                color: AppColors.gold,
+                color: AppColors.amarelo,
               ),
             ),
           ),
@@ -158,7 +158,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                   Text(
                     'Configurar a barbearia',
                     textAlign: TextAlign.center,
-                    style: AppTheme.serif(size: 22),
+                    style: AppTheme.titulo(size: 22),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -166,7 +166,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     'serviços e barbeiros e acompanha a agenda e os '
                     'relatórios.',
                     textAlign: TextAlign.center,
-                    style: AppTheme.sans(
+                    style: AppTheme.texto(
                       size: 13,
                       color: AppColors.muted,
                       height: 1.4,
@@ -223,7 +223,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                   ),
                   _opcaoDadosDeExemplo(),
                   const SizedBox(height: 24),
-                  GoldButton(
+                  BotaoPrincipal(
                     texto: _salvando ? 'CONFIGURANDO...' : 'CONFIGURAR E ENTRAR',
                     onPressed: _salvando ? null : _configurar,
                   ),
@@ -237,7 +237,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
   }
 
   Widget _opcaoDadosDeExemplo() {
-    return GoldCard(
+    return Cartao(
       selected: _dadosDeExemplo,
       onTap: () => setState(() => _dadosDeExemplo = !_dadosDeExemplo),
       child: Row(
@@ -245,7 +245,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
         children: [
           Checkbox(
             value: _dadosDeExemplo,
-            activeColor: AppColors.gold,
+            activeColor: AppColors.amarelo,
             checkColor: Colors.black,
             onChanged: (v) => setState(() => _dadosDeExemplo = v ?? false),
           ),
@@ -258,10 +258,10 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                 children: [
                   Text(
                     'Começar com dados de exemplo',
-                    style: AppTheme.sans(
+                    style: AppTheme.texto(
                       size: 14,
                       weight: FontWeight.w700,
-                      color: AppColors.gold,
+                      color: AppColors.amarelo,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -270,7 +270,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     '${DatabaseService.senhaBarbeirosDeExemplo}) e 5 serviços, '
                     'para testar ou apresentar o app. Desmarcado, a barbearia '
                     'começa vazia e você cadastra os seus.',
-                    style: AppTheme.sans(
+                    style: AppTheme.texto(
                       size: 12,
                       color: AppColors.muted,
                       height: 1.4,
@@ -300,7 +300,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(rotulo),
+          TituloSecao(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -308,7 +308,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
             obscureText: obscuro,
             inputFormatters: formatters,
             autocorrect: false,
-            style: AppTheme.sans(size: 14),
+            style: AppTheme.texto(size: 14),
             decoration: InputDecoration(
               hintText: hint,
               prefixIcon: Icon(icone, color: AppColors.muted, size: 20),

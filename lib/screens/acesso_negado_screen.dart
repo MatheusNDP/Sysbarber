@@ -24,7 +24,7 @@ class AcessoNegadoScreen extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: GoldButton(
+            child: BotaoPrincipal(
               texto: 'VOLTAR AO INÍCIO',
               onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 auth.estaLogado ? auth.rotaInicial : '/',

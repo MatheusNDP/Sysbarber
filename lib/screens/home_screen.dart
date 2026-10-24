@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.gold,
+          color: AppColors.amarelo,
           backgroundColor: AppColors.card,
           onRefresh: _carregarDados,
           child: ListView(
@@ -117,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   ),
                 )
               else if (_erro != null)
@@ -127,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 _cardFidelidade(),
                 const SizedBox(height: 28),
-                const SectionLabel('Acesso rápido'),
+                const TituloSecao('Acesso rápido'),
                 const SizedBox(height: 12),
                 _gridAcessoRapido(),
               ],
@@ -149,12 +149,12 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text(
                 'Olá, bem-vindo 👋',
-                style: AppTheme.sans(size: 13, color: AppColors.muted),
+                style: AppTheme.texto(size: 13, color: AppColors.muted),
               ),
               const SizedBox(height: 4),
               Text(
                 usuario?.nome ?? 'Visitante',
-                style: AppTheme.serif(size: 24),
+                style: AppTheme.titulo(size: 24),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
           excludeSemantics: true,
           child: GestureDetector(
             onTap: () => _irPara('/perfil'),
-            child: GoldAvatar(
+            child: AvatarIniciais(
               texto: usuario?.iniciais ?? '?',
               tamanho: 48,
               large: true,
@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _cardProximoHorario() {
     final proximo = _proximo;
     if (proximo == null) {
-      return GoldCard(
+      return Cartao(
         onTap: () => _irPara('/servicos'),
         child: Row(
           children: [
@@ -193,29 +193,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     'Nenhum horário marcado',
-                    style: AppTheme.sans(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Toque para agendar seu próximo corte',
-                    style: AppTheme.sans(size: 12, color: AppColors.muted),
+                    style: AppTheme.texto(size: 12, color: AppColors.muted),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.gold),
+            const Icon(Icons.chevron_right, color: AppColors.amarelo),
           ],
         ),
       );
     }
 
-    return GoldCard(
+    return Cartao(
       selected: true,
       onTap: () => _irPara('/agendamentos'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionLabel('Próximo horário'),
+          const TituloSecao('Próximo horário'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -230,17 +230,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       proximo.servico?.nome ?? 'Serviço',
-                      style: AppTheme.serif(size: 17),
+                      style: AppTheme.titulo(size: 17),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       formatarDataExtenso(proximo.data),
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                      style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'com ${proximo.barbeiro?.nome ?? ''}',
-                      style: AppTheme.sans(size: 12, color: AppColors.muted),
+                      style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -250,10 +250,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     formatarHora(proximo.data),
-                    style: AppTheme.serif(size: 20, color: AppColors.gold),
+                    style: AppTheme.titulo(size: 20, color: AppColors.amarelo),
                   ),
                   const SizedBox(height: 4),
-                  const GoldBadge(texto: 'Confirmado', cor: AppColors.green),
+                  const Etiqueta(texto: 'Confirmado', cor: AppColors.green),
                 ],
               ),
             ],
@@ -264,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _cardFidelidade() {
-    return GoldCard(
+    return Cartao(
       onTap: () => _irPara('/fidelidade'),
       child: Row(
         children: [
@@ -276,17 +276,17 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(
                   'Pontos de fidelidade',
-                  style: AppTheme.sans(size: 13, color: AppColors.muted),
+                  style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '$_pontos pts',
-                  style: AppTheme.serif(size: 22, color: AppColors.gold),
+                  style: AppTheme.titulo(size: 22, color: AppColors.amarelo),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.gold),
+          const Icon(Icons.chevron_right, color: AppColors.amarelo),
         ],
       ),
     );
@@ -308,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GradeDuasColunas(
       filhos: itens
           .map(
-            (item) => GoldCard(
+            (item) => Cartao(
               onTap: () => _irPara(item.$3),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 10),
                   Text(
                     item.$2,
-                    style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 13, weight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -341,10 +341,10 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.gold,
+        selectedItemColor: AppColors.amarelo,
         unselectedItemColor: AppColors.muted,
-        selectedLabelStyle: AppTheme.sans(size: 11, weight: FontWeight.w700),
-        unselectedLabelStyle: AppTheme.sans(size: 11),
+        selectedLabelStyle: AppTheme.texto(size: 11, weight: FontWeight.w700),
+        unselectedLabelStyle: AppTheme.texto(size: 11),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Início'),
           BottomNavigationBarItem(

@@ -70,12 +70,12 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           Expanded(
             child: _carregando
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
+                    child: CircularProgressIndicator(color: AppColors.amarelo),
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : RefreshIndicator(
-                    color: AppColors.gold,
+                    color: AppColors.amarelo,
                     backgroundColor: AppColors.card,
                     onRefresh: _carregar,
                     child: ListView(
@@ -87,11 +87,11 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                       children: [
                         _cartaoPontos(),
                         const SizedBox(height: 28),
-                        const SectionLabel('Como funciona'),
+                        const TituloSecao('Como funciona'),
                         const SizedBox(height: 12),
                         _comoFunciona(),
                         const SizedBox(height: 28),
-                        const SectionLabel('Histórico de pontos'),
+                        const TituloSecao('Histórico de pontos'),
                         const SizedBox(height: 12),
                         if (_historico.isEmpty)
                           const EstadoVazio(
@@ -127,19 +127,19 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold, width: 1.5),
+        border: Border.all(color: AppColors.amarelo, width: 1.5),
       ),
       child: Column(
         children: [
-          const SectionLabel('Seus pontos'),
+          const TituloSecao('Seus pontos'),
           const SizedBox(height: 10),
           Text(
             '$_pontos',
-            style: AppTheme.serif(size: 52, color: AppColors.gold),
+            style: AppTheme.titulo(size: 52, color: AppColors.amarelo),
           ),
           Text(
             'PONTOS ACUMULADOS',
-            style: AppTheme.sans(
+            style: AppTheme.texto(
               size: 10,
               color: AppColors.muted,
               letterSpacing: 2,
@@ -152,7 +152,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
               value: progresso,
               minHeight: 10,
               backgroundColor: AppColors.background,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.gold),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.amarelo),
             ),
           ),
           const SizedBox(height: 12),
@@ -162,7 +162,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                 : premios > 1
                 ? '🎉 $premios prêmios disponíveis!'
                 : '🎉 Prêmio disponível!',
-            style: AppTheme.sans(
+            style: AppTheme.texto(
               size: 13,
               weight: FontWeight.w700,
               color: faltam > 0 ? AppColors.muted : AppColors.green,
@@ -171,7 +171,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           const SizedBox(height: 4),
           Text(
             'Meta: $metaPontos pontos = 1 serviço grátis',
-            style: AppTheme.sans(size: 11, color: AppColors.muted),
+            style: AppTheme.texto(size: 11, color: AppColors.muted),
           ),
           if (_pontos < 0) ...[
             const SizedBox(height: 12),
@@ -180,14 +180,14 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
               'pontos dele já tinham sido usados. Os próximos pontos '
               'quitam a diferença.',
               textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 11, color: AppColors.red, height: 1.4),
+              style: AppTheme.texto(size: 11, color: AppColors.red, height: 1.4),
             ),
           ],
           // Sem esta indicação o cliente vê "prêmio disponível" e não
           // descobre onde usá-lo.
           if (premios > 0) ...[
             const SizedBox(height: 16),
-            GoldButton(
+            BotaoPrincipal(
               texto: 'RESGATAR EM UM AGENDAMENTO',
               onPressed: () => Navigator.of(context).pushNamed('/servicos'),
             ),
@@ -195,7 +195,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
             Text(
               'O resgate é feito na etapa de pagamento do agendamento.',
               textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 11, color: AppColors.muted),
+              style: AppTheme.texto(size: 11, color: AppColors.muted),
             ),
           ],
         ],
@@ -215,7 +215,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           .map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: GoldCard(
+              child: Cartao(
                 child: Row(
                   children: [
                     Text(item.$1, style: const TextStyle(fontSize: 22)),
@@ -226,7 +226,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                         children: [
                           Text(
                             item.$2,
-                            style: AppTheme.sans(
+                            style: AppTheme.texto(
                               size: 14,
                               weight: FontWeight.w700,
                             ),
@@ -234,7 +234,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                           const SizedBox(height: 3),
                           Text(
                             item.$3,
-                            style: AppTheme.sans(
+                            style: AppTheme.texto(
                               size: 12,
                               color: AppColors.muted,
                             ),
@@ -257,7 +257,7 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GoldCard(
+      child: Cartao(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
@@ -267,19 +267,19 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                 children: [
                   Text(
                     h.descricao,
-                    style: AppTheme.sans(size: 13, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 13, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     formatarDataCurta(DateTime.parse(h.criadoEm)),
-                    style: AppTheme.sans(size: 11, color: AppColors.muted),
+                    style: AppTheme.texto(size: 11, color: AppColors.muted),
                   ),
                 ],
               ),
             ),
             Text(
               '${ganho ? '+' : '−'}${h.pontos.abs()} pts',
-              style: AppTheme.sans(
+              style: AppTheme.texto(
                 size: 14,
                 weight: FontWeight.w700,
                 color: cor,
