@@ -600,6 +600,10 @@ void main() {
 
   testWidgets('a agenda geral mostra os atendimentos de todos os barbeiros, '
       'com as ações da barbearia', (tester) async {
+    // Tela alta: com os filtros no topo, os dois cards cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await adminLogado(tester);
     await tester.runAsync(() async {
       final idCliente = await cadastrarClienteTeste();
@@ -1397,6 +1401,63 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Suporte'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // Filtros da agenda geral
+  // -------------------------------------------------------------------------
+
+  testWidgets('a agenda geral filtra por barbeiro e por dia', (tester) async {
+    // Tela alta: os três atendimentos cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await adminLogado(tester);
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      final amanha = DateTime.now().add(const Duration(days: 1));
+      final depois = DateTime.now().add(const Duration(days: 2));
+      for (final (idBarbeiro, dia, hora) in [
+        (1, amanha, 9),
+        (2, amanha, 10),
+        (1, depois, 9),
+      ]) {
+        await service.criarAgendamento(
+          Agendamento(
+            idCliente: idCliente,
+            idBarbeiro: idBarbeiro,
+            idServico: 1,
+            dataHora: DateTime(
+              dia.year,
+              dia.month,
+              dia.day,
+              hora,
+            ).toIso8601String(),
+          ),
+        );
+      }
+    });
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+    expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
+    expect(find.text('com Rafael Souza'), findsOneWidget);
+
+    // Antes não havia filtro: era preciso achar o nome em cada card.
+    await tester.tap(find.text('Carlos Eduardo'));
+    await tester.pump();
+    expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
+    expect(find.text('com Rafael Souza'), findsNothing);
+
+    // Só aparecem os dias que têm atendimento.
+    await tester.tap(find.text('Amanhã'));
+    await tester.pump();
+    expect(find.text('com Carlos Eduardo'), findsOneWidget);
+
+    // O dia continua escolhido ao voltar para todos os barbeiros.
+    await tester.tap(find.text('Todos os barbeiros'));
+    await tester.pump();
+    expect(find.text('com Carlos Eduardo'), findsOneWidget);
+    expect(find.text('com Rafael Souza'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

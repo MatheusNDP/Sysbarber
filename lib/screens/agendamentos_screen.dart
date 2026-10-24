@@ -33,6 +33,16 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   bool _carregando = true;
   String? _erro;
 
+  /// Barbeiros da barbearia, para o filtro da agenda geral.
+  List<Barbeiro> _barbeiros = [];
+
+  /// Filtro de barbeiro da agenda geral, nas duas abas; `null` mostra todos.
+  int? _filtroBarbeiro;
+
+  /// Filtro de dia da agenda geral, um por aba (os dias de cada aba são
+  /// outros); `null` mostra todos.
+  final List<DateTime?> _filtroDia = [null, null];
+
   @override
   void initState() {
     super.initState();
@@ -85,10 +95,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           : _modoBarbeiro
           ? await db.listarAgendamentosBarbeiro(idBarbeiro!)
           : await db.listarAgendamentosCliente(usuario!.id!);
+      final barbeiros = _agendaGeral
+          ? await db.listarBarbeiros()
+          : const <Barbeiro>[];
 
       if (!mounted) return;
       setState(() {
         _agendamentos = lista;
+        _barbeiros = barbeiros;
         _carregando = false;
       });
     } catch (e) {
@@ -473,6 +487,17 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ],
             ),
           ),
+          if (_agendaGeral && !_carregando && _erro == null) ...[
+            const SizedBox(height: 12),
+            FiltroEmPilulas<int?>(
+              opcoes: [
+                (null, 'Todos os barbeiros'),
+                for (final b in _barbeiros) (b.id, b.nome),
+              ],
+              selecionada: _filtroBarbeiro,
+              onChanged: (id) => setState(() => _filtroBarbeiro = id),
+            ),
+          ],
           Expanded(
             child: _carregando
                 ? const Center(
@@ -483,8 +508,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 : TabBarView(
                     controller: _abas,
                     children: [
-                      _lista(_proximos, primeiraAba: true),
-                      _lista(_historico, primeiraAba: false),
+                      _aba(_proximos, primeiraAba: true),
+                      _aba(_historico, primeiraAba: false),
                     ],
                   ),
           ),
@@ -493,7 +518,81 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     );
   }
 
-  Widget _lista(List<Agendamento> itens, {required bool primeiraAba}) {
+  static DateTime _dia(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// "Hoje", "Amanhã", "Ontem" ou, nos outros dias, "Seg, 27/10".
+  static String _rotuloDoDia(DateTime dia) {
+    final agora = DateTime.now();
+    final dias = DateTime.utc(
+      dia.year,
+      dia.month,
+      dia.day,
+    ).difference(DateTime.utc(agora.year, agora.month, agora.day)).inDays;
+    if (dias == 0) return 'Hoje';
+    if (dias == 1) return 'Amanhã';
+    if (dias == -1) return 'Ontem';
+    final semana = abreviacaoDiaSemana(dia);
+    final dataCurta = formatarDataCurta(dia).substring(0, 5);
+    return '${semana[0]}${semana.substring(1).toLowerCase()}, $dataCurta';
+  }
+
+  /// Uma aba da agenda. Na agenda geral, com os filtros de barbeiro (acima
+  /// das abas) e de dia: só aparecem os dias que têm atendimento, na ordem
+  /// da aba.
+  Widget _aba(List<Agendamento> itens, {required bool primeiraAba}) {
+    if (!_agendaGeral) return _lista(itens, primeiraAba: primeiraAba);
+
+    final indice = primeiraAba ? 0 : 1;
+    final doBarbeiro = _filtroBarbeiro == null
+        ? itens
+        : itens.where((a) => a.idBarbeiro == _filtroBarbeiro).toList();
+    final dias = {for (final a in doBarbeiro) _dia(a.data)}.toList();
+    // O dia escolhido pode não ter atendimento do barbeiro escolhido depois.
+    final dia = dias.contains(_filtroDia[indice]) ? _filtroDia[indice] : null;
+    final filtrados = dia == null
+        ? doBarbeiro
+        : doBarbeiro.where((a) => _dia(a.data) == dia).toList();
+
+    return Column(
+      children: [
+        if (dias.length > 1) ...[
+          const SizedBox(height: 8),
+          FiltroEmPilulas<DateTime?>(
+            opcoes: [
+              (null, 'Todos os dias'),
+              for (final d in dias) (d, _rotuloDoDia(d)),
+            ],
+            selecionada: dia,
+            onChanged: (d) => setState(() => _filtroDia[indice] = d),
+          ),
+        ],
+        Expanded(
+          child: _lista(
+            filtrados,
+            primeiraAba: primeiraAba,
+            semAtendimentoDoBarbeiro: itens.isNotEmpty && doBarbeiro.isEmpty,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _lista(
+    List<Agendamento> itens, {
+    required bool primeiraAba,
+    bool semAtendimentoDoBarbeiro = false,
+  }) {
+    if (semAtendimentoDoBarbeiro) {
+      final nome = _barbeiros
+          .where((b) => b.id == _filtroBarbeiro)
+          .map((b) => b.nome)
+          .firstOrNull;
+      return EstadoVazio(
+        icone: Icons.filter_alt_off_outlined,
+        titulo: 'Nada de ${nome ?? 'este barbeiro'} aqui',
+        descricao: 'Escolha outro barbeiro ou "Todos os barbeiros".',
+      );
+    }
     if (itens.isEmpty) {
       return EstadoVazio(
         icone: primeiraAba
