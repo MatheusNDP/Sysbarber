@@ -442,11 +442,15 @@ class BarberAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 /// Barra de navegação inferior flutuante e translúcida. A opção atual fica
-/// numa pílula amarela.
+/// numa pílula amarela, que desliza até a opção tocada.
 class BarraNavegacao extends StatelessWidget {
   final int atual;
   final ValueChanged<int> onTap;
   final List<(IconData, String)> itens;
+
+  /// Duração das animações da barra (e da troca de aba, na área principal).
+  static const duracao = Duration(milliseconds: 320);
+  static const curva = Curves.easeOutCubic;
 
   const BarraNavegacao({
     super.key,
@@ -457,6 +461,10 @@ class BarraNavegacao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Posição da pílula de -1 (primeira opção) a 1 (última).
+    final posicao = itens.length < 2
+        ? 0.0
+        : -1 + 2 * atual / (itens.length - 1);
     return SafeArea(
       top: false,
       child: Padding(
@@ -472,10 +480,31 @@ class BarraNavegacao extends StatelessWidget {
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Row(
+              child: Stack(
                 children: [
-                  for (var i = 0; i < itens.length; i++)
-                    Expanded(child: _item(i)),
+                  Positioned.fill(
+                    child: AnimatedAlign(
+                      alignment: Alignment(posicao, 0),
+                      duration: duracao,
+                      curve: curva,
+                      child: FractionallySizedBox(
+                        widthFactor: 1 / itens.length,
+                        heightFactor: 1,
+                        child: const DecoratedBox(
+                          decoration: ShapeDecoration(
+                            color: AppColors.amarelo,
+                            shape: StadiumBorder(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (var i = 0; i < itens.length; i++)
+                        Expanded(child: _item(i)),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -487,7 +516,6 @@ class BarraNavegacao extends StatelessWidget {
 
   Widget _item(int i) {
     final selecionado = i == atual;
-    final cor = selecionado ? Colors.black : AppColors.muted;
     return Semantics(
       button: true,
       selected: selecionado,
@@ -496,29 +524,37 @@ class BarraNavegacao extends StatelessWidget {
       child: InkWell(
         onTap: () => onTap(i),
         customBorder: const StadiumBorder(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: ShapeDecoration(
-            color: selecionado ? AppColors.amarelo : Colors.transparent,
-            shape: const StadiumBorder(),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(itens[i].$1, size: 22, color: cor),
-              const SizedBox(height: 2),
-              Text(
-                itens[i].$2,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.texto(
-                  size: 11,
-                  weight: selecionado ? FontWeight.w600 : FontWeight.w500,
-                  color: cor,
+          // A cor acompanha a pílula: preta em cima dela, cinza fora.
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(
+              end: selecionado ? Colors.black : AppColors.muted,
+            ),
+            duration: duracao,
+            curve: curva,
+            builder: (_, cor, __) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  scale: selecionado ? 1.12 : 1,
+                  duration: duracao,
+                  curve: curva,
+                  child: Icon(itens[i].$1, size: 22, color: cor),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  itens[i].$2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.texto(
+                    size: 11,
+                    weight: selecionado ? FontWeight.w600 : FontWeight.w500,
+                    color: cor ?? AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

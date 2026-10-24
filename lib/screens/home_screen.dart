@@ -23,7 +23,31 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _aba = NavegacaoPrincipal.abaInicio;
 
-  void _irParaAba(int aba) => setState(() => _aba = aba);
+  /// 1 quando a aba nova fica à direita da anterior na barra, -1 quando
+  /// fica à esquerda: a aba nova entra por esse lado.
+  int _sentido = 1;
+
+  void _irParaAba(int aba) {
+    if (aba == _aba) return;
+    setState(() {
+      _sentido = aba > _aba ? 1 : -1;
+      _aba = aba;
+    });
+  }
+
+  /// A aba nova entra deslizando do lado da opção tocada e a anterior sai
+  /// pelo outro lado, as duas esmaecendo. A que sai não recebe mais toques.
+  Widget _transicao(Widget aba, Animation<double> animacao) {
+    final entrando = aba.key == ValueKey(_aba);
+    final inicio = Offset(0.12 * _sentido * (entrando ? 1 : -1), 0);
+    return FadeTransition(
+      opacity: animacao,
+      child: SlideTransition(
+        position: Tween(begin: inicio, end: Offset.zero).animate(animacao),
+        child: IgnorePointer(ignoring: !entrando, child: aba),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +71,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Scaffold(
           // O conteúdo passa por trás da barra de navegação translúcida.
           extendBody: true,
-          body: KeyedSubtree(key: ValueKey(_aba), child: aba),
+          body: AnimatedSwitcher(
+            duration: BarraNavegacao.duracao,
+            switchInCurve: BarraNavegacao.curva,
+            switchOutCurve: BarraNavegacao.curva,
+            // Uma função nova a cada troca faz a aba que sai também usar o
+            // sentido atual (o AnimatedSwitcher refaz as transições).
+            transitionBuilder: (aba, animacao) => _transicao(aba, animacao),
+            child: KeyedSubtree(key: ValueKey(_aba), child: aba),
+          ),
           bottomNavigationBar: BarraNavegacao(
             atual: _aba,
             onTap: _irParaAba,

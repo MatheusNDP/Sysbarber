@@ -1291,6 +1291,7 @@ void main() {
       );
       await tester.pump();
     }
+    await tester.pump(BarraNavegacao.duracao); // fim da animação
   }
 
   int abaMarcada(WidgetTester tester) =>
@@ -1319,7 +1320,11 @@ void main() {
     expect(abaMarcada(tester), NavegacaoPrincipal.abaAgenda);
 
     await tester.runAsync(() => tester.binding.handlePopRoute());
-    await tester.pump();
+    // A animação começa a contar no quadro seguinte, e a aba que saiu só é
+    // desmontada no quadro depois do fim.
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(BarraNavegacao.duracao);
+    }
     expect(abaMarcada(tester), NavegacaoPrincipal.abaInicio);
     expect(find.byType(AgendamentosScreen), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
