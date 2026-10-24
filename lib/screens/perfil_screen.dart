@@ -9,7 +9,9 @@ import '../services/suporte.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
-/// Perfil do usuário logado (`/perfil`).
+/// Perfil de quem está logado (`/perfil`). O cliente vê os agendamentos e
+/// os pontos; o administrador, os dados e o Suporte; o barbeiro, os dados,
+/// a troca de senha e sair (sem Suporte).
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key, this.abrirLink = abrirForaDoApp});
 
@@ -34,7 +36,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _carregar() async {
     final usuario = AuthService.instance.usuarioAtual;
-    if (usuario?.id == null) {
+    // Só o cliente tem agendamentos e pontos para mostrar.
+    if (!AuthService.instance.ehCliente || usuario?.id == null) {
       if (mounted) setState(() => _carregando = false);
       return;
     }
@@ -149,7 +152,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final usuario = AuthService.instance.usuarioAtual;
+    final auth = AuthService.instance;
+    final usuario = auth.usuarioAtual;
+    final barbeiro = auth.barbeiroAtual;
+    final telefone = usuario?.telefone ?? barbeiro?.telefone ?? '';
 
     return Scaffold(
       appBar: const BarberAppBar(titulo: 'Perfil'),
@@ -173,59 +179,66 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     children: [
                       Center(
                         child: AvatarIniciais(
-                          texto: usuario?.iniciais ?? '?',
+                          texto: usuario?.iniciais ?? barbeiro?.iniciais ?? '?',
                           tamanho: 92,
                           large: true,
                         ),
                       ),
                       const SizedBox(height: 18),
                       Text(
-                        usuario?.nome ?? 'Visitante',
+                        auth.nomeLogado ?? 'Visitante',
                         textAlign: TextAlign.center,
                         style: AppTheme.titulo(size: 22),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        usuario?.email ?? '',
+                        usuario?.email ?? barbeiro?.email ?? '',
                         textAlign: TextAlign.center,
                         style: AppTheme.texto(size: 13, color: AppColors.muted),
                       ),
                       const SizedBox(height: 24),
-                      _numeros(),
-                      const SizedBox(height: 24),
+                      if (auth.ehCliente) ...[
+                        _numeros(),
+                        const SizedBox(height: 24),
+                      ],
                       _item(
                         Icons.phone_outlined,
                         'Telefone',
-                        usuario?.telefone ?? '-',
+                        telefone.isEmpty ? '-' : telefone,
                       ),
-                      _item(
-                        Icons.edit_outlined,
-                        'Editar dados',
-                        'Nome e telefone',
-                        onTap: _editarDados,
-                      ),
+                      // Os dados do barbeiro são cadastrados pelo
+                      // administrador, em Gerenciar Barbeiros.
+                      if (barbeiro != null)
+                        _item(
+                          Icons.content_cut_rounded,
+                          'Especialidade',
+                          barbeiro.especialidade,
+                        )
+                      else
+                        _item(
+                          Icons.edit_outlined,
+                          'Editar dados',
+                          'Nome e telefone',
+                          onTap: _editarDados,
+                        ),
                       _item(
                         Icons.lock_outline_rounded,
                         'Alterar senha',
                         'Exige a senha atual',
                         onTap: _alterarSenha,
                       ),
-                      if (AuthService.instance.podeAdministrar)
-                        _item(
-                          Icons.admin_panel_settings_outlined,
-                          'Área administrativa',
-                          'Painel de controle',
-                          onTap: () =>
-                              Navigator.of(context).pushNamed('/admin'),
-                        ),
                       const SizedBox(height: 28),
                       BotaoSecundario(
                         texto: 'Sair',
                         icone: Icons.logout_rounded,
                         onPressed: _sair,
                       ),
-                      const SizedBox(height: 36),
-                      _suporte(),
+                      // O barbeiro não tem Suporte: ele fala com o
+                      // administrador.
+                      if (barbeiro == null) ...[
+                        const SizedBox(height: 36),
+                        _suporte(),
+                      ],
                     ],
                   ),
           ),
@@ -284,7 +297,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 '$_totalAgendamentos',
                 () => NavegacaoPrincipal.abrir(
                   context,
-                  NavegacaoPrincipal.abaAgenda,
+                  Aba.agenda,
                   '/agendamentos',
                 ),
               ),

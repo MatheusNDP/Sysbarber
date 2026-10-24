@@ -43,16 +43,19 @@ class AuthService {
   /// administrador (regra de negócio 15).
   static const String rotaConfiguracao = '/configuracao';
 
-  /// Rotas da área do cliente (inclui o administrador, que é um cliente).
+  /// Rotas de quem está logado, em qualquer perfil: a área principal (com as
+  /// abas de cada perfil) e o Perfil.
+  static const Set<String> _rotasLogado = {'/home', '/perfil'};
+
+  /// Rotas só do cliente: agendar e acompanhar os pontos. O administrador
+  /// não entra, porque só gerencia a barbearia (regra de negócio 17).
   static const Set<String> _rotasCliente = {
-    '/home',
     '/servicos',
     '/barbeiro',
     '/horario',
     '/confirmacao',
     '/pagamento',
     '/fidelidade',
-    '/perfil',
   };
 
   Cliente? _usuarioAtual;
@@ -76,11 +79,16 @@ class AuthService {
   /// Barbeiros veem apenas a própria agenda; clientes comuns, nada disso.
   bool get podeAdministrar => _usuarioAtual?.admin ?? false;
 
+  /// Cliente da barbearia: agenda, tem pontos e Fidelidade. O administrador
+  /// também é uma conta da tabela de clientes, mas não é cliente.
+  bool get ehCliente => _usuarioAtual != null && !podeAdministrar;
+
   /// Nome de quem está logado, seja cliente ou barbeiro.
   String? get nomeLogado => _usuarioAtual?.nome ?? _barbeiroAtual?.nome;
 
-  /// Primeira tela depois de entrar: o barbeiro vai direto para a agenda.
-  String get rotaInicial => ehBarbeiro ? '/agendamentos' : '/home';
+  /// Primeira tela depois de entrar: a área principal, com as abas do perfil
+  /// de quem entrou.
+  String get rotaInicial => '/home';
 
   bool _barbeariaConfigurada = false;
 
@@ -98,9 +106,12 @@ class AuthService {
     if (!_barbeariaConfigurada) return rota == '/' || rota == rotaConfiguracao;
     if (rota == rotaConfiguracao) return false;
     if (_rotasPublicas.contains(rota)) return true;
-    if (rota == '/agendamentos') return estaLogado;
+    if (_rotasLogado.contains(rota)) return estaLogado;
+    // Os próprios agendamentos: do cliente ou do barbeiro. O administrador
+    // vê todos na agenda geral, que fica no painel.
+    if (rota == '/agendamentos') return ehCliente || ehBarbeiro;
     if (rota == '/admin') return podeAdministrar;
-    if (_rotasCliente.contains(rota)) return _usuarioAtual != null;
+    if (_rotasCliente.contains(rota)) return ehCliente;
     return false;
   }
 
@@ -482,22 +493,33 @@ class AuthService {
     }
   }
 
-  /// Troca a senha do cliente logado, conferindo a atual.
+  /// Troca a senha de quem está logado (cliente, administrador ou
+  /// barbeiro), conferindo a atual.
   Future<({bool sucesso, String? erro})> alterarSenha({
     required String senhaAtual,
     required String novaSenha,
   }) async {
-    final id = _usuarioAtual?.id;
-    if (id == null) {
+    final idCliente = _usuarioAtual?.id;
+    final idBarbeiro = _barbeiroAtual?.id;
+    if (idCliente == null && idBarbeiro == null) {
       return (sucesso: false, erro: 'Entre na sua conta para trocar a senha');
     }
     try {
-      await _db.alterarSenhaCliente(
-        id,
-        senhaAtual: senhaAtual,
-        novaSenha: novaSenha,
-      );
-      await recarregarUsuario();
+      if (idCliente != null) {
+        await _db.alterarSenhaCliente(
+          idCliente,
+          senhaAtual: senhaAtual,
+          novaSenha: novaSenha,
+        );
+        await recarregarUsuario();
+      } else {
+        await _db.alterarSenhaBarbeiro(
+          idBarbeiro!,
+          senhaAtual: senhaAtual,
+          novaSenha: novaSenha,
+        );
+        _barbeiroAtual = await _db.buscarBarbeiroPorId(idBarbeiro);
+      }
       return (sucesso: true, erro: null);
     } catch (e) {
       return (

@@ -61,6 +61,13 @@ class _AdminScreenState extends State<AdminScreen> {
     if (mounted) _carregar();
   }
 
+  /// A agenda geral e os relatórios também são abas do administrador: dentro
+  /// da área principal, troca de aba; fora dela, abre a [tela] por cima.
+  Future<void> _abrirOuTrocar(Aba aba, Widget tela) async {
+    if (NavegacaoPrincipal.trocar(context, aba)) return;
+    await _abrir(tela);
+  }
+
   @override
   Widget build(BuildContext context) {
     final resumo = _resumo;
@@ -86,9 +93,13 @@ class _AdminScreenState extends State<AdminScreen> {
                     onRefresh: _carregar,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 24,
+                      // Embaixo, o espaço da barra de navegação quando a tela
+                      // é uma aba.
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        24,
+                        20,
+                        24 + MediaQuery.paddingOf(context).bottom,
                       ),
                       children: [
                         const RotuloCampo('Modo administrador'),
@@ -158,7 +169,8 @@ class _AdminScreenState extends State<AdminScreen> {
                           Icons.calendar_month_outlined,
                           'Agenda geral',
                           'Todos os atendimentos: receber, concluir e faltas',
-                          () => _abrir(
+                          () => _abrirOuTrocar(
+                            Aba.agenda,
                             const AgendamentosScreen(agendaGeral: true),
                           ),
                         ),
@@ -184,7 +196,10 @@ class _AdminScreenState extends State<AdminScreen> {
                           Icons.bar_chart_rounded,
                           'Relatórios',
                           'Faturamento e indicadores',
-                          () => _abrir(const AdminRelatoriosScreen()),
+                          () => _abrirOuTrocar(
+                            Aba.relatorios,
+                            const AdminRelatoriosScreen(),
+                          ),
                         ),
                       ],
                     ),

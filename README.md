@@ -40,7 +40,7 @@ telefone e senha (regra 15) e já entra com ela.
 
 A configuração tem a opção **"Começar com dados de exemplo"**, útil para testar
 ou apresentar o app. Marcada, ela cria 5 serviços e 3 barbeiros, que entram com
-estas contas e veem só a própria agenda:
+estas contas e veem a própria agenda e o Perfil (regra 17):
 
 | Barbeiro | E-mail de acesso | Senha |
 |---|---|---|
@@ -128,8 +128,8 @@ está instalado. Isso tem três consequências:
   emulador.
 - **Cada pessoa precisa sair da conta ao terminar.** A sessão fica salva, e o
   app reabre direto na última conta usada. Num aparelho compartilhado, quem
-  termina toca em **Sair**: o cliente e o administrador no Perfil, o barbeiro
-  no ícone de saída da própria agenda.
+  termina toca em **Sair**, no Perfil (o barbeiro também tem o ícone de saída
+  na própria agenda).
 
 Levar o app para o celular de cada cliente exige um servidor central, com o
 banco na nuvem e sincronização entre os aparelhos. Isso fica fora do escopo
@@ -143,7 +143,7 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **279 testes** no total:
+São **284 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -153,8 +153,8 @@ São **279 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 48 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android) e o ícone do serviço escolhido entre os ícones de linha |
-| `integration_test/database_integration_test.dart` | 157 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões e migrações |
+| `test/telas_test.dart` | 50 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha e as abas e o Perfil do administrador e do barbeiro |
+| `integration_test/database_integration_test.dart` | 160 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, e o barbeiro troca a própria senha) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -163,7 +163,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 279 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 284 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -359,6 +359,16 @@ v2):
     qualquer canal, substitui o anterior. Se o e-mail não sai (sem internet,
     por exemplo), o código é descartado. O banco confere tudo isso. O barbeiro também pode receber uma
     senha nova do administrador, em Gerenciar Barbeiros.
+17. Cada perfil vê só as próprias telas (veja [Navegação](#navegação)):
+    - **cliente:** agenda, paga, acompanha os próprios agendamentos e os
+      pontos (Fidelidade) e mantém os dados no Perfil;
+    - **administrador:** só gerencia a barbearia (painel, agenda geral,
+      gerenciar e relatórios) e tem o Perfil. Não agenda serviços nem tem
+      pontos ou Fidelidade: o banco recusa a reserva feita pela conta dele.
+      Ele também não conta como cliente: fica fora de Gerenciar Clientes e
+      das contagens de clientes e de pontos do painel e dos relatórios;
+    - **barbeiro:** vê a própria agenda e o Perfil, com os dados dele e a
+      troca da própria senha (o banco confere a atual), sem Suporte.
 
 ---
 
@@ -386,10 +396,13 @@ v2):
   até gastar a cota da conta.
 - **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
   de ser construída. Antes da configuração inicial, só a abertura e a
-  configuração abrem; depois dela, a configuração não abre mais. `/admin` só abre para o administrador; o barbeiro só
-  acessa a própria agenda; o resto mostra "Acesso restrito". As telas do
-  administrador abrem a partir do `/admin`, e a agenda geral confere de novo
-  se quem está logado é o administrador.
+  configuração abrem; depois dela, a configuração não abre mais. A área
+  principal (`/home`) e o Perfil abrem para os três perfis, cada um com as
+  próprias abas; `/admin` só abre para o administrador; agendar, pagar e a
+  Fidelidade, só para o cliente (o administrador não); a lista dos próprios
+  agendamentos, para o cliente e o barbeiro (regra 17). O resto mostra
+  "Acesso restrito". As telas do administrador abrem a partir do painel, e a
+  agenda geral confere de novo se quem está logado é o administrador.
 - **Sessão:** guarda só o id e o tipo de conta (cliente ou barbeiro); os dados
   são sempre relidos do banco, e uma conta excluída perde a sessão salva.
 - **Dados sensíveis:** do cartão só ficam os 4 últimos dígitos; a agenda do
@@ -407,22 +420,23 @@ v2):
 | `/login` | Login, com "Esqueci minha senha" | todos |
 | `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
-| `/home` | Área principal, com a barra de navegação fixa e as abas Início (próximo horário, pontos, acesso rápido), Serviços, Agenda e Perfil | cliente |
+| `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o acesso rápido | todos os perfis |
 | `/servicos` | Catálogo de serviços (também é a aba Serviços) | cliente |
 | `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção) | cliente |
 | `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
-| `/agendamentos` | Meus agendamentos (cliente; também é a aba Agenda) ou Minha agenda (barbeiro) | cliente e barbeiro |
+| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
-| `/perfil` | Dados do usuário, agendamentos e pontos, editar dados, alterar senha, sair e, no fim, o [Suporte](#suporte) (WhatsApp e e-mail) (também é a aba Perfil) | cliente |
-| `/admin` | Painel administrativo: movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
+| `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro vê a especialidade | todos os perfis |
+| `/admin` | Painel administrativo (também é a aba Painel): movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
 
-Antes da configuração inicial, só `/` e `/configuracao` abrem; as demais rotas
-mostram "Acesso restrito".
+Nas rotas marcadas "cliente", o administrador não entra: ele só gerencia
+(regra 17). Antes da configuração inicial, só `/` e `/configuracao` abrem; as
+demais rotas mostram "Acesso restrito".
 
 Telas abertas a partir do painel administrativo (só o administrador chega a
-elas):
+elas; a agenda geral e os relatórios também são abas dele):
 
 | Tela | O que faz |
 |---|---|
@@ -443,22 +457,29 @@ da oferta de resgate e o pagamento em dinheiro continua disponível.
 
 ### Navegação
 
-O Início (`/home`) é a área principal do cliente e do administrador: embaixo
-fica a barra de navegação, com as abas **Início**, **Serviços**, **Agenda** e
-**Perfil**. Tocar na barra troca a aba sem abrir uma tela nova: a barra
-continua no lugar e uma pílula amarela desliza até a aba escolhida, enquanto o
-conteúdo da aba nova entra deslizando pelo mesmo lado. Cada aba relê o banco
-ao ser aberta. Os atalhos do Início (Serviços, Agenda e Perfil), o cartão do
-próximo horário e o "Agendamentos" do Perfil também trocam de aba. Fora do
-Início, o voltar do Android volta para o Início.
+A área principal (`/home`) é a mesma para todos os perfis: embaixo fica a
+barra de navegação, com as abas de quem entrou (regra 17):
 
-Fidelidade, o painel administrativo e o agendamento (profissional, horário,
-revisão e pagamento) abrem por cima, sem a barra, com o botão de voltar. Ao
-terminar ou cancelar um agendamento, o app volta para o Início. Serviços,
-Meus agendamentos e Perfil abertos pela rota, fora da área principal (por
-exemplo, "Resgatar em um agendamento", na Fidelidade), também vêm por cima,
-com o botão de voltar. O barbeiro não tem a área principal: ele entra direto
-na própria agenda.
+| Perfil | Abas |
+|---|---|
+| Cliente | Início, Serviços, Agenda (Meus agendamentos) e Perfil |
+| Administrador | Painel, Agenda (a agenda geral), Relatórios e Perfil |
+| Barbeiro | Agenda (Minha agenda) e Perfil |
+
+Tocar na barra troca a aba sem abrir uma tela nova: a barra continua no lugar
+e uma pílula amarela desliza até a aba escolhida, enquanto o conteúdo da aba
+nova entra deslizando pelo mesmo lado. Cada aba relê o banco ao ser aberta.
+Os atalhos do Início do cliente (Serviços, Agenda e Perfil), o cartão do
+próximo horário e o "Agendamentos" do Perfil também trocam de aba, assim como
+a Agenda geral e os Relatórios no Painel. Fora da primeira aba, o voltar do
+Android volta para ela.
+
+Fidelidade, Gerenciar Serviços, Barbeiros e Clientes e o agendamento
+(profissional, horário, revisão e pagamento) abrem por cima, sem a barra, com
+o botão de voltar. Ao terminar ou cancelar um agendamento, o app volta para o
+Início. Serviços, Meus agendamentos e Perfil abertos pela rota, fora da área
+principal (por exemplo, "Resgatar em um agendamento", na Fidelidade), também
+vêm por cima, com o botão de voltar.
 
 ### Identidade visual
 
@@ -474,7 +495,7 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
 - botão redondo translúcido para voltar e para as ações da barra do topo
   (como o "+" de Gerenciar Serviços e o sair do barbeiro);
 - abas e opções em pílula, com a escolhida em amarelo;
-- barra de navegação flutuante e translúcida, no Início.
+- barra de navegação flutuante e translúcida, na área principal.
 
 O ícone de cada serviço continua gravado no banco como um emoji (os dados de
 exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
@@ -495,8 +516,8 @@ e, no e-mail, o assunto "Suporte SysBarber". A pessoa pode mudar o texto e é
 ela quem envia: o app não manda nada sozinho. Se o aparelho não tem app para
 abrir o link, o Perfil avisa (no caso do e-mail, mostrando o endereço).
 
-O Suporte aparece para o cliente e para o administrador. O barbeiro não tem
-Perfil: se tiver algum problema, ele fala com o administrador.
+O Suporte aparece no Perfil do cliente e do administrador. O barbeiro não tem
+Suporte: se tiver algum problema, ele fala com o administrador.
 
 ---
 
@@ -505,7 +526,7 @@ Perfil: se tiver algum problema, ele fala com o administrador.
 Primeiro acesso (uma vez só, em cada instalação):
 
 ```
-Abertura → Configurar barbearia → Início, já como administrador
+Abertura → Configurar barbearia → Painel, já como administrador
                │
                cria o administrador e, se marcado,
                os dados de exemplo (na mesma transação)

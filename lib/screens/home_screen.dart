@@ -6,39 +6,85 @@ import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'admin_relatorios_screen.dart';
+import 'admin_screen.dart';
 import 'agendamentos_screen.dart';
 import 'perfil_screen.dart';
 import 'servicos_screen.dart';
 
-/// Área principal (`/home`): as abas Início, Serviços, Agenda e Perfil, com a
-/// barra de navegação fixa embaixo. Trocar de aba não abre uma tela nova:
+/// Área principal (`/home`), com a barra de navegação fixa embaixo e as abas
+/// do perfil de quem entrou: o cliente tem Início, Serviços, Agenda e Perfil;
+/// o administrador, Painel, Agenda (a geral), Relatórios e Perfil; o
+/// barbeiro, Agenda (a dele) e Perfil. Trocar de aba não abre uma tela nova:
 /// a barra continua no lugar e marca a aba atual.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  /// As abas do perfil logado, na ordem da barra.
+  static List<(Aba, IconData, String)> abasDoPerfil(AuthService auth) {
+    const agenda = (Aba.agenda, Icons.calendar_month_outlined, 'Agenda');
+    const perfil = (Aba.perfil, Icons.person_outline_rounded, 'Perfil');
+    if (auth.ehBarbeiro) return const [agenda, perfil];
+    if (auth.podeAdministrar) {
+      return const [
+        (Aba.painel, Icons.space_dashboard_outlined, 'Painel'),
+        agenda,
+        (Aba.relatorios, Icons.bar_chart_rounded, 'Relatórios'),
+        perfil,
+      ];
+    }
+    return const [
+      (Aba.inicio, Icons.home_rounded, 'Início'),
+      (Aba.servicos, Icons.content_cut_rounded, 'Serviços'),
+      agenda,
+      perfil,
+    ];
+  }
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _aba = NavegacaoPrincipal.abaInicio;
+  late final _abas = HomeScreen.abasDoPerfil(AuthService.instance);
+
+  /// Posição da aba atual na barra.
+  int _atual = 0;
 
   /// 1 quando a aba nova fica à direita da anterior na barra, -1 quando
   /// fica à esquerda: a aba nova entra por esse lado.
   int _sentido = 1;
 
-  void _irParaAba(int aba) {
-    if (aba == _aba) return;
+  void _irParaIndice(int indice) {
+    if (indice == _atual) return;
     setState(() {
-      _sentido = aba > _aba ? 1 : -1;
-      _aba = aba;
+      _sentido = indice > _atual ? 1 : -1;
+      _atual = indice;
     });
   }
+
+  void _irParaAba(Aba aba) {
+    final indice = _abas.indexWhere((a) => a.$1 == aba);
+    if (indice >= 0) _irParaIndice(indice);
+  }
+
+  /// A tela de cada aba. É montada de novo a cada troca e relê o banco: o
+  /// que mudou em outra aba (um cancelamento, por exemplo) já aparece.
+  Widget _tela(Aba aba) => switch (aba) {
+    Aba.inicio => const _Inicio(),
+    Aba.servicos => const ServicosScreen(),
+    Aba.agenda => AgendamentosScreen(
+      agendaGeral: AuthService.instance.podeAdministrar,
+    ),
+    Aba.perfil => const PerfilScreen(),
+    Aba.painel => const AdminScreen(),
+    Aba.relatorios => const AdminRelatoriosScreen(),
+  };
 
   /// A aba nova entra deslizando do lado da opção tocada e a anterior sai
   /// pelo outro lado, as duas esmaecendo. A que sai não recebe mais toques.
   Widget _transicao(Widget aba, Animation<double> animacao) {
-    final entrando = aba.key == ValueKey(_aba);
+    final entrando = aba.key == ValueKey(_atual);
     final inicio = Offset(0.12 * _sentido * (entrando ? 1 : -1), 0);
     return FadeTransition(
       opacity: animacao,
@@ -51,22 +97,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // A aba é montada de novo a cada troca e relê o banco: o que mudou em
-    // outra aba (um cancelamento, por exemplo) já aparece.
-    final aba = switch (_aba) {
-      NavegacaoPrincipal.abaServicos => const ServicosScreen(),
-      NavegacaoPrincipal.abaAgenda => const AgendamentosScreen(),
-      NavegacaoPrincipal.abaPerfil => const PerfilScreen(),
-      _ => const _Inicio(),
-    };
-
     return PopScope(
-      // O voltar do Android, fora do Início, volta para o Início.
-      canPop: _aba == NavegacaoPrincipal.abaInicio,
+      // O voltar do Android, fora da primeira aba, volta para ela.
+      canPop: _atual == 0,
       onPopInvokedWithResult: (saiu, _) {
-        if (!saiu) _irParaAba(NavegacaoPrincipal.abaInicio);
+        if (!saiu) _irParaIndice(0);
       },
       child: NavegacaoPrincipal(
+        abas: {for (final a in _abas) a.$1},
         irParaAba: _irParaAba,
         child: Scaffold(
           // O conteúdo passa por trás da barra de navegação translúcida.
@@ -78,17 +116,15 @@ class _HomeScreenState extends State<HomeScreen> {
             // Uma função nova a cada troca faz a aba que sai também usar o
             // sentido atual (o AnimatedSwitcher refaz as transições).
             transitionBuilder: (aba, animacao) => _transicao(aba, animacao),
-            child: KeyedSubtree(key: ValueKey(_aba), child: aba),
+            child: KeyedSubtree(
+              key: ValueKey(_atual),
+              child: _tela(_abas[_atual].$1),
+            ),
           ),
           bottomNavigationBar: BarraNavegacao(
-            atual: _aba,
-            onTap: _irParaAba,
-            itens: const [
-              (Icons.home_rounded, 'Início'),
-              (Icons.content_cut_rounded, 'Serviços'),
-              (Icons.calendar_month_outlined, 'Agenda'),
-              (Icons.person_outline_rounded, 'Perfil'),
-            ],
+            atual: _atual,
+            onTap: _irParaIndice,
+            itens: [for (final a in _abas) (a.$2, a.$3)],
           ),
         ),
       ),
@@ -96,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Aba Início: próximo horário, pontos e acesso rápido.
+/// Aba Início do cliente: próximo horário, pontos e acesso rápido.
 class _Inicio extends StatefulWidget {
   const _Inicio();
 
@@ -169,7 +205,7 @@ class _InicioState extends State<_Inicio> {
   }
 
   /// Troca para outra aba da navegação principal.
-  void _irParaAba(int aba, String rota) =>
+  void _irParaAba(Aba aba, String rota) =>
       NavegacaoPrincipal.abrir(context, aba, rota);
 
   @override
@@ -228,7 +264,7 @@ class _InicioState extends State<_Inicio> {
           label: 'Abrir perfil',
           excludeSemantics: true,
           child: GestureDetector(
-            onTap: () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
+            onTap: () => _irParaAba(Aba.perfil, '/perfil'),
             child: AvatarIniciais(
               texto: usuario?.iniciais ?? '?',
               tamanho: 52,
@@ -330,8 +366,8 @@ class _InicioState extends State<_Inicio> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => proximo == null
-            ? _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos')
-            : _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
+            ? _irParaAba(Aba.servicos, '/servicos')
+            : _irParaAba(Aba.agenda, '/agendamentos'),
         child: Stack(
           children: [
             // Tesoura grande e apagada no canto, no lugar de uma foto.
@@ -409,29 +445,24 @@ class _InicioState extends State<_Inicio> {
   }
 
   Widget _atalhos() {
-    // A administração só aparece para a conta administradora.
-    final ehAdmin = AuthService.instance.podeAdministrar;
-    // Serviços, Agenda e Perfil são abas; Fidelidade e Painel abrem por cima.
+    // Serviços, Agenda e Perfil são abas; a Fidelidade abre por cima.
     final itens = <(IconData, String, VoidCallback)>[
       (
         Icons.content_cut_rounded,
         'Serviços',
-        () => _irParaAba(NavegacaoPrincipal.abaServicos, '/servicos'),
+        () => _irParaAba(Aba.servicos, '/servicos'),
       ),
       (
         Icons.calendar_month_outlined,
         'Agenda',
-        () => _irParaAba(NavegacaoPrincipal.abaAgenda, '/agendamentos'),
+        () => _irParaAba(Aba.agenda, '/agendamentos'),
       ),
       (Icons.star_outline_rounded, 'Fidelidade', () => _irPara('/fidelidade')),
-      if (ehAdmin)
-        (Icons.admin_panel_settings_outlined, 'Painel', () => _irPara('/admin'))
-      else
-        (
-          Icons.person_outline_rounded,
-          'Perfil',
-          () => _irParaAba(NavegacaoPrincipal.abaPerfil, '/perfil'),
-        ),
+      (
+        Icons.person_outline_rounded,
+        'Perfil',
+        () => _irParaAba(Aba.perfil, '/perfil'),
+      ),
     ];
 
     return Row(

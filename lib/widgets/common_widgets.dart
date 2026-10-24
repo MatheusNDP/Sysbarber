@@ -562,38 +562,45 @@ class BarraNavegacao extends StatelessWidget {
   }
 }
 
-/// Liga as abas da área principal (Início) à barra de navegação: uma tela
-/// que está numa aba usa [abrir] para trocar de aba em vez de abrir uma tela
-/// nova por cima.
-class NavegacaoPrincipal extends InheritedWidget {
-  static const abaInicio = 0;
-  static const abaServicos = 1;
-  static const abaAgenda = 2;
-  static const abaPerfil = 3;
+/// Abas da área principal. Cada perfil tem as suas (ver `HomeScreen`): o
+/// cliente, Início, Serviços, Agenda e Perfil; o administrador, Painel,
+/// Agenda (a geral), Relatórios e Perfil; o barbeiro, Agenda e Perfil.
+enum Aba { inicio, servicos, agenda, perfil, painel, relatorios }
 
-  final ValueChanged<int> irParaAba;
+/// Liga as abas da área principal à barra de navegação: uma tela que está
+/// numa aba usa [trocar] ou [abrir] para mudar de aba em vez de abrir uma
+/// tela nova por cima.
+class NavegacaoPrincipal extends InheritedWidget {
+  /// As abas do perfil logado.
+  final Set<Aba> abas;
+  final ValueChanged<Aba> irParaAba;
 
   const NavegacaoPrincipal({
     super.key,
+    required this.abas,
     required this.irParaAba,
     required super.child,
   });
 
-  /// Dentro da área principal, troca para a [aba]; fora dela (a tela foi
-  /// aberta por cima, como rota), abre a [rota].
-  static Future<void> abrir(BuildContext context, int aba, String rota) async {
+  /// Troca para a [aba] quando a tela está na área principal e o perfil tem
+  /// essa aba. Devolve `false` quando não trocou (a tela foi aberta por cima).
+  static bool trocar(BuildContext context, Aba aba) {
     final navegacao = context
         .getInheritedWidgetOfExactType<NavegacaoPrincipal>();
-    if (navegacao != null) {
-      navegacao.irParaAba(aba);
-      return;
-    }
+    if (navegacao == null || !navegacao.abas.contains(aba)) return false;
+    navegacao.irParaAba(aba);
+    return true;
+  }
+
+  /// Troca para a [aba] ou, fora da área principal, abre a [rota] por cima.
+  static Future<void> abrir(BuildContext context, Aba aba, String rota) async {
+    if (trocar(context, aba)) return;
     await Navigator.of(context).pushNamed(rota);
   }
 
   @override
   bool updateShouldNotify(NavegacaoPrincipal oldWidget) =>
-      irParaAba != oldWidget.irParaAba;
+      irParaAba != oldWidget.irParaAba || abas != oldWidget.abas;
 }
 
 /// Estado vazio reutilizado nas listagens.
