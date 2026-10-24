@@ -65,10 +65,9 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
     final servico = BookingFlow.servicoSelecionado;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'PROFISSIONAL'),
+      appBar: const BarberAppBar(titulo: 'Profissional'),
       body: Column(
         children: [
-          const GoldDivider(),
           if (servico != null) _faixaServico(servico),
           Expanded(
             child: _carregando
@@ -90,7 +89,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: BotaoPrincipal(
-              texto: 'CONTINUAR',
+              texto: 'Continuar',
               onPressed: _selecionado == null ? null : _continuar,
             ),
           ),
@@ -102,21 +101,29 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
   Widget _faixaServico(Servico servico) {
     return Container(
       width: double.infinity,
-      color: AppColors.dark,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         children: [
-          Text(servico.icone, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 10),
+          IconeCirculo(
+            icone: iconeDoServico(servico.icone),
+            tamanho: 42,
+            destaque: true,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const TituloSecao('Serviço escolhido'),
+                const RotuloCampo('Serviço escolhido'),
                 const SizedBox(height: 3),
                 Text(
                   servico.nome,
-                  style: AppTheme.texto(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                 ),
               ],
             ),
@@ -147,21 +154,21 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.nome, style: AppTheme.titulo(size: 17)),
+                    Text(
+                      b.nome,
+                      style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 3),
                     Text(
                       b.especialidade,
                       style: AppTheme.texto(size: 12, color: AppColors.muted),
                     ),
                     const SizedBox(height: 8),
-                    const Etiqueta(
-                      texto: 'Indisponível',
-                      cor: AppColors.muted,
-                    ),
+                    const Etiqueta(texto: 'Indisponível', cor: AppColors.muted),
                   ],
                 ),
               ),
-              const Icon(Icons.block, color: AppColors.muted, size: 22),
+              const Icon(Icons.block_rounded, color: AppColors.muted, size: 22),
             ],
           ),
         ),
@@ -173,13 +180,16 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
       onTap: () => setState(() => _selecionado = b),
       child: Row(
         children: [
-          AvatarIniciais(texto: b.iniciais, tamanho: 52),
+          AvatarIniciais(texto: b.iniciais, tamanho: 52, large: selecionado),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(b.nome, style: AppTheme.titulo(size: 17)),
+                Text(
+                  b.nome,
+                  style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   b.especialidade,
@@ -205,7 +215,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
               ),
             ),
             child: selecionado
-                ? const Icon(Icons.check, size: 15, color: Colors.black)
+                ? const Icon(Icons.check_rounded, size: 15, color: Colors.black)
                 : null,
           ),
         ],

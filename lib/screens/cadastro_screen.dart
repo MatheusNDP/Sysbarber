@@ -55,10 +55,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'CRIAR CONTA'),
+      appBar: const BarberAppBar(titulo: 'Criar conta'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -106,7 +105,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     icone: Icons.lock_outline,
                     obscuro: _ocultarSenha,
                     sufixo: IconButton(
-                      tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                      tooltip: _ocultarSenha
+                          ? 'Mostrar senha'
+                          : 'Ocultar senha',
                       icon: Icon(
                         _ocultarSenha
                             ? Icons.visibility_outlined
@@ -120,7 +121,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   ),
                   const SizedBox(height: 16),
                   BotaoPrincipal(
-                    texto: _carregando ? 'CADASTRANDO...' : 'CADASTRAR',
+                    texto: _carregando ? 'Cadastrando...' : 'Cadastrar',
                     onPressed: _carregando ? null : _cadastrar,
                   ),
                   const SizedBox(height: 20),
@@ -143,7 +144,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                           'Entrar',
                           style: AppTheme.texto(
                             size: 13,
-                            weight: FontWeight.w700,
+                            weight: FontWeight.w600,
                             color: AppColors.amarelo,
                           ),
                         ),
@@ -174,7 +175,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TituloSecao(rotulo),
+          RotuloCampo(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,

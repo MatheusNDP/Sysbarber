@@ -90,8 +90,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     );
     final barbeiro = BookingFlow.barbeiroSelecionado?.id ?? 0;
     final horario =
-        BookingFlow.dataHoraCompleta?.toIso8601String().substring(0, 16) ??
-        '-';
+        BookingFlow.dataHoraCompleta?.toIso8601String().substring(0, 16) ?? '-';
     return 'SYSBARBER|SIMULACAO|BARBEIRO=$barbeiro|HORARIO=$horario|'
         'VALOR=$valor|TCC';
   }
@@ -169,7 +168,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       // Sem isto o botão ficaria travado em "PROCESSANDO..." para sempre.
       if (!mounted) return;
       setState(() => _processando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Não foi possível concluir o agendamento'));
+      mostrarErro(
+        context,
+        mensagemDeErro(e, 'Não foi possível concluir o agendamento'),
+      );
     }
   }
 
@@ -179,11 +181,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     final voltar = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text(
           'Não foi possível agendar',
           style: AppTheme.titulo(size: 18),
@@ -196,17 +193,17 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(
-              'FECHAR',
+              'Fechar',
               style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
-              'ESCOLHER OUTRO HORÁRIO',
+              'Escolher outro horário',
               style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
               ),
             ),
@@ -216,9 +213,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     );
 
     if (voltar != true || !mounted) return;
-    Navigator.of(
-      context,
-    ).popUntil((r) => r.settings.name == '/horario' || r.isFirst);
+    Navigator.of(context)
+        .popUntil((r) => r.settings.name == '/horario' || r.isFirst);
   }
 
   /// Confirmação do resgate: o serviço saiu de graça.
@@ -230,14 +226,13 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Column(
           children: [
-            const Text('🎁', style: TextStyle(fontSize: 46)),
+            const IconeCirculo(
+              icone: Icons.card_giftcard_rounded,
+              tamanho: 64,
+              destaque: true,
+            ),
             const SizedBox(height: 12),
             Text(
               'Prêmio resgatado!',
@@ -277,30 +272,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Column(
           children: [
-            Container(
-              width: 60,
-              height: 60,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: (antecipado ? AppColors.green : AppColors.amarelo)
-                    .withValues(alpha: 0.15),
-                border: Border.all(
-                  color: antecipado ? AppColors.green : AppColors.amarelo,
-                ),
-              ),
-              child: Icon(
-                antecipado ? Icons.check : Icons.schedule,
-                color: antecipado ? AppColors.green : AppColors.amarelo,
-                size: 30,
-              ),
+            IconeCirculo(
+              icone: antecipado ? Icons.check_rounded : Icons.schedule_rounded,
+              tamanho: 64,
+              cor: antecipado ? AppColors.green : AppColors.amarelo,
             ),
             const SizedBox(height: 14),
             Text(
@@ -324,26 +301,35 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             ),
             const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.amarelo.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
+                color: AppColors.amarelo.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(
-                antecipado
-                    ? '⭐ Você ganhou ${resultado.pontosCreditados} pontos'
-                    : '⭐ ${resultado.valor.round()} pontos liberados após '
-                          'o pagamento',
-                textAlign: TextAlign.center,
-                style: AppTheme.texto(
-                  size: 13,
-                  weight: FontWeight.w700,
-                  color: AppColors.amarelo,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 18,
+                    color: AppColors.amarelo,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      antecipado
+                          ? 'Você ganhou ${resultado.pontosCreditados} pontos'
+                          : '${resultado.valor.round()} pontos liberados após '
+                                'o pagamento',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.texto(
+                        size: 13,
+                        weight: FontWeight.w600,
+                        color: AppColors.amarelo,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -370,10 +356,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     final antecipado = _tipo == TipoPagamento.antecipado;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'PAGAMENTO'),
+      appBar: const BarberAppBar(titulo: 'Pagamento'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -396,11 +381,16 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   const SizedBox(height: 26),
                   const TituloSecao('Forma de pagamento'),
                   const SizedBox(height: 12),
-                  _opcaoMetodo(MetodoPagamento.pix, '📱', 'Pix', 'QR Code'),
+                  _opcaoMetodo(
+                    MetodoPagamento.pix,
+                    Icons.pix,
+                    'Pix',
+                    'QR Code',
+                  ),
                   const SizedBox(height: 10),
                   _opcaoMetodo(
                     MetodoPagamento.cartao,
-                    '💳',
+                    Icons.credit_card_rounded,
                     'Cartão de Crédito/Débito',
                     'Informe os dados do cartão',
                   ),
@@ -420,12 +410,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: BotaoPrincipal(
               texto: _processando
-                  ? 'PROCESSANDO...'
+                  ? 'Processando...'
                   : _usarPontos
-                  ? 'RESGATAR COM PONTOS'
+                  ? 'Resgatar com pontos'
                   : antecipado
-                  ? 'CONFIRMAR PAGAMENTO'
-                  : 'RESERVAR E PAGAR NA BARBEARIA',
+                  ? 'Confirmar pagamento'
+                  : 'Reservar e pagar na barbearia',
               onPressed: _processando ? null : _confirmar,
             ),
           ),
@@ -435,26 +425,33 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   }
 
   Widget _cartaoValor(Servico? servico) {
+    final textoEscuro = Colors.black.withValues(alpha: 0.7);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 30),
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.amarelo,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         children: [
-          const TituloSecao('Valor total'),
-          const SizedBox(height: 10),
+          Text(
+            'Valor total',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: textoEscuro,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             formatarReal(servico?.preco ?? 0),
-            style: AppTheme.titulo(size: 40, color: AppColors.amarelo),
+            style: AppTheme.titulo(size: 38, color: Colors.black),
           ),
           const SizedBox(height: 6),
           Text(
             servico?.nome ?? '',
-            style: AppTheme.texto(size: 13, color: AppColors.muted),
+            style: AppTheme.texto(size: 13, color: textoEscuro),
           ),
         ],
       ),
@@ -482,10 +479,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           TextButton(
             onPressed: _carregarPontos,
             child: Text(
-              'TENTAR NOVAMENTE',
+              'Tentar novamente',
               style: AppTheme.texto(
                 size: 12,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
               ),
             ),
@@ -504,7 +501,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       onTap: () => setState(() => _usarPontos = !_usarPontos),
       child: Row(
         children: [
-          const Text('🎁', style: TextStyle(fontSize: 28)),
+          const IconeCirculo(
+            icone: Icons.card_giftcard_rounded,
+            tamanho: 44,
+            cor: AppColors.amarelo,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -512,11 +513,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               children: [
                 Text(
                   'Usar ${DatabaseService.pontosParaPremio} pontos',
-                  style: AppTheme.texto(
-                    size: 14,
-                    weight: FontWeight.w700,
-                    color: AppColors.amarelo,
-                  ),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -547,7 +544,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               ),
             ),
             child: _usarPontos
-                ? const Icon(Icons.check, size: 14, color: Colors.black)
+                ? const Icon(Icons.check_rounded, size: 14, color: Colors.black)
                 : null,
           ),
         ],
@@ -564,9 +561,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         onTap: () => setState(() => _tipo = tipo),
         child: Row(
           children: [
-            Text(
-              tipo == TipoPagamento.antecipado ? '⚡' : '🏪',
-              style: const TextStyle(fontSize: 24),
+            IconeCirculo(
+              icone: tipo == TipoPagamento.antecipado
+                  ? Icons.bolt_rounded
+                  : Icons.storefront_outlined,
+              tamanho: 44,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -575,7 +574,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 children: [
                   Text(
                     tipo.label,
-                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -597,7 +596,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
   Widget _opcaoMetodo(
     MetodoPagamento metodo,
-    String icone,
+    IconData icone,
     String titulo,
     String descricao,
   ) {
@@ -607,7 +606,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       onTap: () => setState(() => _metodo = metodo),
       child: Row(
         children: [
-          Text(icone, style: const TextStyle(fontSize: 24)),
+          IconeCirculo(icone: icone, tamanho: 44),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -615,7 +614,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
               children: [
                 Text(
                   titulo,
-                  style: AppTheme.texto(size: 14, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 14, weight: FontWeight.w600),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -663,8 +662,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
@@ -672,7 +670,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: QrImageView(
               data: _payloadPix,
@@ -692,15 +690,14 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           const SizedBox(height: 16),
           Text(
             'Aponte a câmera para o QR Code',
-            style: AppTheme.texto(size: 13, weight: FontWeight.w700),
+            style: AppTheme.texto(size: 13, weight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
             decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
+              color: AppColors.card2,
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
@@ -715,14 +712,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 IconButton(
                   tooltip: 'Copiar código',
                   icon: const Icon(
-                    Icons.copy,
+                    Icons.copy_rounded,
                     size: 18,
                     color: AppColors.amarelo,
                   ),
                   onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: _payloadPix),
-                    );
+                    await Clipboard.setData(ClipboardData(text: _payloadPix));
                     if (!mounted) return;
                     mostrarInfo(context, 'Código copiado');
                   },
@@ -747,8 +742,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,7 +807,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TituloSecao(rotulo),
+          RotuloCampo(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -834,9 +828,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.amarelo.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.amarelo.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -851,7 +844,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   'Pagamento pendente',
                   style: AppTheme.texto(
                     size: 13,
-                    weight: FontWeight.w700,
+                    weight: FontWeight.w600,
                     color: AppColors.amarelo,
                   ),
                 ),

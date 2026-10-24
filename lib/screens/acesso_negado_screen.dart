@@ -11,13 +11,12 @@ class AcessoNegadoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = AuthService.instance;
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'ACESSO RESTRITO'),
+      appBar: const BarberAppBar(titulo: 'Acesso restrito'),
       body: Column(
         children: [
-          const GoldDivider(),
           const Expanded(
             child: EstadoVazio(
-              icone: '🔒',
+              icone: Icons.lock_outline_rounded,
               titulo: 'Acesso restrito',
               descricao: 'Esta área não está disponível para a sua conta.',
             ),
@@ -25,7 +24,7 @@ class AcessoNegadoScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: BotaoPrincipal(
-              texto: 'VOLTAR AO INÍCIO',
+              texto: 'Voltar ao início',
               onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 auth.estaLogado ? auth.rotaInicial : '/',
                 (_) => false,

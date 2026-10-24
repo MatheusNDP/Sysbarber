@@ -1,10 +1,12 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 
-/// Botão principal: preenchido em dourado com texto preto.
+/// Botão principal: pílula amarela com texto preto.
 class BotaoPrincipal extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
@@ -25,10 +27,9 @@ class BotaoPrincipal extends StatelessWidget {
       texto,
       textAlign: TextAlign.center,
       style: AppTheme.texto(
-        size: 14,
-        weight: FontWeight.w700,
+        size: 15,
+        weight: FontWeight.w600,
         color: onPressed == null ? AppColors.muted : Colors.black,
-        letterSpacing: 1,
       ),
     );
     final botao = ElevatedButton(
@@ -39,14 +40,17 @@ class BotaoPrincipal extends StatelessWidget {
         disabledBackgroundColor: AppColors.card2,
         disabledForegroundColor: AppColors.muted,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        shape: const StadiumBorder(),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (icone != null) ...[Icon(icone, size: 18), const SizedBox(width: 8)],
+          if (icone != null) ...[
+            Icon(icone, size: 18),
+            const SizedBox(width: 8),
+          ],
           // Com a largura toda, o texto quebra a linha em vez de estourar o
           // botão em telas estreitas. O botão compacto não tem largura
           // definida, e ali um Flexible não é permitido.
@@ -58,7 +62,7 @@ class BotaoPrincipal extends StatelessWidget {
   }
 }
 
-/// Botão secundário: apenas contorno dourado.
+/// Botão secundário: pílula translúcida, com contorno claro e texto branco.
 class BotaoSecundario extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
@@ -79,19 +83,19 @@ class BotaoSecundario extends StatelessWidget {
       texto,
       textAlign: TextAlign.center,
       style: AppTheme.texto(
-        size: 14,
-        weight: FontWeight.w700,
-        color: AppColors.amarelo,
-        letterSpacing: 1,
+        size: 15,
+        weight: FontWeight.w600,
+        color: onPressed == null ? AppColors.muted : AppColors.text,
       ),
     );
     final botao = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.amarelo,
-        side: const BorderSide(color: AppColors.amarelo, width: 1.5),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        foregroundColor: AppColors.text,
+        backgroundColor: AppColors.vidro,
+        side: const BorderSide(color: AppColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        shape: const StadiumBorder(),
       ),
       child: icone == null
           ? rotulo
@@ -111,7 +115,64 @@ class BotaoSecundario extends StatelessWidget {
   }
 }
 
-/// Cartão padrão do app. Com [selected] a borda vira dourada.
+/// Botão redondo translúcido (efeito vidro), para ações de ícone como
+/// voltar. O fundo desfocado aparece quando há conteúdo atrás dele.
+class BotaoVidro extends StatelessWidget {
+  final IconData icone;
+  final VoidCallback? onPressed;
+
+  /// Texto da dica e do leitor de tela, ex.: "Voltar".
+  final String dica;
+  final double tamanho;
+  final Color? corIcone;
+
+  const BotaoVidro({
+    super.key,
+    required this.icone,
+    required this.onPressed,
+    required this.dica,
+    this.tamanho = 44,
+    this.corIcone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: dica,
+      child: Semantics(
+        button: true,
+        label: dica,
+        excludeSemantics: true,
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Material(
+              color: AppColors.vidro,
+              shape: const CircleBorder(
+                side: BorderSide(color: AppColors.border),
+              ),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onPressed,
+                child: SizedBox(
+                  width: tamanho,
+                  height: tamanho,
+                  child: Icon(
+                    icone,
+                    size: tamanho * 0.45,
+                    color: corIcone ?? AppColors.text,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Cartão padrão do app. Com [selected] ganha a borda amarela.
 class Cartao extends StatelessWidget {
   final Widget child;
   final bool selected;
@@ -134,19 +195,94 @@ class Cartao extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: padding,
           decoration: BoxDecoration(
             color: cor ?? AppColors.card,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(20),
+            // A borda existe sempre (transparente quando não selecionado),
+            // para o conteúdo não mudar de lugar ao selecionar.
             border: Border.all(
-              color: selected ? AppColors.amarelo : AppColors.border,
-              width: selected ? 1.5 : 1,
+              color: selected ? AppColors.amarelo : Colors.transparent,
+              width: 1.5,
             ),
           ),
           child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Ícone de linha dentro de um círculo. Com [destaque] o fundo fica amarelo;
+/// com [cor], o círculo ganha um fundo suave dessa cor (ex.: status).
+class IconeCirculo extends StatelessWidget {
+  final IconData icone;
+  final double tamanho;
+  final bool destaque;
+  final Color? cor;
+
+  const IconeCirculo({
+    super.key,
+    required this.icone,
+    this.tamanho = 52,
+    this.destaque = false,
+    this.cor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fundo = destaque
+        ? AppColors.amarelo
+        : cor?.withValues(alpha: 0.16) ?? AppColors.card2;
+    final corIcone = destaque ? Colors.black : cor ?? AppColors.text;
+    return Container(
+      width: tamanho,
+      height: tamanho,
+      decoration: BoxDecoration(color: fundo, shape: BoxShape.circle),
+      child: Icon(icone, size: tamanho * 0.44, color: corIcone),
+    );
+  }
+}
+
+/// Atalho redondo com o nome embaixo, como as categorias da tela inicial.
+class AtalhoCirculo extends StatelessWidget {
+  final IconData icone;
+  final String rotulo;
+  final VoidCallback onTap;
+
+  const AtalhoCirculo({
+    super.key,
+    required this.icone,
+    required this.rotulo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: rotulo,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconeCirculo(icone: icone, tamanho: 60),
+              const SizedBox(height: 8),
+              Text(
+                rotulo,
+                textAlign: TextAlign.center,
+                style: AppTheme.texto(size: 12, weight: FontWeight.w500),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -158,31 +294,29 @@ class Etiqueta extends StatelessWidget {
   final String texto;
   final Color cor;
 
-  const Etiqueta({super.key, required this.texto, this.cor = AppColors.amarelo});
+  const Etiqueta({
+    super.key,
+    required this.texto,
+    this.cor = AppColors.amarelo,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: cor.withValues(alpha: 0.15),
+        color: cor.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cor.withValues(alpha: 0.5)),
       ),
       child: Text(
         texto,
-        style: AppTheme.texto(
-          size: 11,
-          weight: FontWeight.w700,
-          color: cor,
-          letterSpacing: 0.5,
-        ),
+        style: AppTheme.texto(size: 11, weight: FontWeight.w600, color: cor),
       ),
     );
   }
 }
 
-/// Avatar circular. Com [large] recebe o gradiente dourado.
+/// Avatar circular com as iniciais. Com [large] o fundo fica amarelo.
 class AvatarIniciais extends StatelessWidget {
   final String texto;
   final double tamanho;
@@ -203,23 +337,13 @@ class AvatarIniciais extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: large
-            ? const LinearGradient(
-                colors: [AppColors.amareloClaro, AppColors.amarelo],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : const LinearGradient(
-                colors: [AppColors.card2, AppColors.card],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-        border: large ? null : Border.all(color: AppColors.amarelo, width: 1.2),
+        color: large ? AppColors.amarelo : AppColors.card2,
       ),
       child: Text(
         texto,
         style: AppTheme.titulo(
-          size: tamanho * 0.36,
+          size: tamanho * 0.34,
+          weight: FontWeight.w600,
           color: large ? Colors.black : AppColors.amarelo,
         ),
       ),
@@ -227,47 +351,58 @@ class AvatarIniciais extends StatelessWidget {
   }
 }
 
-/// Linha de 2px com degradê dourado → transparente.
-class GoldDivider extends StatelessWidget {
-  final double largura;
+/// Título de seção, com uma ação opcional à direita (ex.: "Ver todos").
+class TituloSecao extends StatelessWidget {
+  final String texto;
+  final String? acao;
+  final VoidCallback? onAcao;
 
-  const GoldDivider({super.key, this.largura = double.infinity});
+  const TituloSecao(this.texto, {super.key, this.acao, this.onAcao});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 2,
-      width: largura,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.amarelo, Colors.transparent],
+    final titulo = Text(
+      texto,
+      style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
+    );
+    if (acao == null) return titulo;
+    return Row(
+      children: [
+        Expanded(child: titulo),
+        TextButton(
+          onPressed: onAcao,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.muted,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 36),
+          ),
+          child: Text(acao!, style: AppTheme.texto(size: 13)),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Rótulo de seção em caixa alta.
-class TituloSecao extends StatelessWidget {
+/// Rótulo pequeno acima de um campo ou de um dado.
+class RotuloCampo extends StatelessWidget {
   final String texto;
 
-  const TituloSecao(this.texto, {super.key});
+  const RotuloCampo(this.texto, {super.key});
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      texto.toUpperCase(),
+      texto,
       style: AppTheme.texto(
-        size: 11,
-        weight: FontWeight.w700,
-        color: AppColors.amarelo,
-        letterSpacing: 1.5,
+        size: 13,
+        weight: FontWeight.w500,
+        color: AppColors.muted,
       ),
     );
   }
 }
 
-/// AppBar padrão com título serifado dourado.
+/// AppBar padrão: título centralizado e o voltar num botão translúcido.
 class BarberAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String titulo;
   final List<Widget>? acoes;
@@ -281,24 +416,119 @@ class BarberAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(64);
 
   @override
   Widget build(BuildContext context) {
+    final podeVoltar =
+        mostrarVoltar && (ModalRoute.of(context)?.canPop ?? false);
     return AppBar(
-      automaticallyImplyLeading: mostrarVoltar,
-      title: Text(
-        titulo,
-        style: AppTheme.titulo(size: 20, color: AppColors.amarelo),
+      toolbarHeight: 64,
+      automaticallyImplyLeading: false,
+      leadingWidth: 68,
+      leading: podeVoltar
+          ? Center(
+              child: BotaoVidro(
+                icone: Icons.arrow_back_ios_new_rounded,
+                dica: 'Voltar',
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            )
+          : null,
+      title: Text(titulo),
+      actions: acoes == null ? null : [...acoes!, const SizedBox(width: 12)],
+    );
+  }
+}
+
+/// Barra de navegação inferior flutuante e translúcida. A opção atual fica
+/// numa pílula amarela.
+class BarraNavegacao extends StatelessWidget {
+  final int atual;
+  final ValueChanged<int> onTap;
+  final List<(IconData, String)> itens;
+
+  const BarraNavegacao({
+    super.key,
+    required this.atual,
+    required this.onTap,
+    required this.itens,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.card2.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  for (var i = 0; i < itens.length; i++)
+                    Expanded(child: _item(i)),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      actions: acoes,
+    );
+  }
+
+  Widget _item(int i) {
+    final selecionado = i == atual;
+    final cor = selecionado ? Colors.black : AppColors.muted;
+    return Semantics(
+      button: true,
+      selected: selecionado,
+      label: itens[i].$2,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: () => onTap(i),
+        customBorder: const StadiumBorder(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: ShapeDecoration(
+            color: selecionado ? AppColors.amarelo : Colors.transparent,
+            shape: const StadiumBorder(),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(itens[i].$1, size: 22, color: cor),
+              const SizedBox(height: 2),
+              Text(
+                itens[i].$2,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.texto(
+                  size: 11,
+                  weight: selecionado ? FontWeight.w600 : FontWeight.w500,
+                  color: cor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
 /// Estado vazio reutilizado nas listagens.
 class EstadoVazio extends StatelessWidget {
-  final String icone;
+  final IconData icone;
   final String titulo;
   final String descricao;
 
@@ -317,9 +547,13 @@ class EstadoVazio extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(icone, style: const TextStyle(fontSize: 56)),
-            const SizedBox(height: 16),
-            Text(titulo, style: AppTheme.titulo(size: 18)),
+            IconeCirculo(icone: icone, tamanho: 76, cor: AppColors.amarelo),
+            const SizedBox(height: 18),
+            Text(
+              titulo,
+              textAlign: TextAlign.center,
+              style: AppTheme.titulo(size: 18, weight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Text(
               descricao,
@@ -331,6 +565,26 @@ class EstadoVazio extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Ícones que o administrador escolhe para um serviço: o valor gravado na
+/// coluna `icone` do banco (um emoji, como nos dados de exemplo), o ícone de
+/// linha que a tela mostra e o nome da opção.
+const List<(String, IconData, String)> iconesDeServico = [
+  ('✂️', Icons.content_cut_rounded, 'Corte'),
+  ('🪒', Icons.face_6_outlined, 'Barba'),
+  ('💈', Icons.workspace_premium_outlined, 'Combo'),
+  ('💆', Icons.water_drop_outlined, 'Hidratação'),
+  ('🎨', Icons.palette_outlined, 'Coloração'),
+];
+
+/// Ícone de linha de um serviço a partir do valor gravado no banco. Um valor
+/// fora da lista (gravado antes dela, por exemplo) mostra a tesoura.
+IconData iconeDoServico(String icone) {
+  for (final opcao in iconesDeServico) {
+    if (opcao.$1 == icone) return opcao.$2;
+  }
+  return Icons.content_cut_rounded;
 }
 
 /// Duas colunas cujas linhas crescem com o conteúdo.
@@ -394,9 +648,16 @@ class EstadoErro extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('⚠️', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            Text('Algo deu errado', style: AppTheme.titulo(size: 18)),
+            const IconeCirculo(
+              icone: Icons.error_outline_rounded,
+              tamanho: 76,
+              cor: AppColors.red,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Algo deu errado',
+              style: AppTheme.titulo(size: 18, weight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Text(
               mensagem,
@@ -407,7 +668,7 @@ class EstadoErro extends StatelessWidget {
             SizedBox(
               width: 240,
               child: BotaoSecundario(
-                texto: 'TENTAR NOVAMENTE',
+                texto: 'Tentar novamente',
                 onPressed: onTentarNovamente,
               ),
             ),
@@ -426,7 +687,7 @@ void mostrarErro(BuildContext context, String mensagem) {
       SnackBar(
         backgroundColor: AppColors.red,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Row(
           children: [
             const Icon(Icons.error_outline, color: Colors.white, size: 20),
@@ -450,10 +711,14 @@ void mostrarSucesso(BuildContext context, String mensagem) {
       SnackBar(
         backgroundColor: AppColors.green,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.black, size: 20),
+            const Icon(
+              Icons.check_circle_outline,
+              color: Colors.black,
+              size: 20,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -474,7 +739,7 @@ void mostrarInfo(BuildContext context, String mensagem) {
       SnackBar(
         backgroundColor: AppColors.card2,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text(
           mensagem,
           style: AppTheme.texto(size: 13, color: AppColors.text),

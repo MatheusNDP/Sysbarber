@@ -30,10 +30,9 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     // O barbeiro volta direto para a própria agenda.
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AuthService.instance.rotaInicial,
-      (_) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AuthService.instance.rotaInicial, (_) => false);
   }
 
   @override
@@ -46,16 +45,14 @@ class _SplashScreenState extends State<SplashScreen> {
         children: [
           // Tesoura decorativa translúcida no canto inferior direito.
           Positioned(
-            right: -30,
-            bottom: -20,
+            right: -40,
+            bottom: -30,
             child: Transform.rotate(
               angle: -math.pi / 8,
-              child: Text(
-                '✂️',
-                style: TextStyle(
-                  fontSize: 180,
-                  color: AppColors.amarelo.withValues(alpha: 0.04),
-                ),
+              child: Icon(
+                Icons.content_cut_rounded,
+                size: 240,
+                color: AppColors.amarelo.withValues(alpha: 0.05),
               ),
             ),
           ),
@@ -66,40 +63,36 @@ class _SplashScreenState extends State<SplashScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const Spacer(flex: 2),
-                  const Text('✂️', style: TextStyle(fontSize: 72)),
+                  const IconeCirculo(
+                    icone: Icons.content_cut_rounded,
+                    tamanho: 96,
+                    destaque: true,
+                  ),
                   const SizedBox(height: 28),
                   RichText(
                     text: TextSpan(
                       children: [
                         TextSpan(
-                          text: 'SYS',
+                          text: 'Sys',
                           style: AppTheme.titulo(
-                            size: 40,
+                            size: 38,
                             color: AppColors.amarelo,
-                            letterSpacing: 4,
                           ),
                         ),
                         TextSpan(
-                          text: 'BARBER',
+                          text: 'Barber',
                           style: AppTheme.titulo(
-                            size: 40,
+                            size: 38,
                             color: AppColors.text,
-                            letterSpacing: 4,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  const GoldDivider(largura: 120),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 10),
                   Text(
-                    'SISTEMA DE BARBEARIA',
-                    style: AppTheme.texto(
-                      size: 11,
-                      color: AppColors.muted,
-                      letterSpacing: 3,
-                    ),
+                    'Sistema de barbearia',
+                    style: AppTheme.texto(size: 14, color: AppColors.muted),
                   ),
                   const Spacer(flex: 3),
                   if (_restaurandoSessao)
@@ -136,20 +129,20 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                     const SizedBox(height: 16),
                     BotaoPrincipal(
-                      texto: 'CONFIGURAR BARBEARIA',
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).pushNamed(AuthService.rotaConfiguracao),
+                      texto: 'Configurar barbearia',
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pushNamed(AuthService.rotaConfiguracao),
                     ),
                   ] else ...[
                     BotaoPrincipal(
-                      texto: 'ENTRAR',
+                      texto: 'Entrar',
                       onPressed: () =>
                           Navigator.of(context).pushNamed('/login'),
                     ),
                     const SizedBox(height: 12),
                     BotaoSecundario(
-                      texto: 'CRIAR CONTA',
+                      texto: 'Criar conta',
                       onPressed: () =>
                           Navigator.of(context).pushNamed('/cadastro'),
                     ),

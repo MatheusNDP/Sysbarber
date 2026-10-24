@@ -55,10 +55,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (resultado.sucesso) {
       // Profissional entra direto na própria agenda: a Home é a área do
       // cliente e depende de um cadastro de cliente, que ele não tem.
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AuthService.instance.rotaInicial,
-        (_) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AuthService.instance.rotaInicial, (_) => false);
     } else {
       mostrarErro(context, resultado.erro ?? 'Não foi possível entrar');
     }
@@ -67,10 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'ENTRAR'),
+      appBar: const BarberAppBar(titulo: 'Entrar'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -79,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   _cabecalho(),
                   const SizedBox(height: 28),
-                  const TituloSecao('E-mail'),
+                  const RotuloCampo('E-mail'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _emailCtrl,
@@ -89,15 +87,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: AppTheme.texto(size: 14),
                     decoration: const InputDecoration(
                       hintText: 'seu@email.com',
-                      prefixIcon: Icon(
-                        Icons.mail_outline,
-                        color: AppColors.muted,
-                        size: 20,
-                      ),
+                      prefixIcon: Icon(Icons.mail_outline_rounded, size: 20),
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const TituloSecao('Senha'),
+                  const RotuloCampo('Senha'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _senhaCtrl,
@@ -108,12 +102,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: '••••••••',
                       prefixIcon: const Icon(
-                        Icons.lock_outline,
-                        color: AppColors.muted,
+                        Icons.lock_outline_rounded,
                         size: 20,
                       ),
                       suffixIcon: IconButton(
-                        tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                        tooltip: _ocultarSenha
+                            ? 'Mostrar senha'
+                            : 'Ocultar senha',
                         icon: Icon(
                           _ocultarSenha
                               ? Icons.visibility_outlined
@@ -129,9 +124,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).pushNamed(AuthService.rotaRecuperarSenha),
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pushNamed(AuthService.rotaRecuperarSenha),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         minimumSize: const Size(48, 48),
@@ -140,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Esqueci minha senha',
                         style: AppTheme.texto(
                           size: 13,
-                          weight: FontWeight.w700,
+                          weight: FontWeight.w600,
                           color: AppColors.amarelo,
                         ),
                       ),
@@ -148,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   BotaoPrincipal(
-                    texto: _carregando ? 'ENTRANDO...' : 'ENTRAR',
+                    texto: _carregando ? 'Entrando...' : 'Entrar',
                     onPressed: _carregando ? null : _entrar,
                   ),
                   const SizedBox(height: 20),
@@ -172,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'Criar conta',
                           style: AppTheme.texto(
                             size: 13,
-                            weight: FontWeight.w700,
+                            weight: FontWeight.w600,
                             color: AppColors.amarelo,
                           ),
                         ),
@@ -191,34 +186,27 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _cabecalho() {
     return Column(
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.amarelo, width: 1.5),
-          ),
-          child: const Text('✂️', style: TextStyle(fontSize: 28)),
+        const IconeCirculo(
+          icone: Icons.content_cut_rounded,
+          tamanho: 72,
+          destaque: true,
         ),
-        const SizedBox(height: 16),
-        Text(
-          'SYSBARBER',
-          style: AppTheme.titulo(
-            size: 26,
-            color: AppColors.amarelo,
-            letterSpacing: 3,
+        const SizedBox(height: 18),
+        RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: 'Sys',
+                style: AppTheme.titulo(size: 28, color: AppColors.amarelo),
+              ),
+              TextSpan(text: 'Barber', style: AppTheme.titulo(size: 28)),
+            ],
           ),
         ),
         const SizedBox(height: 6),
         Text(
-          'FAÇA SEU LOGIN',
-          style: AppTheme.texto(
-            size: 11,
-            color: AppColors.muted,
-            letterSpacing: 2,
-          ),
+          'Faça seu login',
+          style: AppTheme.texto(size: 14, color: AppColors.muted),
         ),
       ],
     );

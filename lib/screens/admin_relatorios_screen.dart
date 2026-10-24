@@ -94,10 +94,9 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     final r = _relatorio;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'RELATÓRIOS'),
+      appBar: const BarberAppBar(titulo: 'Relatórios'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -158,7 +157,11 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         const TituloSecao('Agendamentos'),
                         const SizedBox(height: 12),
                         _grade([
-                          _indicador('Total', '${r.totalAgendamentos}', 'geral'),
+                          _indicador(
+                            'Total',
+                            '${r.totalAgendamentos}',
+                            'geral',
+                          ),
                           _indicador(
                             'Confirmados',
                             '${r.confirmados}',
@@ -229,30 +232,36 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.card2, AppColors.dark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.amarelo, width: 1.5),
+        color: AppColors.amarelo,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         children: [
-          const TituloSecao('Faturamento líquido'),
-          const SizedBox(height: 10),
+          Text(
+            'Faturamento líquido',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: Colors.black.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 8),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               formatarReal(r.faturamento),
               maxLines: 1,
-              style: AppTheme.titulo(size: 40, color: AppColors.amarelo),
+              style: AppTheme.titulo(size: 38, color: Colors.black),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'Pagamentos e multas recebidos, menos estornos',
-            style: AppTheme.texto(size: 11, color: AppColors.muted),
+            textAlign: TextAlign.center,
+            style: AppTheme.texto(
+              size: 12,
+              color: Colors.black.withValues(alpha: 0.7),
+            ),
           ),
         ],
       ),
@@ -274,14 +283,11 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             label: Text(rotulos[p]!),
             selected: _periodo == p,
             onSelected: (_) => _mudarPeriodo(p),
-            selectedColor: AppColors.amarelo,
-            backgroundColor: AppColors.card,
             labelStyle: AppTheme.texto(
-              size: 12,
-              weight: FontWeight.w700,
+              size: 13,
+              weight: FontWeight.w600,
               color: _periodo == p ? Colors.black : AppColors.text,
             ),
-            side: const BorderSide(color: AppColors.border),
             showCheckmark: false,
           ),
       ],
@@ -375,7 +381,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: AppTheme.texto(
                                 size: 13,
-                                weight: FontWeight.w700,
+                                weight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -386,7 +392,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                                 : '${item.quantidade}×',
                             style: AppTheme.texto(
                               size: 12,
-                              weight: FontWeight.w700,
+                              weight: FontWeight.w600,
                               color: AppColors.amarelo,
                             ),
                           ),
@@ -398,7 +404,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         child: LinearProgressIndicator(
                           value: maior == 0 ? 0 : item.quantidade / maior,
                           minHeight: 6,
-                          backgroundColor: AppColors.background,
+                          backgroundColor: AppColors.card2,
                           valueColor: const AlwaysStoppedAnimation<Color>(
                             AppColors.amarelo,
                           ),

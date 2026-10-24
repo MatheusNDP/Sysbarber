@@ -96,10 +96,9 @@ class _HorarioScreenState extends State<HorarioScreen> {
     final barbeiro = BookingFlow.barbeiroSelecionado;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'HORÁRIO'),
+      appBar: const BarberAppBar(titulo: 'Horário'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -114,7 +113,9 @@ class _HorarioScreenState extends State<HorarioScreen> {
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 30),
                     child: Center(
-                      child: CircularProgressIndicator(color: AppColors.amarelo),
+                      child: CircularProgressIndicator(
+                        color: AppColors.amarelo,
+                      ),
                     ),
                   )
                 else if (_erro != null)
@@ -127,19 +128,21 @@ class _HorarioScreenState extends State<HorarioScreen> {
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Column(
                       children: [
-                        const Text('😕', style: TextStyle(fontSize: 34)),
-                        const SizedBox(height: 10),
+                        const IconeCirculo(
+                          icone: Icons.event_busy_outlined,
+                          cor: AppColors.muted,
+                        ),
+                        const SizedBox(height: 12),
                         Text(
                           'Nenhum horário disponível neste dia',
                           textAlign: TextAlign.center,
                           style: AppTheme.texto(
                             size: 13,
-                            weight: FontWeight.w700,
+                            weight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -162,10 +165,10 @@ class _HorarioScreenState extends State<HorarioScreen> {
                     selected: true,
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.event_available,
-                          color: AppColors.amarelo,
-                          size: 22,
+                        const IconeCirculo(
+                          icone: Icons.event_available_outlined,
+                          tamanho: 44,
+                          destaque: true,
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -176,7 +179,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
                                 barbeiro?.nome ?? 'Profissional',
                                 style: AppTheme.texto(
                                   size: 14,
-                                  weight: FontWeight.w700,
+                                  weight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -206,7 +209,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: BotaoPrincipal(
-              texto: 'CONFIRMAR',
+              texto: 'Confirmar',
               onPressed: _horaSelecionada == null ? null : _confirmar,
             ),
           ),
@@ -217,7 +220,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
 
   Widget _reguaDias() {
     return SizedBox(
-      height: 78,
+      height: 84,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _dias.length,
@@ -238,14 +241,11 @@ class _HorarioScreenState extends State<HorarioScreen> {
             child: GestureDetector(
               onTap: () => _selecionarData(dia),
               child: Container(
-                width: 62,
+                width: 60,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selecionado ? AppColors.amarelo : AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selecionado ? AppColors.amarelo : AppColors.border,
-                  ),
+                  borderRadius: BorderRadius.circular(30),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -253,10 +253,9 @@ class _HorarioScreenState extends State<HorarioScreen> {
                     Text(
                       abreviacaoDiaSemana(dia),
                       style: AppTheme.texto(
-                        size: 10,
-                        weight: FontWeight.w700,
+                        size: 11,
+                        weight: FontWeight.w600,
                         color: selecionado ? Colors.black : AppColors.muted,
-                        letterSpacing: 1,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -292,18 +291,15 @@ class _HorarioScreenState extends State<HorarioScreen> {
               // 14 + 14 de respiro deixam o alvo de toque perto dos 48 pt
               // recomendados.
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: selecionado ? AppColors.amarelo : AppColors.card,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selecionado ? AppColors.amarelo : AppColors.border,
-                ),
+                shape: const StadiumBorder(),
               ),
               child: Text(
                 hora,
                 style: AppTheme.texto(
                   size: 14,
-                  weight: FontWeight.w700,
+                  weight: FontWeight.w600,
                   color: selecionado ? Colors.black : AppColors.text,
                 ),
               ),

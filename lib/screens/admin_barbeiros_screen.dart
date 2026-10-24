@@ -79,7 +79,10 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
       await _carregar();
     } catch (e) {
       if (!mounted) return;
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao alterar disponibilidade'));
+      mostrarErro(
+        context,
+        mensagemDeErro(e, 'Erro ao alterar disponibilidade'),
+      );
     }
   }
 
@@ -95,26 +98,28 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border),
+          title: Text(
+            'Não é possível excluir',
+            style: AppTheme.titulo(size: 18),
           ),
-          title: Text('Não é possível excluir', style: AppTheme.titulo(size: 18)),
           content: Text(
             '${b.nome} possui $vinculados agendamento(s) registrado(s). '
             'Excluí-lo faria esses atendimentos desaparecerem do histórico '
             'dos clientes.',
-            style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
+            style: AppTheme.texto(
+              size: 13,
+              color: AppColors.muted,
+              height: 1.4,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
-                'ENTENDI',
+                'Entendi',
                 style: AppTheme.texto(
                   size: 13,
-                  weight: FontWeight.w700,
+                  weight: FontWeight.w600,
                   color: AppColors.amarelo,
                 ),
               ),
@@ -128,11 +133,6 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text('Excluir barbeiro?', style: AppTheme.titulo(size: 18)),
         content: Text(
           '"${b.nome}" será removido permanentemente da equipe.',
@@ -142,17 +142,17 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'CANCELAR',
+              'Cancelar',
               style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'EXCLUIR',
+              'Excluir',
               style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.red,
               ),
             ),
@@ -178,18 +178,18 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: BarberAppBar(
-        titulo: 'BARBEIROS',
+        titulo: 'Barbeiros',
         acoes: [
-          IconButton(
-            tooltip: 'Novo barbeiro',
-            icon: const Icon(Icons.add, color: AppColors.amarelo),
+          BotaoVidro(
+            icone: Icons.add_rounded,
+            dica: 'Novo barbeiro',
+            corIcone: AppColors.amarelo,
             onPressed: () => _abrirFormulario(),
           ),
         ],
       ),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -199,7 +199,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : _barbeiros.isEmpty
                 ? const EstadoVazio(
-                    icone: '✂️',
+                    icone: Icons.content_cut_rounded,
                     titulo: 'Nenhum barbeiro',
                     descricao: 'Use o botão + para cadastrar o primeiro.',
                   )
@@ -232,7 +232,10 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.nome, style: AppTheme.titulo(size: 16)),
+                    Text(
+                      b.nome,
+                      style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 3),
                     Text(
                       b.especialidade,
@@ -248,21 +251,19 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: b.ativo
+              Tooltip(
+                message: b.ativo
                     ? 'Marcar como indisponível'
                     : 'Marcar como disponível',
-                icon: Icon(
-                  b.ativo ? Icons.toggle_on : Icons.toggle_off,
-                  color: b.ativo ? AppColors.green : AppColors.muted,
-                  size: 30,
+                child: Switch(
+                  value: b.ativo,
+                  onChanged: (_) => _alternarDisponibilidade(b),
                 ),
-                onPressed: () => _alternarDisponibilidade(b),
               ),
               IconButton(
                 tooltip: 'Excluir',
                 icon: const Icon(
-                  Icons.delete_outline,
+                  Icons.delete_outline_rounded,
                   color: AppColors.red,
                   size: 20,
                 ),
@@ -431,11 +432,6 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.border),
-      ),
       title: Text(
         _editando ? 'Editar barbeiro' : 'Novo barbeiro',
         style: AppTheme.titulo(size: 18),
@@ -487,17 +483,17 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
         TextButton(
           onPressed: _salvando ? null : () => Navigator.of(context).pop(false),
           child: Text(
-            'CANCELAR',
+            'Cancelar',
             style: AppTheme.texto(size: 13, color: AppColors.muted),
           ),
         ),
         TextButton(
           onPressed: _salvando ? null : _salvar,
           child: Text(
-            _salvando ? 'SALVANDO...' : 'SALVAR',
+            _salvando ? 'Salvando...' : 'Salvar',
             style: AppTheme.texto(
               size: 13,
-              weight: FontWeight.w700,
+              weight: FontWeight.w600,
               color: AppColors.amarelo,
             ),
           ),

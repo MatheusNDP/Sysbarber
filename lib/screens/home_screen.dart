@@ -100,18 +100,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final usuario = AuthService.instance.usuarioAtual;
 
     return Scaffold(
+      // O conteúdo passa por trás da barra de navegação translúcida.
+      extendBody: true,
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           color: AppColors.amarelo,
           backgroundColor: AppColors.card,
           onRefresh: _carregarDados,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
             children: [
               _saudacao(usuario),
-              const SizedBox(height: 20),
-              const GoldDivider(),
               const SizedBox(height: 24),
               if (_carregando)
                 const Padding(
@@ -128,39 +129,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 _cardFidelidade(),
                 const SizedBox(height: 28),
                 const TituloSecao('Acesso rápido'),
-                const SizedBox(height: 12),
-                _gridAcessoRapido(),
+                const SizedBox(height: 14),
+                _atalhos(),
               ],
-              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _navegacao(),
+      bottomNavigationBar: BarraNavegacao(
+        atual: 0,
+        onTap: _aoTocarNavegacao,
+        itens: const [
+          (Icons.home_rounded, 'Início'),
+          (Icons.content_cut_rounded, 'Serviços'),
+          (Icons.calendar_month_outlined, 'Agenda'),
+          (Icons.person_outline_rounded, 'Perfil'),
+        ],
+      ),
     );
   }
 
   Widget _saudacao(Cliente? usuario) {
     return Row(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Olá, bem-vindo 👋',
-                style: AppTheme.texto(size: 13, color: AppColors.muted),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                usuario?.nome ?? 'Visitante',
-                style: AppTheme.titulo(size: 24),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
         Semantics(
           button: true,
           label: 'Abrir perfil',
@@ -169,95 +160,147 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () => _irPara('/perfil'),
             child: AvatarIniciais(
               texto: usuario?.iniciais ?? '?',
-              tamanho: 48,
+              tamanho: 52,
               large: true,
             ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Olá, bem-vindo',
+                style: AppTheme.texto(size: 13, color: AppColors.muted),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                usuario?.nome ?? 'Visitante',
+                style: AppTheme.titulo(size: 20),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
+  /// Cartão amarelo de destaque: o próximo horário ou o convite para agendar.
   Widget _cardProximoHorario() {
     final proximo = _proximo;
-    if (proximo == null) {
-      return Cartao(
-        onTap: () => _irPara('/servicos'),
-        child: Row(
-          children: [
-            const Text('📅', style: TextStyle(fontSize: 28)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nenhum horário marcado',
-                    style: AppTheme.texto(size: 14, weight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Toque para agendar seu próximo corte',
-                    style: AppTheme.texto(size: 12, color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.amarelo),
-          ],
-        ),
-      );
-    }
+    final textoEscuro = Colors.black.withValues(alpha: 0.7);
 
-    return Cartao(
-      selected: true,
-      onTap: () => _irPara('/agendamentos'),
-      child: Column(
+    final Widget conteudo;
+    if (proximo == null) {
+      conteudo = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const TituloSecao('Próximo horário'),
-          const SizedBox(height: 12),
+          Text(
+            'Nenhum horário marcado',
+            style: AppTheme.titulo(size: 20, color: Colors.black),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Toque para agendar seu próximo corte',
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          const SizedBox(height: 18),
+          _pilulaEscura('Agendar', Icons.arrow_forward_rounded),
+        ],
+      );
+    } else {
+      conteudo = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
-              Text(
-                proximo.servico?.icone ?? '💈',
-                style: const TextStyle(fontSize: 30),
-              ),
-              const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      proximo.servico?.nome ?? 'Serviço',
-                      style: AppTheme.titulo(size: 17),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      formatarDataExtenso(proximo.data),
-                      style: AppTheme.texto(size: 12, color: AppColors.muted),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'com ${proximo.barbeiro?.nome ?? ''}',
-                      style: AppTheme.texto(size: 12, color: AppColors.muted),
-                    ),
-                  ],
+                child: Text(
+                  'Próximo horário',
+                  style: AppTheme.texto(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: textoEscuro,
+                  ),
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatarHora(proximo.data),
-                    style: AppTheme.titulo(size: 20, color: AppColors.amarelo),
-                  ),
-                  const SizedBox(height: 4),
-                  const Etiqueta(texto: 'Confirmado', cor: AppColors.green),
-                ],
+              Text(
+                formatarHora(proximo.data),
+                style: AppTheme.titulo(size: 26, color: Colors.black),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            proximo.servico?.nome ?? 'Serviço',
+            style: AppTheme.titulo(size: 20, color: Colors.black),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            formatarDataExtenso(proximo.data),
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          Text(
+            'com ${proximo.barbeiro?.nome ?? ''}',
+            style: AppTheme.texto(size: 13, color: textoEscuro),
+          ),
+          const SizedBox(height: 18),
+          _pilulaEscura('Confirmado', Icons.check_rounded),
+        ],
+      );
+    }
+
+    return Material(
+      color: AppColors.amarelo,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _irPara(proximo == null ? '/servicos' : '/agendamentos'),
+        child: Stack(
+          children: [
+            // Tesoura grande e apagada no canto, no lugar de uma foto.
+            Positioned(
+              right: -18,
+              bottom: -22,
+              child: Icon(
+                proximo == null
+                    ? Icons.content_cut_rounded
+                    : iconeDoServico(proximo.servico?.icone ?? ''),
+                size: 130,
+                color: Colors.black.withValues(alpha: 0.07),
+              ),
+            ),
+            Padding(padding: const EdgeInsets.all(20), child: conteudo),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Pílula preta dentro do cartão amarelo.
+  Widget _pilulaEscura(String texto, IconData icone) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const ShapeDecoration(
+        color: Colors.black,
+        shape: StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            texto,
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(icone, size: 16, color: AppColors.amarelo),
         ],
       ),
     );
@@ -268,7 +311,10 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => _irPara('/fidelidade'),
       child: Row(
         children: [
-          const Text('⭐', style: TextStyle(fontSize: 26)),
+          const IconeCirculo(
+            icone: Icons.star_outline_rounded,
+            cor: AppColors.amarelo,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -279,88 +325,41 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  '$_pontos pts',
-                  style: AppTheme.titulo(size: 22, color: AppColors.amarelo),
-                ),
+                Text('$_pontos pts', style: AppTheme.titulo(size: 22)),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.amarelo),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
         ],
       ),
     );
   }
 
-  Widget _gridAcessoRapido() {
+  Widget _atalhos() {
     // A administração só aparece para a conta administradora.
     final ehAdmin = AuthService.instance.podeAdministrar;
     final itens = [
-      ('💈', 'Ver Serviços', '/servicos'),
-      ('📋', 'Meus Agendamentos', '/agendamentos'),
-      ('⭐', 'Fidelidade', '/fidelidade'),
+      (Icons.content_cut_rounded, 'Serviços', '/servicos'),
+      (Icons.calendar_month_outlined, 'Agenda', '/agendamentos'),
+      (Icons.star_outline_rounded, 'Fidelidade', '/fidelidade'),
       if (ehAdmin)
-        ('⚙️', 'Administração', '/admin')
+        (Icons.admin_panel_settings_outlined, 'Painel', '/admin')
       else
-        ('👤', 'Meu Perfil', '/perfil'),
+        (Icons.person_outline_rounded, 'Perfil', '/perfil'),
     ];
 
-    return GradeDuasColunas(
-      filhos: itens
-          .map(
-            (item) => Cartao(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final item in itens)
+          Expanded(
+            child: AtalhoCirculo(
+              icone: item.$1,
+              rotulo: item.$2,
               onTap: () => _irPara(item.$3),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.$1, style: const TextStyle(fontSize: 26)),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.$2,
-                    style: AppTheme.texto(size: 13, weight: FontWeight.w700),
-                  ),
-                ],
-              ),
             ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _navegacao() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.dark,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: _aoTocarNavegacao,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.amarelo,
-        unselectedItemColor: AppColors.muted,
-        selectedLabelStyle: AppTheme.texto(size: 11, weight: FontWeight.w700),
-        unselectedLabelStyle: AppTheme.texto(size: 11),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Início'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.content_cut_outlined),
-            label: 'Serviços',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            label: 'Agenda',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Perfil',
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

@@ -57,10 +57,9 @@ class _ServicosScreenState extends State<ServicosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'SERVIÇOS'),
+      appBar: const BarberAppBar(titulo: 'Serviços'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -70,7 +69,7 @@ class _ServicosScreenState extends State<ServicosScreen> {
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : _servicos.isEmpty
                 ? const EstadoVazio(
-                    icone: '💈',
+                    icone: Icons.content_cut_rounded,
                     titulo: 'Nenhum serviço cadastrado',
                     descricao:
                         'Cadastre serviços na área administrativa para '
@@ -93,49 +92,62 @@ class _ServicosScreenState extends State<ServicosScreen> {
 
   Widget _cardServico(Servico s) {
     return Cartao(
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(s.icone, style: const TextStyle(fontSize: 32)),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s.nome, style: AppTheme.titulo(size: 17)),
-                const SizedBox(height: 4),
-                Text(
-                  s.descricao,
-                  style: AppTheme.texto(size: 12, color: AppColors.muted),
-                ),
-                const SizedBox(height: 10),
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconeCirculo(icone: iconeDoServico(s.icone)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      formatarReal(s.preco),
-                      style: AppTheme.titulo(size: 18, color: AppColors.amarelo),
+                      s.nome,
+                      style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
                     ),
-                    const SizedBox(width: 14),
-                    const Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: AppColors.muted,
-                    ),
-                    const SizedBox(width: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      '${s.duracaoMinutos} min',
-                      style: AppTheme.texto(size: 12, color: AppColors.muted),
+                      s.descricao,
+                      style: AppTheme.texto(
+                        size: 12,
+                        color: AppColors.muted,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          BotaoPrincipal(
-            texto: 'Agendar',
-            expandido: false,
-            onPressed: () => _agendar(s),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Text(
+                formatarReal(s.preco),
+                style: AppTheme.titulo(size: 17, color: AppColors.amarelo),
+              ),
+              const SizedBox(width: 12),
+              const Icon(
+                Icons.schedule_rounded,
+                size: 14,
+                color: AppColors.muted,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '${s.duracaoMinutos} min',
+                  style: AppTheme.texto(size: 12, color: AppColors.muted),
+                ),
+              ),
+              BotaoPrincipal(
+                texto: 'Agendar',
+                expandido: false,
+                onPressed: () => _agendar(s),
+              ),
+            ],
           ),
         ],
       ),

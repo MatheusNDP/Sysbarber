@@ -30,18 +30,17 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Fontes embarcadas no APK: o app não depende de internet para exibir a
-  # identidade visual (importante para a apresentação offline).
+  # Fonte embarcada no APK: o app não depende de internet para exibir a
+  # identidade visual (importante para a apresentação offline). Montserrat,
+  # licença SIL Open Font License (assets/fonts/Montserrat-OFL.txt).
   fonts:
-    - family: Playfair Display
+    - family: Montserrat
       fonts:
-        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/Montserrat-Regular.ttf
           weight: 400
-        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
-          weight: 700
-    - family: DM Sans
-      fonts:
-        - asset: assets/fonts/DMSans-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/DMSans-Bold.ttf
+        - asset: assets/fonts/Montserrat-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Montserrat-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Montserrat-Bold.ttf
           weight: 700

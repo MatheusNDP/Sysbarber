@@ -89,18 +89,11 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border),
-          ),
           title: Row(
             children: [
               AvatarIniciais(texto: c.iniciais, tamanho: 42),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(c.nome, style: AppTheme.titulo(size: 17)),
-              ),
+              Expanded(child: Text(c.nome, style: AppTheme.titulo(size: 17))),
             ],
           ),
           content: Column(
@@ -124,17 +117,17 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                 _liberarNovaSenha(c);
               },
               child: Text(
-                'LIBERAR NOVA SENHA',
+                'Liberar nova senha',
                 style: AppTheme.texto(size: 13, color: AppColors.muted),
               ),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
-                'FECHAR',
+                'Fechar',
                 style: AppTheme.texto(
                   size: 13,
-                  weight: FontWeight.w700,
+                  weight: FontWeight.w600,
                   color: AppColors.amarelo,
                 ),
               ),
@@ -156,11 +149,6 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text('Liberar nova senha?', style: AppTheme.titulo(size: 18)),
         content: Text(
           'Confira se quem pediu é mesmo ${c.nome}. O app vai gerar um '
@@ -172,17 +160,17 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'CANCELAR',
+              'Cancelar',
               style: AppTheme.texto(size: 13, color: AppColors.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'LIBERAR',
+              'Liberar',
               style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
               ),
             ),
@@ -202,11 +190,6 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text('Código provisório', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -219,7 +202,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
               // de ditar ao cliente.
               style: AppTheme.texto(
                 size: 32,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
                 letterSpacing: 6,
               ),
@@ -238,10 +221,10 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'ENTENDI',
+              'Entendi',
               style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
               ),
             ),
@@ -265,8 +248,9 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // A Montserrat é mais larga: com 130 o e-mail quebrava no meio.
           SizedBox(
-            width: 130,
+            width: 110,
             child: Text(
               rotulo,
               style: AppTheme.texto(size: 12, color: AppColors.muted),
@@ -275,7 +259,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
           Expanded(
             child: Text(
               valor,
-              style: AppTheme.texto(size: 13, weight: FontWeight.w700),
+              style: AppTheme.texto(size: 13, weight: FontWeight.w600),
             ),
           ),
         ],
@@ -288,10 +272,9 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     final lista = _filtrados;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'CLIENTES'),
+      appBar: const BarberAppBar(titulo: 'Clientes'),
       body: Column(
         children: [
-          const GoldDivider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: TextField(
@@ -300,11 +283,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
               style: AppTheme.texto(size: 14),
               decoration: InputDecoration(
                 hintText: 'Buscar por nome, e-mail ou telefone',
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: AppColors.muted,
-                  size: 20,
-                ),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: _busca.isEmpty
                     ? null
                     : IconButton(
@@ -325,7 +304,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: TituloSecao('${lista.length} cliente(s)'),
+              child: RotuloCampo('${lista.length} cliente(s)'),
             ),
           ),
           Expanded(
@@ -337,7 +316,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
                 : lista.isEmpty
                 ? EstadoVazio(
-                    icone: '👥',
+                    icone: Icons.people_outline_rounded,
                     titulo: _busca.isEmpty
                         ? 'Nenhum cliente'
                         : 'Nada encontrado',
@@ -355,7 +334,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                         onTap: () => _abrirDetalhe(c),
                         child: Row(
                           children: [
-                            AvatarIniciais(texto: c.iniciais, tamanho: 42),
+                            AvatarIniciais(texto: c.iniciais, tamanho: 44),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
@@ -367,7 +346,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                     style: AppTheme.texto(
                                       size: 14,
-                                      weight: FontWeight.w700,
+                                      weight: FontWeight.w600,
                                     ),
                                   ),
                                   const SizedBox(height: 3),
@@ -384,8 +363,8 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                               ),
                             ),
                             const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.amarelo,
+                              Icons.chevron_right_rounded,
+                              color: AppColors.muted,
                             ),
                           ],
                         ),

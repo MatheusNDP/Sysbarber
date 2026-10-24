@@ -109,10 +109,9 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
 
     if (r.sucesso) {
       mostrarSucesso(context, 'Senha alterada');
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AuthService.instance.rotaInicial,
-        (_) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AuthService.instance.rotaInicial, (_) => false);
     } else {
       mostrarErro(context, r.erro ?? 'Não foi possível criar a nova senha');
     }
@@ -124,11 +123,10 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
 
     return Scaffold(
       appBar: BarberAppBar(
-        titulo: _comCodigoDaBarbearia ? 'NOVA SENHA' : 'RECUPERAR SENHA',
+        titulo: _comCodigoDaBarbearia ? 'Nova senha' : 'Recuperar senha',
       ),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -178,7 +176,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
         ),
       const SizedBox(height: 8),
       BotaoPrincipal(
-        texto: _carregando ? 'ENVIANDO...' : 'ENVIAR CÓDIGO',
+        texto: _carregando ? 'Enviando...' : 'Enviar código',
         onPressed: _carregando ? null : _enviarCodigo,
       ),
       const SizedBox(height: 24),
@@ -193,13 +191,14 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
 
   Widget _opcaoCanal(_Canal canal, IconData icone, String rotulo) {
     final selecionado = _canal == canal;
-    final cor = selecionado ? AppColors.amarelo : AppColors.muted;
+    // Como as abas em pílula: a opção escolhida fica amarela.
+    final cor = selecionado ? Colors.black : AppColors.muted;
     return Expanded(
       child: Semantics(
         button: true,
         selected: selecionado,
         child: Cartao(
-          selected: selecionado,
+          cor: selecionado ? AppColors.amarelo : AppColors.card,
           onTap: () => setState(() => _canal = canal),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
           child: Row(
@@ -212,8 +211,8 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
                   rotulo,
                   style: AppTheme.texto(
                     size: 14,
-                    weight: FontWeight.w700,
-                    color: selecionado ? AppColors.amarelo : AppColors.text,
+                    weight: FontWeight.w600,
+                    color: selecionado ? Colors.black : AppColors.text,
                   ),
                 ),
               ),
@@ -293,7 +292,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
       ),
       const SizedBox(height: 8),
       BotaoPrincipal(
-        texto: _carregando ? 'SALVANDO...' : 'SALVAR E ENTRAR',
+        texto: _carregando ? 'Salvando...' : 'Salvar e entrar',
         onPressed: _carregando ? null : _salvar,
       ),
       if (!_comCodigoDaBarbearia) ...[
@@ -305,7 +304,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
             'Reenviar código',
             style: AppTheme.texto(
               size: 13,
-              weight: FontWeight.w700,
+              weight: FontWeight.w600,
               color: AppColors.amarelo,
             ),
           ),
@@ -340,7 +339,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TituloSecao(rotulo),
+          RotuloCampo(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
@@ -379,7 +378,7 @@ class _SmsSimuladoCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Etiqueta(texto: 'SMS SIMULADO'),
+                  const Etiqueta(texto: 'SMS simulado'),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -423,7 +422,7 @@ class _EmailSimuladoCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Etiqueta(texto: 'E-MAIL SIMULADO'),
+                  const Etiqueta(texto: 'E-mail simulado'),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -436,7 +435,7 @@ class _EmailSimuladoCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 email.assunto,
-                style: AppTheme.texto(size: 14, weight: FontWeight.w700),
+                style: AppTheme.texto(size: 14, weight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(email.texto, style: AppTheme.texto(size: 14)),

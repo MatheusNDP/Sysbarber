@@ -84,12 +84,10 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.border),
+        title: Text(
+          'Dados de exemplo criados',
+          style: AppTheme.titulo(size: 18),
         ),
-        title: Text('Dados de exemplo criados', style: AppTheme.titulo(size: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +108,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   '•  $email',
-                  style: AppTheme.texto(size: 13, weight: FontWeight.w700),
+                  style: AppTheme.texto(size: 13, weight: FontWeight.w600),
                 ),
               ),
             const SizedBox(height: 10),
@@ -129,10 +127,10 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'ENTENDI',
+              'Entendi',
               style: AppTheme.texto(
                 size: 13,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: AppColors.amarelo,
               ),
             ),
@@ -145,10 +143,9 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'PRIMEIRO ACESSO'),
+      appBar: const BarberAppBar(titulo: 'Primeiro acesso'),
       body: Column(
         children: [
-          const GoldDivider(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -202,7 +199,9 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     icone: Icons.lock_outline,
                     obscuro: _ocultarSenha,
                     sufixo: IconButton(
-                      tooltip: _ocultarSenha ? 'Mostrar senha' : 'Ocultar senha',
+                      tooltip: _ocultarSenha
+                          ? 'Mostrar senha'
+                          : 'Ocultar senha',
                       icon: Icon(
                         _ocultarSenha
                             ? Icons.visibility_outlined
@@ -224,7 +223,9 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                   _opcaoDadosDeExemplo(),
                   const SizedBox(height: 24),
                   BotaoPrincipal(
-                    texto: _salvando ? 'CONFIGURANDO...' : 'CONFIGURAR E ENTRAR',
+                    texto: _salvando
+                        ? 'Configurando...'
+                        : 'Configurar e entrar',
                     onPressed: _salvando ? null : _configurar,
                   ),
                 ],
@@ -260,7 +261,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     'Começar com dados de exemplo',
                     style: AppTheme.texto(
                       size: 14,
-                      weight: FontWeight.w700,
+                      weight: FontWeight.w600,
                       color: AppColors.amarelo,
                     ),
                   ),
@@ -300,7 +301,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TituloSecao(rotulo),
+          RotuloCampo(rotulo),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
