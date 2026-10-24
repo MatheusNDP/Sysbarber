@@ -48,7 +48,7 @@ class AuthService {
   static const Set<String> _rotasLogado = {'/home', '/perfil'};
 
   /// Rotas só do cliente: agendar e acompanhar os pontos. O administrador
-  /// não entra, porque só gerencia a barbearia.
+  /// não entra, porque só gerencia a barbearia (regra de negócio 17).
   static const Set<String> _rotasCliente = {
     '/servicos',
     '/barbeiro',

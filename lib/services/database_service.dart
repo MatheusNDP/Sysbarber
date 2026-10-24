@@ -830,7 +830,8 @@ class DatabaseService {
     );
   }
 
-  /// Troca a senha do barbeiro, exigindo a senha atual (no Perfil dele).
+  /// Troca a senha do barbeiro, exigindo a senha atual (no Perfil dele,
+  /// regra de negócio 17).
   Future<void> alterarSenhaBarbeiro(
     int id, {
     required String senhaAtual,
@@ -1327,7 +1328,8 @@ class DatabaseService {
     return Sqflite.firstIntValue(r) ?? 0;
   }
 
-  /// Clientes da barbearia. O administrador não entra: ele só gerencia.
+  /// Clientes da barbearia. O administrador não entra: ele só gerencia
+  /// (regra de negócio 17).
   Future<List<Cliente>> listarClientes() async {
     final db = await database;
     final linhas = await db.query(
@@ -1800,7 +1802,7 @@ class DatabaseService {
     int? idCliente,
     DateTime? agora,
   }) async {
-    // O administrador só gerencia a barbearia: não agenda serviços.
+    // O administrador só gerencia: não agenda serviços (regra de negócio 17).
     if (idCliente != null) {
       final cliente = await db.query(
         'cliente',
