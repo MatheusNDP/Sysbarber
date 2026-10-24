@@ -143,7 +143,7 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **284 testes** no total:
+São **287 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -153,7 +153,7 @@ São **284 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 50 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha e as abas e o Perfil do administrador e do barbeiro |
+| `test/telas_test.dart` | 53 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro e os filtros da agenda geral (select de barbeiro e calendário de período) |
 | `integration_test/database_integration_test.dart` | 160 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, e o barbeiro troca a própria senha) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -163,7 +163,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 284 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 287 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -224,8 +224,9 @@ lib/
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
-  (`abrirLink`, que por padrão usa o pacote `url_launcher`), e os testes o
-  trocam por um falso.
+  (`abrirLink`, que por padrão usa o pacote `url_launcher`), e a agenda geral
+  recebe quem abre o calendário do período (`escolherPeriodo`, que por padrão
+  usa o calendário do Material); os testes trocam os dois por falsos.
 
 ---
 
@@ -440,7 +441,7 @@ elas; a agenda geral e os relatórios também são abas dele):
 
 | Tela | O que faz |
 |---|---|
-| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa) |
+| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa). Dois filtros, que valem para as duas abas (em aberto e histórico): o barbeiro, num select, e o período, de um dia até outro, escolhido no calendário (que vai até o último dia que aceita reserva). O período escolhido aparece embaixo, com o botão de limpar |
 | Gerenciar Serviços | Cadastrar, editar e excluir serviços. O ícone do serviço é escolhido entre cinco ícones de linha (corte, barba, combo, hidratação e coloração) |
 | Gerenciar Barbeiros | Cadastrar, editar e excluir barbeiros e ligar ou desligar a disponibilidade |
 | Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
@@ -500,6 +501,10 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
 O ícone de cada serviço continua gravado no banco como um emoji (os dados de
 exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
 correspondente, e um valor fora dessa lista aparece como a tesoura.
+
+Os textos prontos do Material, como os do calendário e os menus de copiar e
+colar, ficam em português: o app usa as traduções do Flutter
+(`flutter_localizations`), em pt_BR.
 
 ### Suporte
 
