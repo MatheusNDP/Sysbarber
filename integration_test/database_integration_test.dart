@@ -6,6 +6,7 @@ import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/email.dart';
+import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 
@@ -27,6 +28,8 @@ void main() {
     databaseFactory = databaseFactoryFfi;
     // Menos iterações só para a suíte rodar rápido; o formato é o mesmo.
     Senhas.iteracoes = 1000;
+    // Sem as notificações do aparelho: os lembretes ficam numa lista.
+    AuthService.instance.lembretes = LembretesEmMemoria();
   });
 
   setUp(() async {
@@ -4722,6 +4725,123 @@ void main() {
       // Cancelado no prazo, no novo horário, os pontos voltam.
       await service.cancelarAgendamento(r.idAgendamento);
       expect(await service.obterPontos(r.idCliente), 500);
+    });
+  });
+  // -------------------------------------------------------------------------
+  group('P37 — lembrete do horário', () {
+    final auth = AuthService.instance;
+    late LembretesEmMemoria lembretes;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      lembretes = LembretesEmMemoria();
+      auth.lembretes = lembretes;
+      await auth.logout();
+    });
+
+    tearDown(() async {
+      await auth.logout();
+      auth.lembretes = LembretesEmMemoria();
+    });
+
+    test('ao entrar, o cliente ganha um lembrete por agendamento em aberto, '
+        'e sair da conta apaga os lembretes', () async {
+      final idCliente = await criarClienteTeste();
+      final aberto = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      final cancelado = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(14),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await service.cancelarAgendamento(cancelado.idAgendamento);
+
+      await auth.login('novo@teste.com', 'senha123');
+
+      expect(lembretes.agendados.map((l) => l.id), [aberto.idAgendamento]);
+      expect(
+        lembretes.agendados.single.quando,
+        proximoDiaAs(9).subtract(const Duration(hours: 2)),
+      );
+
+      await auth.logout();
+      expect(lembretes.agendados, isEmpty);
+    });
+
+    test('reservar, reagendar e cancelar refazem os lembretes', () async {
+      final idCliente = await criarClienteTeste();
+      await auth.login('novo@teste.com', 'senha123');
+      expect(lembretes.agendados, isEmpty);
+
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await auth.atualizarLembretes();
+      expect(lembretes.agendados, hasLength(1));
+
+      await service.reagendarAgendamento(
+        r.idAgendamento,
+        idCliente: idCliente,
+        idBarbeiro: 2,
+        dataHora: proximoDiaAs(15),
+      );
+      await auth.atualizarLembretes();
+      expect(lembretes.agendados.single.quando, proximoDiaAs(13));
+
+      await service.cancelarAgendamento(r.idAgendamento);
+      await auth.atualizarLembretes();
+      expect(lembretes.agendados, isEmpty);
+    });
+
+    test('ao abrir o app com a sessão salva, os lembretes são refeitos',
+        () async {
+      final idCliente = await criarClienteTeste();
+      await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await auth.login('novo@teste.com', 'senha123');
+
+      // Como se o app fosse fechado e aberto de novo.
+      auth.esquecerSessaoEmMemoria();
+      lembretes.agendados = [];
+      await auth.carregarSessao();
+
+      expect(auth.ehCliente, isTrue);
+      expect(lembretes.agendados, hasLength(1));
+    });
+
+    test('o barbeiro e o administrador não têm lembretes no aparelho',
+        () async {
+      final antigo = Lembrete(
+        id: 99,
+        quando: DateTime.now().add(const Duration(days: 1)),
+        titulo: 'Antigo',
+        texto: 'De outra conta',
+      );
+
+      lembretes.agendados = [antigo];
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      expect(lembretes.agendados, isEmpty);
+      await auth.logout();
+
+      lembretes.agendados = [antigo];
+      await auth.login(emailAdmin, senhaAdmin);
+      expect(lembretes.agendados, isEmpty);
     });
   });
 }

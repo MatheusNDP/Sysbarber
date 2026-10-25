@@ -25,6 +25,7 @@ import 'screens/splash_screen.dart';
 import 'screens/termos_screen.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
+import 'services/lembretes.dart';
 import 'theme/app_theme.dart';
 import 'widgets/common_widgets.dart';
 
@@ -73,6 +74,8 @@ Future<void> iniciar() async {
     // configuração inicial.
     await DatabaseService.instance.database;
     await AuthService.instance.carregarConfiguracao();
+    // Lembretes do horário: notificações locais (regra de negócio 20).
+    await LembretesLocais.instance.iniciar();
   } catch (erro, pilha) {
     developer.log(
       'Falha ao abrir o banco',

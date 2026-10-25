@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sysbarber/models/models.dart';
 import 'package:sysbarber/services/database_service.dart';
+import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 
 /// Testes unitários das regras puras: hash de senha e serialização das
@@ -254,6 +255,62 @@ void main() {
       expect(convite.vencido(DateTime(2030, 3, 11, 9, 59)), isFalse);
       expect(convite.vencido(DateTime(2030, 3, 11, 10)), isTrue);
       expect(ConviteBarbeiro.normalizarCodigo(' k7mp-q2xr '), 'K7MPQ2XR');
+    });
+  });
+
+  group('Lembretes do horário', () {
+    final agora = DateTime(2030, 3, 4, 8);
+    Agendamento marcado(
+      int id,
+      DateTime quando, [
+      StatusAgendamento status = StatusAgendamento.confirmado,
+    ]) => Agendamento(
+      id: id,
+      idCliente: 1,
+      idBarbeiro: 2,
+      idServico: 1,
+      dataHora: quando.toIso8601String(),
+      status: status,
+      servico: const Servico(
+        nome: 'Corte de Cabelo',
+        descricao: 'Tesoura ou máquina',
+        preco: 35,
+        duracaoMinutos: 30,
+        icone: 'corte',
+      ),
+      barbeiro: const Barbeiro(
+        nome: 'Rafael Souza',
+        especialidade: 'Cortes modernos',
+        iniciais: 'RS',
+      ),
+    );
+
+    test('um lembrete por agendamento em aberto, 2 horas antes, com o prazo '
+        'para cancelar sem multa', () {
+      final lembretes = lembretesDe([
+        marcado(7, DateTime(2030, 3, 4, 14, 30)),
+      ], agora);
+
+      expect(lembretes, hasLength(1));
+      final l = lembretes.single;
+      expect(l.id, 7);
+      expect(l.quando, DateTime(2030, 3, 4, 12, 30));
+      expect(l.titulo, 'Seu horário é às 14:30');
+      expect(l.texto, contains('Corte de Cabelo com Rafael Souza'));
+      expect(l.texto, contains('até as 13:30, sem multa'));
+    });
+
+    test('sem lembrete para o que já foi encerrado ou quando faltam menos de '
+        '2 horas', () {
+      final lembretes = lembretesDe([
+        marcado(1, DateTime(2030, 3, 5, 9), StatusAgendamento.cancelado),
+        marcado(2, DateTime(2030, 3, 5, 9), StatusAgendamento.finalizado),
+        marcado(3, DateTime(2030, 3, 4, 9, 30)),
+        // Exatamente 2 horas antes: o momento do lembrete já chegou.
+        marcado(4, DateTime(2030, 3, 4, 10)),
+      ], agora);
+
+      expect(lembretes, isEmpty);
     });
   });
 

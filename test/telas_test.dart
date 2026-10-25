@@ -27,6 +27,7 @@ import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/formatters.dart';
+import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/services/suporte.dart';
@@ -46,6 +47,8 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     Senhas.iteracoes = 1000;
+    // Sem as notificações do aparelho: os lembretes ficam numa lista.
+    AuthService.instance.lembretes = LembretesEmMemoria();
   });
 
   tearDown(() async => service.resetarParaTeste());
@@ -2054,6 +2057,64 @@ void main() {
     ).removeCurrentSnackBar();
     await tester.pumpAndSettle();
     semantica.dispose();
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P37 — lembrete do horário
+  // -------------------------------------------------------------------------
+
+  testWidgets('reservar pelo pagamento pede a permissão de notificação e '
+      'agenda o lembrete', (tester) async {
+    final lembretes = LembretesEmMemoria();
+    AuthService.instance.lembretes = lembretes;
+    addTearDown(() => AuthService.instance.lembretes = LembretesEmMemoria());
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    final dia = DatabaseService.diasDisponiveis()[1];
+    await tester.runAsync(() async {
+      await cadastrarClienteTeste();
+      await AuthService.instance.login('c@teste.com', 'senha123');
+      BookingFlow.iniciar((await service.listarServicos()).first);
+      BookingFlow.barbeiroSelecionado = (await service.listarBarbeiros()).first;
+      BookingFlow.dataSelecionada = dia;
+      BookingFlow.horaSelecionada = '09:00';
+    });
+    await abrir(tester, const PagamentoScreen());
+
+    await tocarEsperando(tester, find.text('Pagar na barbearia'));
+    await tocarEsperando(tester, find.text('Reservar e pagar na barbearia'));
+    await esperarBanco(tester);
+
+    expect(lembretes.pedidosDePermissao, 1);
+    expect(lembretes.agendados, hasLength(1));
+    expect(lembretes.agendados.single.titulo, 'Seu horário é às 09:00');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('cancelar pela agenda apaga o lembrete do horário', (
+    tester,
+  ) async {
+    final lembretes = LembretesEmMemoria();
+    AuthService.instance.lembretes = lembretes;
+    addTearDown(() => AuthService.instance.lembretes = LembretesEmMemoria());
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await cadastrarClienteTeste();
+      final dia = DatabaseService.diasDisponiveis()[1];
+      await marcarCorte(id, DateTime(dia.year, dia.month, dia.day, 9));
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    expect(lembretes.agendados, hasLength(1));
+    await abrir(tester, const AgendamentosScreen());
+
+    await tocarEsperando(tester, find.text('Cancelar agendamento'));
+    await tester.pumpAndSettle();
+    await tocarEsperando(tester, find.text('Cancelar agendamento').last);
+    await esperarBanco(tester);
+
+    expect(lembretes.agendados, isEmpty);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

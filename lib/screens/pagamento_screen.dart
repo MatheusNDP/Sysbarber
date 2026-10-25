@@ -152,6 +152,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             : null,
       );
 
+      // Lembrete 2 horas antes (regra de negócio 20); no primeiro
+      // agendamento do aparelho, o Android pede a permissão de notificação.
+      final auth = AuthService.instance;
+      await auth.pedirPermissaoDosLembretes();
+      await auth.atualizarLembretes();
+
       if (!mounted) return;
       setState(() => _processando = false);
 

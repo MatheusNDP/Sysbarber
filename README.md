@@ -111,7 +111,8 @@ Todo o resto funciona sem internet: o banco é local (SQLite) e a fonte
 idêntica com ou sem internet — importante para a apresentação. O SMS da
 recuperação de senha é simulado (regra 16). Os botões do [Suporte](#suporte),
 no Perfil, também não fazem requisição: só abrem o WhatsApp ou o app de e-mail
-do aparelho, e são eles que usam a internet.
+do aparelho, e são eles que usam a internet. O lembrete do horário (regra 20) é
+uma notificação local, agendada no próprio aparelho, sem internet.
 
 ### Pensado para ser online
 
@@ -149,18 +150,18 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **339 testes** no total:
+São **347 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
-| `test/unit_test.dart` | 25 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele, e do convite do barbeiro, com o código digitado), enums e regras de estado do agendamento |
+| `test/unit_test.dart` | 27 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele, e do convite do barbeiro, com o código digitado), enums, regras de estado do agendamento e os lembretes do horário (2 horas antes, só dos agendamentos em aberto) |
 | `test/validators_test.dart` | 21 | Validação de cadastro, telefone, dados e contato do barbeiro e cartão (Luhn) |
 | `test/formatters_test.dart` | 19 | Máscaras de telefone, moeda, cartão (até 19 dígitos, Amex) e código do convite, `formatarReal`, `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 65 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) |
-| `integration_test/database_integration_test.dart` | 196 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos) e migrações |
+| `test/telas_test.dart` | 67 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) |
+| `integration_test/database_integration_test.dart` | 200 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -169,7 +170,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 339 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 347 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -200,6 +201,7 @@ lib/
 │   ├── sms.dart                 # Envio de SMS da recuperação de senha (simulado)
 │   ├── email.dart               # Envio do código por e-mail: EmailJS ou simulado
 │   ├── suporte.dart             # Contato do suporte, mensagem pronta e links do WhatsApp e do e-mail
+│   ├── lembretes.dart           # Lembrete do horário: cálculo e notificações locais
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
@@ -226,7 +228,9 @@ lib/
   envio do resto do app. O SMS é simulado (`SmsSimulado`); o e-mail sai pelo
   EmailJS (`EmailJs`) quando o build traz a chave, ou é simulado
   (`EmailSimulado`). Um provedor novo entra implementando a interface, sem
-  mudar as telas nem o banco.
+  mudar as telas nem o banco. O mesmo vale para os lembretes: `Lembretes`
+  tem as notificações do aparelho (`LembretesLocais`), e um servidor poderia
+  mandar notificações push no lugar delas.
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
@@ -234,7 +238,8 @@ lib/
   recebe quem abre o calendário do período (`escolherPeriodo`, que por padrão
   usa o calendário do Material), e Gerenciar Barbeiros, quem abre o menu de
   compartilhar do convite (`compartilhar`, que por padrão usa o pacote
-  `share_plus`); os testes trocam os três por falsos.
+  `share_plus`); os testes trocam os três por falsos. O `AuthService` recebe os lembretes
+  (`lembretes`), que nos testes ficam numa lista (`LembretesEmMemoria`).
 
 ---
 
@@ -435,6 +440,16 @@ v2):
     (regras 1, 2 e 14), sem contar o próprio agendamento como ocupado, e não
     pode ser igual ao atual. A barbearia não reagenda: ela cancela (regra
     13). O banco confere tudo isso, numa transação.
+20. O cliente recebe um **lembrete** de cada agendamento em aberto, 2 horas
+    antes do horário: uma notificação no aparelho, com o serviço, o barbeiro
+    e até que horas dá para cancelar ou reagendar sem multa (1 hora antes).
+    Quem agenda com menos de 2 horas de antecedência fica sem lembrete. Os
+    lembretes são refeitos a partir do banco ao entrar, ao abrir o app e
+    depois de reservar, cancelar ou reagendar; sair da conta apaga os
+    lembretes dela no aparelho. A permissão de notificação (Android 13 em
+    diante) é pedida no primeiro agendamento feito no aparelho. Só o cliente
+    recebe: avisar o barbeiro de um agendamento novo precisaria de um
+    servidor, porque o aviso sairia de outro celular.
 
 ---
 
@@ -502,7 +517,7 @@ v2):
 | `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção). Num reagendamento, o atual vem escolhido, com o aviso "Reagendando o horário de…" | cliente |
 | `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível. Num reagendamento, vira "Novo horário": não oferece o horário atual com o mesmo barbeiro e, confirmado, troca o horário e volta à lista | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
-| `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
+| `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva e agenda o lembrete; no primeiro agendamento do aparelho, o Android pede a permissão de notificação | cliente |
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda. O cliente tem "Reagendar" até 1 hora antes e "Cancelar agendamento" até o horário | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
 | `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro vê a especialidade e edita o e-mail e o telefone. Todos têm "Termos e privacidade"; o cliente também tem "Excluir minha conta", embaixo do Sair | todos os perfis |
@@ -694,6 +709,13 @@ Meus agendamentos → Reagendar (até 1 h antes) → Profissional → Novo horá
   Perfil).
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).
+- O lembrete usa alarme exato (`USE_EXACT_ALARM`; sem ele, o Android podia
+  atrasar o aviso até 1 hora). Para publicar na Google Play, essa permissão
+  passa pela avaliação da loja; se o aparelho não permitir alarme exato, o
+  lembrete fica inexato. Como os dados ficam no aparelho, o lembrete existe
+  só no aparelho em que o cliente está logado, e sair da conta o apaga; com
+  um servidor, ele viraria uma notificação enviada pelo servidor.
+- O app ainda usa o ícone padrão do Flutter, também nas notificações.
 - Instalações feitas antes da configuração inicial mantêm a conta de
   administrador criada na época (`admin@sysbarber.com`, com a senha
   `admin1234` se ela não foi trocada no Perfil). Para configurar do zero, é
