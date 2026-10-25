@@ -5,6 +5,13 @@
          aparelho reiniciado volta a agendar os lembretes. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Alarme exato: sem ele, o Android pode atrasar o lembrete até 1 hora,
+         que é o limite para cancelar sem multa. USE_EXACT_ALARM vale do
+         Android 13 em diante; antes dele, SCHEDULE_EXACT_ALARM. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32"/>
     <application
         android:label="sysbarber"
         android:name="${applicationName}"

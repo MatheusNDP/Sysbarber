@@ -67,8 +67,9 @@ abstract class Lembretes {
 }
 
 /// Lembretes como notificações locais, agendadas no próprio celular pelo
-/// `flutter_local_notifications`, sem servidor. O horário é inexato: o
-/// Android pode atrasar a notificação alguns minutos para poupar bateria.
+/// `flutter_local_notifications`, sem servidor. O alarme é exato: um alarme
+/// inexato pode chegar até 1 hora depois, que é o limite para cancelar sem
+/// multa. Se o aparelho não permitir alarme exato, fica o inexato.
 ///
 /// Uma falha aqui nunca impede o agendamento: ela só vai para o log.
 class LembretesLocais implements Lembretes {
@@ -112,13 +113,22 @@ class LembretesLocais implements Lembretes {
     await iniciar();
     try {
       await _plugin.cancelAll();
+      final exato =
+          await _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >()
+              ?.canScheduleExactNotifications() ??
+          false;
       for (final l in lembretes) {
         await _plugin.zonedSchedule(
           id: l.id,
           // Um instante só, sem repetição: o fuso de referência não importa.
           scheduledDate: tz.TZDateTime.from(l.quando.toUtc(), tz.UTC),
           notificationDetails: _detalhes,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          androidScheduleMode: exato
+              ? AndroidScheduleMode.exactAllowWhileIdle
+              : AndroidScheduleMode.inexactAllowWhileIdle,
           title: l.titulo,
           body: l.texto,
         );
