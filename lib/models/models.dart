@@ -453,6 +453,11 @@ class Agendamento {
     return !dia.isAfter(hoje);
   }
 
+  /// O cliente reagenda até [prazo] antes do horário (regra de negócio 19),
+  /// o mesmo prazo do cancelamento sem multa. Depois disso, só cancelar.
+  bool podeReagendar(DateTime agora, {required Duration prazo}) =>
+      emAberto && !data.isBefore(agora.add(prazo));
+
   /// Falta só pode ser registrada depois do horário marcado.
   bool podeRegistrarFalta(DateTime agora) => emAberto && jaComecou(agora);
 

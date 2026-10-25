@@ -1948,4 +1948,112 @@ void main() {
     expect(find.text('Excluir minha conta'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
+
+  // -------------------------------------------------------------------------
+  // P36 — reagendar
+  // -------------------------------------------------------------------------
+
+  testWidgets('o cliente vê "Reagendar" até 1 hora antes, e o barbeiro não',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await cadastrarClienteTeste();
+      final dia = DatabaseService.diasDisponiveis()[1];
+      await marcarCorte(id, DateTime(dia.year, dia.month, dia.day, 9));
+      await marcarCorte(id, DateTime.now().add(const Duration(minutes: 30)));
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    // Com menos de 1 hora, sobra só cancelar.
+    expect(find.text('Reagendar'), findsOneWidget);
+    expect(find.text('Cancelar agendamento'), findsNWidgets(2));
+    await tester.runAsync(AuthService.instance.logout);
+
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const AgendamentosScreen());
+    expect(find.text('Reagendar'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('reagendar passa pelo profissional e pelo horário, confirma e '
+      'volta à lista com o horário novo', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final semantica = tester.ensureSemantics();
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    final dia = DatabaseService.diasDisponiveis()[1];
+    late int idAgendamento;
+    late int idCliente;
+    await tester.runAsync(() async {
+      idCliente = await cadastrarClienteTeste();
+      idAgendamento = await marcarCorte(
+        idCliente,
+        DateTime(dia.year, dia.month, dia.day, 9),
+      );
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          home: const AgendamentosScreen(),
+          routes: {
+            '/barbeiro': (_) => const BarbeiroScreen(),
+            '/horario': (_) => const HorarioScreen(),
+          },
+        ),
+      ),
+    );
+    await esperarBanco(tester);
+
+    await tocarEsperando(tester, find.text('Reagendar'));
+    await esperarBanco(tester);
+    expect(find.textContaining('Reagendando o horário de'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Continuar'));
+    await esperarBanco(tester);
+    expect(find.text('Novo horário'), findsOneWidget);
+
+    await tocarEsperando(
+      tester,
+      find.bySemanticsLabel(formatarDataExtenso(dia)),
+    );
+    await esperarBanco(tester);
+    // O horário atual, com o mesmo barbeiro, não é oferecido.
+    expect(find.text('09:00'), findsNothing);
+    await tocarEsperando(tester, find.text('14:00'));
+    await tocarEsperando(tester, find.text('Reagendar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reagendar?'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Reagendar').last);
+    await esperarBanco(tester);
+
+    expect(find.byType(HorarioScreen), findsNothing);
+    expect(find.byType(AgendamentosScreen), findsOneWidget);
+    final novo = DateTime(dia.year, dia.month, dia.day, 14);
+    expect(find.text(formatarDataHora(novo)), findsOneWidget);
+    final gravado = await tester.runAsync(
+      () => service.listarAgendamentosCliente(idCliente),
+    );
+    expect(gravado!.single.id, idAgendamento);
+    expect(gravado.single.data, novo);
+    expect(BookingFlow.reagendando, isNull);
+
+    ScaffoldMessenger.of(
+      tester.element(find.byType(AgendamentosScreen)),
+    ).removeCurrentSnackBar();
+    await tester.pumpAndSettle();
+    semantica.dispose();
+    await tester.runAsync(AuthService.instance.logout);
+  });
 }
