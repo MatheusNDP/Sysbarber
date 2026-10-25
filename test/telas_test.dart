@@ -10,6 +10,7 @@ import 'package:sysbarber/screens/admin_screen.dart';
 import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/barbeiro_screen.dart';
+import 'package:sysbarber/screens/cadastro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/convite_barbeiro_screen.dart';
 import 'package:sysbarber/screens/home_screen.dart';
@@ -20,6 +21,7 @@ import 'package:sysbarber/screens/perfil_screen.dart';
 import 'package:sysbarber/screens/recuperar_senha_screen.dart';
 import 'package:sysbarber/screens/servicos_screen.dart';
 import 'package:sysbarber/screens/splash_screen.dart';
+import 'package:sysbarber/screens/termos_screen.dart';
 import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
@@ -68,6 +70,7 @@ void main() {
         email: emailAdmin,
         telefone: '(67) 99999-0000',
         senha: senhaAdmin,
+        aceitouTermos: true,
         dadosDeExemplo: true,
       );
     });
@@ -861,6 +864,9 @@ void main() {
     await tester.ensureVisible(find.text('Começar com dados de exemplo'));
     await tester.tap(find.text('Começar com dados de exemplo'));
     await tester.pump();
+    await tester.ensureVisible(find.byType(AceiteTermos));
+    await tester.tap(find.textContaining('Li e aceito'));
+    await tester.pump();
 
     await tester.ensureVisible(find.text('Configurar e entrar'));
     await tester.runAsync(() async {
@@ -1603,6 +1609,9 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '67994044004');
     await tester.enterText(find.byType(TextField).at(2), 'senha123');
     await tester.enterText(find.byType(TextField).at(3), 'senha123');
+    await tester.ensureVisible(find.byType(AceiteTermos));
+    await tester.tap(find.textContaining('Li e aceito'));
+    await tester.pump();
     await tocarEsperando(tester, find.text('Criar conta e entrar'));
     await esperarBanco(tester);
 
@@ -1636,6 +1645,9 @@ void main() {
       'rafael@barbearia.com',
     );
     await tocarEsperando(tester, find.text('Salvar'));
+    await tester.pumpAndSettle();
+    // O e-mail fica no topo do Perfil.
+    await tester.drag(find.byType(ListView), const Offset(0, 800));
     await tester.pumpAndSettle();
 
     expect(find.text('rafael@barbearia.com'), findsOneWidget);
@@ -1780,6 +1792,160 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(DateRangePickerDialog), findsOneWidget);
     expect(find.text('Escolha o período'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P34 — excluir a própria conta e termos de uso
+  // -------------------------------------------------------------------------
+
+  testWidgets('o cadastro só cria a conta com os termos aceitos, e "Ler os '
+      'termos" abre o texto', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          home: const CadastroScreen(),
+          routes: {
+            '/home': (_) => const Scaffold(body: Text('INÍCIO')),
+            AuthService.rotaTermos: (_) => const TermosScreen(),
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).at(0), 'Joana Lima');
+    await tester.enterText(find.byType(TextField).at(1), 'joana@teste.com');
+    await tester.enterText(find.byType(TextField).at(2), '67988881234');
+    await tester.enterText(find.byType(TextField).at(3), 'senha123');
+    await tocarEsperando(tester, find.text('Cadastrar'));
+    await esperarBanco(tester);
+    expect(find.text(DatabaseService.termosNaoAceitos), findsOneWidget);
+    expect(AuthService.instance.estaLogado, isFalse);
+
+    await tocarEsperando(tester, find.text('Ler os termos'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TermosScreen), findsOneWidget);
+    await tester.tap(find.byTooltip('Voltar'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Li e aceito'));
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tocarEsperando(tester, find.text('Cadastrar'));
+    await esperarBanco(tester);
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.ehCliente, isTrue);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('os termos explicam os dados guardados e os direitos de quem '
+      'usa o app', (tester) async {
+    await abrir(tester, const TermosScreen());
+
+    expect(find.text('Termos de uso e política de privacidade'), findsOneWidget);
+    for (final titulo in [
+      'Quais dados o app guarda',
+      'Onde ficam e com quem são compartilhados',
+      'Seus direitos',
+    ]) {
+      await tester.scrollUntilVisible(find.text(titulo), 200);
+      expect(find.text(titulo), findsOneWidget);
+    }
+    expect(find.textContaining('Lei Geral de Proteção de Dados'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Versão de ${TermosScreen.versao}.'),
+      200,
+    );
+  });
+
+  testWidgets('no Perfil, o cliente exclui a própria conta com a senha e '
+      'volta à abertura', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await cadastrarClienteTeste();
+      await service.adicionarPontos(id, 120, 'Pontos de teste');
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          initialRoute: '/perfil',
+          routes: {
+            '/': (_) => const Scaffold(body: Text('ABERTURA')),
+            '/perfil': (_) => const PerfilScreen(),
+          },
+        ),
+      ),
+    );
+    await esperarBanco(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Excluir minha conta'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Termos e privacidade'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Excluir minha conta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Excluir a sua conta?'), findsOneWidget);
+    expect(find.textContaining('seus 120 pontos são perdidos'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'errada1');
+    await tocarEsperando(tester, find.text('Excluir conta'));
+    await esperarBanco(tester);
+    expect(find.text('Senha incorreta'), findsOneWidget);
+    expect(find.text('Excluir a sua conta?'), findsOneWidget);
+    // Os avisos nascem no relógio real do toque; tirá-los cancela o
+    // temporizador deles.
+    ScaffoldMessenger.of(
+      tester.element(find.byType(PerfilScreen)),
+    ).removeCurrentSnackBar();
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, 'senha123');
+    await tocarEsperando(tester, find.text('Excluir conta'));
+    await esperarBanco(tester);
+
+    expect(find.text('ABERTURA'), findsOneWidget);
+    expect(AuthService.instance.estaLogado, isFalse);
+    // O mesmo com o aviso "Conta excluída", antes de a tela ser desmontada.
+    ScaffoldMessenger.of(
+      tester.element(find.text('ABERTURA')),
+    ).removeCurrentSnackBar();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('o administrador e o barbeiro não têm "Excluir minha conta", '
+      'mas têm os termos no Perfil', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const PerfilScreen());
+    await tester.scrollUntilVisible(
+      find.text('Sair'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Termos e privacidade'), findsOneWidget);
+    expect(find.text('Excluir minha conta'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'rafael.souza@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const PerfilScreen());
+    await tester.scrollUntilVisible(
+      find.text('Sair'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Termos e privacidade'), findsOneWidget);
+    expect(find.text('Excluir minha conta'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

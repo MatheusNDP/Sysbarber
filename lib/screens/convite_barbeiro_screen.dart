@@ -27,6 +27,7 @@ class _ConviteBarbeiroScreenState extends State<ConviteBarbeiroScreen> {
   /// O convite do código digitado, depois de conferido.
   ConviteBarbeiro? _convite;
   bool _ocultarSenha = true;
+  bool _aceitouTermos = false;
   bool _carregando = false;
 
   @override
@@ -63,6 +64,7 @@ class _ConviteBarbeiroScreenState extends State<ConviteBarbeiroScreen> {
       email: _emailCtrl.text,
       telefone: _telefoneCtrl.text,
       senha: _senhaCtrl.text,
+      aceitouTermos: _aceitouTermos,
     );
     if (!mounted) return;
     if (!r.sucesso) {
@@ -205,7 +207,13 @@ class _ConviteBarbeiroScreenState extends State<ConviteBarbeiroScreen> {
           icone: Icons.lock_outline,
           obscuro: _ocultarSenha,
         ),
-        const SizedBox(height: 8),
+        AceiteTermos(
+          aceito: _aceitouTermos,
+          onChanged: (v) => setState(() => _aceitouTermos = v),
+          aoLerTermos: () =>
+              Navigator.of(context).pushNamed(AuthService.rotaTermos),
+        ),
+        const SizedBox(height: 16),
         BotaoPrincipal(
           texto: _carregando ? 'Criando a conta...' : 'Criar conta e entrar',
           onPressed: _carregando ? null : _criarConta,

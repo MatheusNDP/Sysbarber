@@ -32,7 +32,9 @@ class DatabaseService {
   /// v6: tabela `codigo_senha`, com os códigos para criar uma senha nova.
   /// v7: tabela `convite_barbeiro`, com os convites que o administrador gera
   /// para o barbeiro criar a própria conta.
-  static const int versaoBanco = 7;
+  /// v8: cliente e barbeiro guardam quando aceitaram os termos de uso, e o
+  /// cliente, quando excluiu a própria conta.
+  static const int versaoBanco = 8;
 
   /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
   /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
@@ -191,7 +193,9 @@ class DatabaseService {
         telefone TEXT NOT NULL,
         senha_hash TEXT NOT NULL,
         criado_em TEXT NOT NULL,
-        admin INTEGER NOT NULL DEFAULT 0
+        admin INTEGER NOT NULL DEFAULT 0,
+        termos_aceitos_em TEXT,
+        excluido_em TEXT
       )
     ''');
 
@@ -208,7 +212,8 @@ class DatabaseService {
         email TEXT NOT NULL DEFAULT '',
         senha_hash TEXT NOT NULL DEFAULT '',
         salario REAL NOT NULL DEFAULT 0,
-        ativo INTEGER NOT NULL DEFAULT 1
+        ativo INTEGER NOT NULL DEFAULT 1,
+        termos_aceitos_em TEXT
       )
     ''');
 
@@ -492,6 +497,15 @@ class DatabaseService {
 
     if (versaoAntiga < 6) await _criarTabelaCodigoSenha(db);
     if (versaoAntiga < 7) await _criarTabelaConviteBarbeiro(db);
+
+    if (versaoAntiga < 8) {
+      // Quem já tinha conta não aceitou termos que ainda não existiam.
+      await db.execute('ALTER TABLE cliente ADD COLUMN termos_aceitos_em TEXT');
+      await db.execute('ALTER TABLE cliente ADD COLUMN excluido_em TEXT');
+      await db.execute(
+        'ALTER TABLE barbeiro ADD COLUMN termos_aceitos_em TEXT',
+      );
+    }
   }
 
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
@@ -621,6 +635,7 @@ class DatabaseService {
     required String email,
     required String telefone,
     required String senha,
+    required bool aceitouTermos,
     bool dadosDeExemplo = false,
   }) async {
     final erro = Validators.validarCadastro(
@@ -630,6 +645,7 @@ class DatabaseService {
       senha: senha,
     );
     if (erro != null) throw RegraNegocioException(erro);
+    if (!aceitouTermos) throw const RegraNegocioException(termosNaoAceitos);
 
     final emailNormalizado = email.trim().toLowerCase();
     final db = await database;
@@ -659,13 +675,15 @@ class DatabaseService {
       );
       if (impedimento != null) throw RegraNegocioException(impedimento);
 
+      final agora = DateTime.now().toIso8601String();
       final admin = Cliente(
         nome: nome.trim(),
         email: emailNormalizado,
         telefone: telefone.trim(),
         senhaHash: senhaHash,
-        criadoEm: DateTime.now().toIso8601String(),
+        criadoEm: agora,
         admin: true,
+        termosAceitosEm: agora,
       );
       final id = await txn.insert('cliente', admin.toMap()..remove('id'));
       await txn.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
@@ -742,10 +760,163 @@ class DatabaseService {
   // CLIENTE
   // -------------------------------------------------------------------------
 
-  /// Insere o cliente e já cria seu registro de fidelidade zerado.
+  /// Mensagem de quem tenta criar a conta sem aceitar os termos (regra de
+  /// negócio 18).
+  static const String termosNaoAceitos =
+      'Para criar a conta, aceite os termos de uso e a política de '
+      'privacidade';
+
+  /// Nome que fica no lugar do de quem excluiu a conta (regra de negócio 18).
+  static const String nomeClienteExcluido = 'Cliente excluído';
+
+  /// O cliente cria a própria conta, pelo cadastro (regra de negócio 18):
+  /// o banco confere os dados, o aceite dos termos e o e-mail único entre
+  /// clientes e barbeiros (regra 12). Devolve o cliente, já com o id.
+  Future<Cliente> criarContaCliente({
+    required String nome,
+    required String email,
+    required String telefone,
+    required String senha,
+    required bool aceitouTermos,
+    DateTime? agora,
+  }) async {
+    final erro = Validators.validarCadastro(
+      nome: nome,
+      email: email,
+      telefone: telefone,
+      senha: senha,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
+    if (!aceitouTermos) throw const RegraNegocioException(termosNaoAceitos);
+
+    final momento = (agora ?? DateTime.now()).toIso8601String();
+    final novo = Cliente(
+      nome: nome.trim(),
+      email: email.trim().toLowerCase(),
+      telefone: telefone.trim(),
+      senhaHash: await Senhas.gerarHashEmSegundoPlano(senha),
+      criadoEm: momento,
+      termosAceitosEm: momento,
+    );
+    final db = await database;
+    return db.transaction((txn) async {
+      if (await _contaPorEmail(txn, novo.email) != null) {
+        throw const RegraNegocioException('Este e-mail já está cadastrado');
+      }
+      final id = await txn.insert('cliente', novo.toMap()..remove('id'));
+      await txn.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
+      return novo.copyWith(id: id);
+    });
+  }
+
+  /// O cliente exclui a própria conta, no Perfil (regra de negócio 18).
+  ///
+  /// Confere a senha e recusa enquanto houver agendamento em aberto ou valor
+  /// pendente com a barbearia. Os dados pessoais são apagados (nome, e-mail,
+  /// telefone e senha), os pontos e o extrato somem e os códigos de senha são
+  /// descartados; os atendimentos passados continuam nos relatórios, como
+  /// "Cliente excluído". Tudo na mesma transação.
+  Future<void> excluirContaCliente(
+    int idCliente, {
+    required String senha,
+    DateTime? agora,
+  }) async {
+    final cliente = await buscarClientePorId(idCliente);
+    if (cliente == null || cliente.excluido) {
+      throw const RegraNegocioException('Conta não encontrada');
+    }
+    if (cliente.admin) {
+      throw const RegraNegocioException(
+        'O administrador não pode excluir a própria conta',
+      );
+    }
+    if (!await Senhas.conferirEmSegundoPlano(senha, cliente.senhaHash)) {
+      throw const RegraNegocioException('Senha incorreta');
+    }
+
+    final db = await database;
+    await db.transaction((txn) async {
+      final impedimento = await _impedimentoExclusao(txn, idCliente);
+      if (impedimento != null) throw RegraNegocioException(impedimento);
+
+      await txn.update(
+        'cliente',
+        {
+          'nome': nomeClienteExcluido,
+          // O e-mail é único e obrigatório: fica um que não é de ninguém, e
+          // o verdadeiro volta a valer para uma conta nova.
+          'email': 'excluido-$idCliente@sysbarber.invalid',
+          'telefone': '',
+          'senha_hash': '',
+          'termos_aceitos_em': null,
+          'excluido_em': (agora ?? DateTime.now()).toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [idCliente],
+      );
+      await txn.update(
+        'fidelidade',
+        {'pontos': 0},
+        where: 'id_cliente = ?',
+        whereArgs: [idCliente],
+      );
+      await txn.delete(
+        'historico_ponto',
+        where: 'id_cliente = ?',
+        whereArgs: [idCliente],
+      );
+      await txn.delete(
+        'codigo_senha',
+        where: 'id_cliente = ?',
+        whereArgs: [idCliente],
+      );
+    });
+  }
+
+  /// Por que o cliente ainda não pode excluir a conta, ou `null` se pode.
+  Future<String?> _impedimentoExclusao(
+    DatabaseExecutor db,
+    int idCliente,
+  ) async {
+    final abertos =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM agendamento '
+            'WHERE id_cliente = ? AND status = ?',
+            [idCliente, StatusAgendamento.confirmado.dbValue],
+          ),
+        ) ??
+        0;
+    if (abertos > 0) {
+      return abertos == 1
+          ? 'Você tem 1 agendamento em aberto. Cancele-o ou espere a '
+                'barbearia concluí-lo antes de excluir a conta'
+          : 'Você tem $abertos agendamentos em aberto. Cancele-os ou espere '
+                'a barbearia concluí-los antes de excluir a conta';
+    }
+    // Quem deve à barbearia (multa ou serviço ainda não pago) paga antes,
+    // como nos apps reais.
+    final pendente = await db.rawQuery(
+      'SELECT SUM(p.valor) AS total FROM pagamento p '
+      'JOIN agendamento a ON a.id = p.id_agendamento '
+      'WHERE a.id_cliente = ? AND p.status = ?',
+      [idCliente, Pagamento.statusPendente],
+    );
+    final total = (pendente.first['total'] as num?)?.toDouble() ?? 0;
+    if (total > 0) {
+      final reais = total.toStringAsFixed(2).replaceAll('.', ',');
+      return 'Você tem R\$ $reais pendente com a barbearia. Pague no balcão '
+          'antes de excluir a conta';
+    }
+    return null;
+  }
+
+  /// Insere o cliente pronto, sem conferir nada. Só os testes usam: no app,
+  /// a conta nasce por [criarContaCliente] ou pela configuração inicial.
   ///
   /// O e-mail é normalizado para minúsculas porque toda busca é feita assim —
   /// sem isso um cadastro com maiúsculas nunca mais seria encontrado.
+  @visibleForTesting
   Future<int> cadastrarCliente(Cliente c) async {
     final db = await database;
     final dados = c.toMap()
@@ -793,7 +964,8 @@ class DatabaseService {
   /// — é o único momento em que o app conhece a senha para refazer o hash.
   Future<Cliente?> autenticar(String email, String senha) async {
     final cliente = await buscarClientePorEmail(email);
-    if (cliente == null) return null;
+    // A conta excluída não tem mais senha.
+    if (cliente == null || cliente.excluido) return null;
     if (!await Senhas.conferirEmSegundoPlano(senha, cliente.senhaHash)) {
       return null;
     }
@@ -1538,6 +1710,7 @@ class DatabaseService {
     required String email,
     required String telefone,
     required String senha,
+    required bool aceitouTermos,
     DateTime? agora,
   }) async {
     final erro = Validators.validarContatoBarbeiro(
@@ -1545,6 +1718,7 @@ class DatabaseService {
       telefone: telefone,
     );
     if (erro != null) throw RegraNegocioException(erro);
+    if (!aceitouTermos) throw const RegraNegocioException(termosNaoAceitos);
     if (!Validators.senhaValida(senha)) {
       throw const RegraNegocioException(
         'Senha deve ter no mínimo 6 caracteres',
@@ -1580,6 +1754,7 @@ class DatabaseService {
         email: normalizado,
         senhaHash: senhaHash,
         salario: convite.salario,
+        termosAceitosEm: momento.toIso8601String(),
       );
       final id = await txn.insert('barbeiro', barbeiro.toMap()..remove('id'));
       return barbeiro.copyWith(id: id);
@@ -1626,12 +1801,12 @@ class DatabaseService {
   }
 
   /// Clientes da barbearia. O administrador não entra: ele só gerencia
-  /// (regra de negócio 17).
+  /// (regra de negócio 17). Nem quem excluiu a conta (regra 18).
   Future<List<Cliente>> listarClientes() async {
     final db = await database;
     final linhas = await db.query(
       'cliente',
-      where: 'admin = 0',
+      where: 'admin = 0 AND excluido_em IS NULL',
       orderBy: 'nome COLLATE NOCASE',
     );
     return linhas.map(Cliente.fromMap).toList();
@@ -2724,7 +2899,7 @@ class DatabaseService {
         ['$dia%', cancelado],
       ),
       clientesTotal: await conta(
-        'SELECT COUNT(*) FROM cliente WHERE admin = 0',
+        'SELECT COUNT(*) FROM cliente WHERE admin = 0 AND excluido_em IS NULL',
       ),
       servicosHoje: await conta(
         'SELECT COUNT(DISTINCT id_servico) FROM agendamento '
@@ -2844,7 +3019,7 @@ class DatabaseService {
       faltas: await agendamentos('faltou'),
       // O administrador não conta como cliente, nem os pontos dele.
       totalClientes: await conta(
-        'SELECT COUNT(*) FROM cliente WHERE admin = 0',
+        'SELECT COUNT(*) FROM cliente WHERE admin = 0 AND excluido_em IS NULL',
       ),
       pontosEmCirculacao: await conta(
         'SELECT SUM(f.pontos) FROM fidelidade f '

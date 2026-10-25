@@ -48,6 +48,7 @@ void main() {
       email: emailAdmin,
       telefone: '(67) 99999-0000',
       senha: senhaAdmin,
+      aceitouTermos: true,
       dadosDeExemplo: true,
     );
   });
@@ -2304,6 +2305,28 @@ void main() {
       expect(tabela, hasLength(1));
       await db.close();
     });
+
+    test('a migração v8 guarda o aceite dos termos e a exclusão da conta, e '
+        'ninguém antigo aparece como tendo aceitado', () async {
+      final db = await bancoV2();
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      Future<List<String>> colunas(String tabela) async =>
+          (await db.rawQuery('PRAGMA table_info($tabela)'))
+              .map((c) => c['name'] as String)
+              .toList();
+      expect(
+        await colunas('cliente'),
+        containsAll(['termos_aceitos_em', 'excluido_em']),
+      );
+      expect(await colunas('barbeiro'), contains('termos_aceitos_em'));
+      final aceitos = await db.query(
+        'cliente',
+        where: 'termos_aceitos_em IS NOT NULL',
+      );
+      expect(aceitos, isEmpty);
+      await db.close();
+    });
   });
 
   group('Correção 13 — sessão do barbeiro e acesso às rotas', () {
@@ -3022,6 +3045,7 @@ void main() {
       email: email,
       telefone: '(67) 98765-4321',
       senha: senha,
+      aceitouTermos: true,
       dadosDeExemplo: dadosDeExemplo,
     );
 
@@ -3148,6 +3172,7 @@ void main() {
         email: 'dono@barbearia.com',
         telefone: '(67) 98765-4321',
         senha: 'senhaDoDono1',
+        aceitouTermos: true,
         dadosDeExemplo: false,
       );
 
@@ -3807,6 +3832,7 @@ void main() {
       email: email,
       telefone: '(67) 99404-4004',
       senha: 'senha123',
+      aceitouTermos: true,
       agora: momento ?? agora,
     );
 
@@ -3832,7 +3858,7 @@ void main() {
     });
 
     test('o banco confere o que o administrador informa no convite', () async {
-      expect(
+      await expectLater(
         () => service.criarConviteBarbeiro(
           nome: 'Pedro Alves',
           especialidade: 'Degradê',
@@ -3881,7 +3907,7 @@ void main() {
       final g = await convidar();
       await aceitar(g.codigo);
 
-      expect(
+      await expectLater(
         () => aceitar(g.codigo, email: 'outro@sysbarber.com'),
         throwsA(
           isA<RegraNegocioException>().having(
@@ -3896,7 +3922,7 @@ void main() {
     test('o convite vence em 7 dias', () async {
       final g = await convidar();
 
-      expect(
+      await expectLater(
         () => aceitar(
           g.codigo,
           momento: agora.add(const Duration(days: 7, minutes: 1)),
@@ -3933,7 +3959,7 @@ void main() {
           DateTime.parse(novo.convite.expiraEm),
           depois.add(const Duration(days: 7)),
         );
-        expect(
+        await expectLater(
           () => aceitar(g.codigo, momento: depois),
           throwsA(isA<RegraNegocioException>()),
         );
@@ -3948,7 +3974,7 @@ void main() {
       await service.cancelarConviteBarbeiro(g.convite.id!);
 
       expect(await service.listarConvitesBarbeiro(), isEmpty);
-      expect(() => aceitar(g.codigo), throwsA(isA<RegraNegocioException>()));
+      await expectLater(() => aceitar(g.codigo), throwsA(isA<RegraNegocioException>()));
     });
 
     test('o e-mail continua único: o de um cliente ou de outro barbeiro é '
@@ -3961,7 +3987,7 @@ void main() {
         'CARLOS.EDUARDO@sysbarber.com',
         emailAdmin,
       ]) {
-        expect(
+        await expectLater(
           () => aceitar(g.codigo, email: email),
           throwsA(
             isA<RegraNegocioException>().having(
@@ -3981,22 +4007,24 @@ void main() {
       () async {
         final g = await convidar();
 
-        expect(
+        await expectLater(
           () => service.aceitarConviteBarbeiro(
             codigo: g.codigo,
             email: 'pedro',
             telefone: '(67) 99404-4004',
             senha: 'senha123',
+            aceitouTermos: true,
             agora: agora,
           ),
           throwsA(isA<RegraNegocioException>()),
         );
-        expect(
+        await expectLater(
           () => service.aceitarConviteBarbeiro(
             codigo: g.codigo,
             email: 'pedro.alves@sysbarber.com',
             telefone: '(67) 99404-4004',
             senha: '123',
+            aceitouTermos: true,
             agora: agora,
           ),
           throwsA(isA<RegraNegocioException>()),
@@ -4025,6 +4053,7 @@ void main() {
           email: 'pedro.alves@sysbarber.com',
           telefone: '(67) 99404-4004',
           senha: 'senha123',
+          aceitouTermos: true,
         );
 
         expect(r.sucesso, isTrue);
@@ -4115,6 +4144,323 @@ void main() {
         await service.autenticarBarbeiro(b.email, 'outraSenha1'),
         isNotNull,
       );
+    });
+  });
+  // -------------------------------------------------------------------------
+  group('P34 — excluir a própria conta e termos de uso', () {
+    final auth = AuthService.instance;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await auth.logout();
+    });
+
+    Future<Cliente> criarConta({
+      String email = 'joana@teste.com',
+      bool aceitouTermos = true,
+    }) => service.criarContaCliente(
+      nome: 'Joana Lima',
+      email: email,
+      telefone: '(67) 98888-1234',
+      senha: 'senha123',
+      aceitouTermos: aceitouTermos,
+    );
+
+    test('sem aceitar os termos, o banco não cria a conta do cliente',
+        () async {
+      await expectLater(
+        () => criarConta(aceitouTermos: false),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            DatabaseService.termosNaoAceitos,
+          ),
+        ),
+      );
+      expect(await service.buscarClientePorEmail('joana@teste.com'), isNull);
+
+      final c = await criarConta();
+      expect(c.termosAceitosEm, isNotNull);
+      final gravado = await service.buscarClientePorId(c.id!);
+      expect(gravado!.termosAceitosEm, isNotNull);
+      expect(await service.obterPontos(c.id!), 0);
+    });
+
+    test('o banco confere no cadastro o e-mail de clientes e de barbeiros',
+        () async {
+      await criarConta();
+      for (final email in ['JOANA@teste.com', 'carlos.eduardo@sysbarber.com']) {
+        await expectLater(
+          () => criarConta(email: email),
+          throwsA(
+            isA<RegraNegocioException>().having(
+              (e) => e.mensagem,
+              'mensagem',
+              'Este e-mail já está cadastrado',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('pelo AuthService, o cadastro sem os termos avisa e não entra',
+        () async {
+      final sem = await auth.cadastrar(
+        nome: 'Joana Lima',
+        email: 'joana@teste.com',
+        telefone: '(67) 98888-1234',
+        senha: 'senha123',
+        aceitouTermos: false,
+      );
+      expect(sem.sucesso, isFalse);
+      expect(sem.erro, DatabaseService.termosNaoAceitos);
+      expect(auth.estaLogado, isFalse);
+
+      final com = await auth.cadastrar(
+        nome: 'Joana Lima',
+        email: 'joana@teste.com',
+        telefone: '(67) 98888-1234',
+        senha: 'senha123',
+        aceitouTermos: true,
+      );
+      expect(com.sucesso, isTrue);
+      expect(auth.ehCliente, isTrue);
+    });
+
+    test('o barbeiro também aceita os termos ao usar o convite', () async {
+      final g = await service.criarConviteBarbeiro(
+        nome: 'Pedro Alves',
+        especialidade: 'Degradê',
+        salario: 2400,
+      );
+      Future<Barbeiro> aceitar(bool aceitou) => service.aceitarConviteBarbeiro(
+        codigo: g.codigo,
+        email: 'pedro.alves@sysbarber.com',
+        telefone: '(67) 99404-4004',
+        senha: 'senha123',
+        aceitouTermos: aceitou,
+      );
+
+      await expectLater(() => aceitar(false), throwsA(isA<RegraNegocioException>()));
+      expect(await service.listarConvitesBarbeiro(), hasLength(1));
+
+      final b = await aceitar(true);
+      final gravado = await service.buscarBarbeiroPorId(b.id!);
+      expect(gravado!.termosAceitosEm, isNotNull);
+    });
+
+    test('o administrador aceitou os termos na configuração inicial', () async {
+      final admin = (await todasAsContas()).firstWhere((c) => c.admin);
+      expect(admin.termosAceitosEm, isNotNull);
+    });
+
+    test('excluir a conta apaga os dados pessoais, os pontos e o extrato, e '
+        'os atendimentos passados continuam', () async {
+      final c = await criarConta();
+      await service.adicionarPontos(c.id!, 120, 'Pontos de teste');
+      final r = await service.reservar(
+        idCliente: c.id!,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+      await service.finalizarAgendamento(
+        r.idAgendamento,
+        agora: proximoDiaAs(9, 30),
+      );
+      await service.gerarCodigoPorSms(
+        email: 'joana@teste.com',
+        telefone: '(67) 98888-1234',
+      );
+
+      await service.excluirContaCliente(c.id!, senha: 'senha123');
+
+      final depois = await service.buscarClientePorId(c.id!);
+      expect(depois!.excluido, isTrue);
+      expect(depois.nome, DatabaseService.nomeClienteExcluido);
+      expect(depois.email, isNot(contains('joana')));
+      expect(depois.telefone, isEmpty);
+      expect(depois.senhaHash, isEmpty);
+      expect(await service.obterPontos(c.id!), 0);
+      expect(await service.listarHistoricoPontos(c.id!), isEmpty);
+      final db = await service.database;
+      expect(await db.query('codigo_senha'), isEmpty);
+
+      // O atendimento continua nos relatórios, sem o nome.
+      final todos = await service.listarTodosAgendamentos();
+      final atendimento = todos.firstWhere((a) => a.id == r.idAgendamento);
+      expect(atendimento.cliente!.nome, DatabaseService.nomeClienteExcluido);
+      expect((await service.gerarRelatorio()).finalizados, 1);
+
+      // Sai da lista e das contagens de clientes, e não entra mais.
+      expect(
+        (await service.listarClientes()).map((x) => x.id),
+        isNot(contains(c.id)),
+      );
+      expect((await service.resumoDoDia()).clientesTotal, 0);
+      expect((await service.gerarRelatorio()).totalClientes, 0);
+      expect(await service.autenticar('joana@teste.com', 'senha123'), isNull);
+    });
+
+    test('o e-mail da conta excluída pode criar uma conta nova, do zero',
+        () async {
+      final c = await criarConta();
+      await service.adicionarPontos(c.id!, 80, 'Pontos de teste');
+      await service.excluirContaCliente(c.id!, senha: 'senha123');
+
+      final nova = await criarConta();
+
+      expect(nova.id, isNot(c.id));
+      expect(await service.obterPontos(nova.id!), 0);
+      expect(await service.autenticar('joana@teste.com', 'senha123'), isNotNull);
+    });
+
+    test('a senha errada não exclui a conta', () async {
+      final c = await criarConta();
+
+      await expectLater(
+        () => service.excluirContaCliente(c.id!, senha: 'outra123'),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Senha incorreta',
+          ),
+        ),
+      );
+      expect((await service.buscarClientePorId(c.id!))!.excluido, isFalse);
+    });
+
+    test('com agendamento em aberto, o banco recusa a exclusão', () async {
+      final c = await criarConta();
+      await service.reservar(
+        idCliente: c.id!,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+
+      await expectLater(
+        () => service.excluirContaCliente(c.id!, senha: 'senha123'),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            startsWith('Você tem 1 agendamento em aberto'),
+          ),
+        ),
+      );
+      expect((await service.buscarClientePorId(c.id!))!.excluido, isFalse);
+    });
+
+    test('quem deve à barbearia paga antes de excluir: multa pendente e '
+        'serviço concluído sem pagamento', () async {
+      final c = await criarConta();
+      final db = await service.database;
+      Future<int> pendentes() async => (await db.query(
+        'pagamento',
+        where: 'status = ?',
+        whereArgs: [Pagamento.statusPendente],
+      )).length;
+
+      // Cancelou em cima da hora, e ia pagar na barbearia: multa pendente.
+      final cancelado = await service.reservar(
+        idCliente: c.id!,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await service.cancelarAgendamento(
+        cancelado.idAgendamento,
+        agora: proximoDiaAs(8, 30),
+      );
+      expect(await pendentes(), 1);
+      await expectLater(
+        () => service.excluirContaCliente(c.id!, senha: 'senha123'),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            allOf(contains('pendente com a barbearia'), contains('balcão')),
+          ),
+        ),
+      );
+
+      // A barbearia recebe a multa, mas fica um serviço concluído sem
+      // pagamento.
+      final multa = (await db.query(
+        'pagamento',
+        where: 'status = ?',
+        whereArgs: [Pagamento.statusPendente],
+      )).single;
+      await service.confirmarPagamento(multa['id'] as int, metodo: 'Dinheiro');
+      final concluido = await service.reservar(
+        idCliente: c.id!,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(10),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      await service.finalizarAgendamento(
+        concluido.idAgendamento,
+        agora: proximoDiaAs(10, 30),
+      );
+      await expectLater(
+        () => service.excluirContaCliente(c.id!, senha: 'senha123'),
+        throwsA(isA<RegraNegocioException>()),
+      );
+
+      // Tudo pago: a exclusão é liberada.
+      final servico = (await db.query(
+        'pagamento',
+        where: 'status = ?',
+        whereArgs: [Pagamento.statusPendente],
+      )).single;
+      await service.confirmarPagamento(
+        servico['id'] as int,
+        metodo: 'Dinheiro',
+      );
+      await service.excluirContaCliente(c.id!, senha: 'senha123');
+      expect((await service.buscarClientePorId(c.id!))!.excluido, isTrue);
+    });
+
+    test('só o cliente exclui a própria conta, e sai dela', () async {
+      await auth.login(emailAdmin, senhaAdmin);
+      final doAdmin = await auth.excluirConta(senhaAdmin);
+      expect(doAdmin.sucesso, isFalse);
+      expect(doAdmin.erro, 'O administrador não pode excluir a própria conta');
+      final admin = (await todasAsContas()).firstWhere((c) => c.admin);
+      await expectLater(
+        () => service.excluirContaCliente(admin.id!, senha: senhaAdmin),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      await auth.logout();
+
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      final doBarbeiro = await auth.excluirConta('barbeiro123');
+      expect(doBarbeiro.sucesso, isFalse);
+      expect(
+        doBarbeiro.erro,
+        'A conta do barbeiro é excluída pelo administrador',
+      );
+      await auth.logout();
+
+      await criarConta();
+      await auth.login('joana@teste.com', 'senha123');
+      final doCliente = await auth.excluirConta('senha123');
+      expect(doCliente.sucesso, isTrue);
+      expect(auth.estaLogado, isFalse);
+      expect((await auth.login('joana@teste.com', 'senha123')).sucesso, isFalse);
+    });
+
+    test('os termos abrem para todos, até antes da configuração inicial',
+        () async {
+      expect(auth.podeAcessar(AuthService.rotaTermos), isTrue);
     });
   });
 }
