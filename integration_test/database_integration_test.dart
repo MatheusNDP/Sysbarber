@@ -326,7 +326,12 @@ void main() {
       expect(salvo!.iniciais, 'PA');
       expect(salvo.salario, 2400.00);
 
-      await service.atualizarBarbeiro(salvo.copyWith(salario: 3000.00));
+      await service.atualizarDadosDoBarbeiro(
+        salvo.id!,
+        nome: salvo.nome,
+        especialidade: salvo.especialidade,
+        salario: 3000.00,
+      );
       final editado = await service.buscarBarbeiroPorEmail(
         'pedro.alves@sysbarber.com',
       );
@@ -1799,17 +1804,11 @@ void main() {
 
       // O formulário monta um Barbeiro novo a partir dos campos; antes o
       // `ativo` padrão (true) ia junto e reativava o profissional.
-      await service.atualizarBarbeiro(
-        Barbeiro(
-          id: inativo.id,
-          nome: inativo.nome,
-          especialidade: 'Coloração, Corte e Barba',
-          iniciais: inativo.iniciais,
-          telefone: inativo.telefone,
-          email: inativo.email,
-          senhaHash: inativo.senhaHash,
-          salario: 2700,
-        ),
+      await service.atualizarDadosDoBarbeiro(
+        inativo.id!,
+        nome: inativo.nome,
+        especialidade: 'Coloração, Corte e Barba',
+        salario: 2700,
       );
 
       final depois = (await service.listarBarbeiros()).firstWhere(
@@ -2105,8 +2104,12 @@ void main() {
 
     test('o barbeiro com hash antigo também é atualizado', () async {
       final b = (await service.listarBarbeiros()).first;
-      await service.atualizarBarbeiro(
-        b.copyWith(senhaHash: Senhas.hashLegado('barbeiro123')),
+      final db = await service.database;
+      await db.update(
+        'barbeiro',
+        {'senha_hash': Senhas.hashLegado('barbeiro123')},
+        where: 'id = ?',
+        whereArgs: [b.id],
       );
 
       expect(
@@ -2284,6 +2287,19 @@ void main() {
         'sqlite_master',
         where: 'type = ? AND name = ?',
         whereArgs: ['table', 'codigo_senha'],
+      );
+      expect(tabela, hasLength(1));
+      await db.close();
+    });
+
+    test('a migração cria a tabela dos convites do barbeiro (v7)', () async {
+      final db = await bancoV2();
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final tabela = await db.query(
+        'sqlite_master',
+        where: 'type = ? AND name = ?',
+        whereArgs: ['table', 'convite_barbeiro'],
       );
       expect(tabela, hasLength(1));
       await db.close();
@@ -3766,6 +3782,339 @@ void main() {
         isNull,
       );
       await auth.logout();
+    });
+  });
+  // -------------------------------------------------------------------------
+  group('P33 — convite do barbeiro', () {
+    final agora = DateTime(2026, 10, 24, 10);
+
+    Future<({ConviteBarbeiro convite, String codigo})> convidar({
+      String nome = 'Pedro Alves',
+      DateTime? momento,
+    }) => service.criarConviteBarbeiro(
+      nome: nome,
+      especialidade: 'Degradê',
+      salario: 2400,
+      agora: momento ?? agora,
+    );
+
+    Future<Barbeiro> aceitar(
+      String codigo, {
+      String email = 'pedro.alves@sysbarber.com',
+      DateTime? momento,
+    }) => service.aceitarConviteBarbeiro(
+      codigo: codigo,
+      email: email,
+      telefone: '(67) 99404-4004',
+      senha: 'senha123',
+      agora: momento ?? agora,
+    );
+
+    test('o convite tem um código de 8 letras e números e vale 7 dias, sem '
+        'criar o barbeiro', () async {
+      final g = await convidar();
+
+      expect(g.codigo, matches(RegExp(r'^[A-Z2-9]{8}$')));
+      // Nem o código em texto nem letras que se confundem ao ditar.
+      expect(g.codigo, isNot(matches(RegExp('[01ILO]'))));
+      expect(g.convite.codigoHash, isNot(contains(g.codigo)));
+      expect(
+        DateTime.parse(g.convite.expiraEm),
+        agora.add(const Duration(days: 7)),
+      );
+      expect(await service.listarConvitesBarbeiro(), hasLength(1));
+      // Enquanto não usa o convite, ele não aparece para o cliente agendar.
+      expect(await service.listarBarbeiros(), hasLength(3));
+      expect(
+        (await service.listarBarbeirosAtivos()).map((b) => b.nome),
+        isNot(contains('Pedro Alves')),
+      );
+    });
+
+    test('o banco confere o que o administrador informa no convite', () async {
+      expect(
+        () => service.criarConviteBarbeiro(
+          nome: 'Pedro Alves',
+          especialidade: 'Degradê',
+          salario: 0,
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await service.listarConvitesBarbeiro(), isEmpty);
+    });
+
+    test('com o convite, o barbeiro cria a conta: nome, especialidade e '
+        'salário vêm do convite', () async {
+      final g = await convidar();
+
+      final b = await aceitar(g.codigo);
+
+      expect(b.id, isNotNull);
+      expect(b.nome, 'Pedro Alves');
+      expect(b.especialidade, 'Degradê');
+      expect(b.salario, 2400);
+      expect(b.iniciais, 'PA');
+      expect(b.ativo, isTrue);
+      expect(b.telefone, '(67) 99404-4004');
+      expect(await service.listarConvitesBarbeiro(), isEmpty);
+      expect(
+        await service.autenticarBarbeiro(
+          'pedro.alves@sysbarber.com',
+          'senha123',
+        ),
+        isNotNull,
+      );
+      expect(await service.listarBarbeiros(), hasLength(4));
+    });
+
+    test('o código vale com minúsculas e com o hífen', () async {
+      final g = await convidar();
+      final digitado = '${g.codigo.substring(0, 4)}-${g.codigo.substring(4)}'
+          .toLowerCase();
+
+      final b = await aceitar(digitado);
+
+      expect(b.nome, 'Pedro Alves');
+    });
+
+    test('o convite vale uma vez só', () async {
+      final g = await convidar();
+      await aceitar(g.codigo);
+
+      expect(
+        () => aceitar(g.codigo, email: 'outro@sysbarber.com'),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            startsWith('Convite não encontrado'),
+          ),
+        ),
+      );
+    });
+
+    test('o convite vence em 7 dias', () async {
+      final g = await convidar();
+
+      expect(
+        () => aceitar(
+          g.codigo,
+          momento: agora.add(const Duration(days: 7, minutes: 1)),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Este convite venceu. Peça um novo ao administrador',
+          ),
+        ),
+      );
+      // Até o fim do sétimo dia, ainda vale.
+      final b = await aceitar(
+        g.codigo,
+        momento: agora.add(const Duration(days: 6, hours: 23)),
+      );
+      expect(b.nome, 'Pedro Alves');
+    });
+
+    test(
+      'gerar outro código cancela o anterior e conta a validade de novo',
+      () async {
+        final g = await convidar();
+        final depois = agora.add(const Duration(days: 3));
+
+        final novo = await service.gerarNovoCodigoDoConvite(
+          g.convite.id!,
+          agora: depois,
+        );
+
+        expect(novo.codigo, isNot(g.codigo));
+        expect(
+          DateTime.parse(novo.convite.expiraEm),
+          depois.add(const Duration(days: 7)),
+        );
+        expect(
+          () => aceitar(g.codigo, momento: depois),
+          throwsA(isA<RegraNegocioException>()),
+        );
+        final b = await aceitar(novo.codigo, momento: depois);
+        expect(b.nome, 'Pedro Alves');
+      },
+    );
+
+    test('cancelar o convite invalida o código', () async {
+      final g = await convidar();
+
+      await service.cancelarConviteBarbeiro(g.convite.id!);
+
+      expect(await service.listarConvitesBarbeiro(), isEmpty);
+      expect(() => aceitar(g.codigo), throwsA(isA<RegraNegocioException>()));
+    });
+
+    test('o e-mail continua único: o de um cliente ou de outro barbeiro é '
+        'recusado, e o convite continua valendo', () async {
+      await criarClienteTeste(email: 'cliente@teste.com');
+      final g = await convidar();
+
+      for (final email in [
+        'cliente@teste.com',
+        'CARLOS.EDUARDO@sysbarber.com',
+        emailAdmin,
+      ]) {
+        expect(
+          () => aceitar(g.codigo, email: email),
+          throwsA(
+            isA<RegraNegocioException>().having(
+              (e) => e.mensagem,
+              'mensagem',
+              'Este e-mail já está cadastrado',
+            ),
+          ),
+        );
+      }
+      expect(await service.listarConvitesBarbeiro(), hasLength(1));
+      expect(await service.listarBarbeiros(), hasLength(3));
+    });
+
+    test(
+      'o banco confere o e-mail, o telefone e a senha do barbeiro',
+      () async {
+        final g = await convidar();
+
+        expect(
+          () => service.aceitarConviteBarbeiro(
+            codigo: g.codigo,
+            email: 'pedro',
+            telefone: '(67) 99404-4004',
+            senha: 'senha123',
+            agora: agora,
+          ),
+          throwsA(isA<RegraNegocioException>()),
+        );
+        expect(
+          () => service.aceitarConviteBarbeiro(
+            codigo: g.codigo,
+            email: 'pedro.alves@sysbarber.com',
+            telefone: '(67) 99404-4004',
+            senha: '123',
+            agora: agora,
+          ),
+          throwsA(isA<RegraNegocioException>()),
+        );
+        expect(await service.listarConvitesBarbeiro(), hasLength(1));
+      },
+    );
+
+    test(
+      'pelo AuthService, quem usa o convite já entra como barbeiro',
+      () async {
+        final auth = AuthService.instance;
+        SharedPreferences.setMockInitialValues({});
+        final g = await service.criarConviteBarbeiro(
+          nome: 'Pedro Alves',
+          especialidade: 'Degradê',
+          salario: 2400,
+        );
+
+        final conferido = await auth.conferirConvite(g.codigo);
+        expect(conferido.convite?.nome, 'Pedro Alves');
+        expect((await auth.conferirConvite('AAAA-AAAA')).convite, isNull);
+
+        final r = await auth.aceitarConvite(
+          codigo: g.codigo,
+          email: 'pedro.alves@sysbarber.com',
+          telefone: '(67) 99404-4004',
+          senha: 'senha123',
+        );
+
+        expect(r.sucesso, isTrue);
+        expect(auth.ehBarbeiro, isTrue);
+        expect(auth.nomeLogado, 'Pedro Alves');
+        expect(auth.podeAcessar(AuthService.rotaConvite), isTrue);
+        await auth.logout();
+      },
+    );
+
+    test('o administrador edita só nome, especialidade e salário', () async {
+      final b = (await service.listarBarbeiros()).first;
+
+      await service.atualizarDadosDoBarbeiro(
+        b.id!,
+        nome: 'Carlos Eduardo Lima',
+        especialidade: 'Barba',
+        salario: 3100,
+      );
+
+      final depois = await service.buscarBarbeiroPorId(b.id!);
+      expect(depois!.nome, 'Carlos Eduardo Lima');
+      expect(depois.iniciais, 'CL');
+      expect(depois.especialidade, 'Barba');
+      expect(depois.salario, 3100);
+      expect(depois.email, b.email);
+      expect(depois.telefone, b.telefone);
+      expect(depois.senhaHash, b.senhaHash);
+    });
+
+    test('o barbeiro troca o próprio e-mail e telefone, sem repetir o '
+        'e-mail de outra conta', () async {
+      final auth = AuthService.instance;
+      SharedPreferences.setMockInitialValues({});
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+
+      final repetido = await auth.atualizarContatoBarbeiro(
+        email: 'carlos.eduardo@sysbarber.com',
+        telefone: '(67) 99777-7777',
+      );
+      expect(repetido.sucesso, isFalse);
+      expect(repetido.erro, 'Este e-mail já está cadastrado');
+
+      // O próprio e-mail, com outro telefone, é aceito.
+      final mesmo = await auth.atualizarContatoBarbeiro(
+        email: 'rafael.souza@sysbarber.com',
+        telefone: '(67) 99777-7777',
+      );
+      expect(mesmo.sucesso, isTrue);
+
+      final r = await auth.atualizarContatoBarbeiro(
+        email: 'Rafael@Barbearia.com',
+        telefone: '(67) 99888-8888',
+      );
+      expect(r.sucesso, isTrue);
+      expect(auth.barbeiroAtual!.email, 'rafael@barbearia.com');
+      expect(auth.barbeiroAtual!.telefone, '(67) 99888-8888');
+      expect(
+        await service.autenticarBarbeiro('rafael@barbearia.com', 'barbeiro123'),
+        isNotNull,
+      );
+      await auth.logout();
+    });
+
+    test('o administrador libera uma nova senha para o barbeiro, que entra '
+        'com o código e cria outra', () async {
+      final auth = AuthService.instance;
+      SharedPreferences.setMockInitialValues({});
+      final b = (await service.listarBarbeiros()).first;
+
+      // Só o administrador libera.
+      expect((await auth.liberarNovaSenhaDoBarbeiro(b.id!)).sucesso, isFalse);
+
+      await auth.login(emailAdmin, senhaAdmin);
+      final liberado = await auth.liberarNovaSenhaDoBarbeiro(b.id!);
+      expect(liberado.sucesso, isTrue);
+      await auth.logout();
+
+      final login = await auth.login(b.email, liberado.codigo!);
+      expect(login.criarNovaSenha, isTrue);
+      final r = await auth.redefinirSenha(
+        email: b.email,
+        codigo: liberado.codigo!,
+        novaSenha: 'outraSenha1',
+      );
+      expect(r.sucesso, isTrue);
+      expect(
+        await service.autenticarBarbeiro(b.email, 'outraSenha1'),
+        isNotNull,
+      );
     });
   });
 }

@@ -825,6 +825,106 @@ void mostrarInfo(BuildContext context, String mensagem) {
     );
 }
 
+/// O administrador libera uma nova senha no balcão (regra de negócio 16),
+/// para um cliente ou um barbeiro ([quem]: "o cliente" ou "o barbeiro"):
+/// confirma, gera o código provisório com [liberar] e o mostra uma vez só.
+Future<void> liberarNovaSenhaNoBalcao(
+  BuildContext context, {
+  required String nome,
+  required String email,
+  required String quem,
+  required int horas,
+  required Future<({bool sucesso, String? erro, String? codigo})> Function()
+  liberar,
+}) async {
+  final confirmou = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Liberar nova senha?', style: AppTheme.titulo(size: 18)),
+      content: Text(
+        'Confira se quem pediu é mesmo $nome. O app vai gerar um '
+        'código provisório, que vale por $horas horas e uma vez só. Com '
+        'ele no lugar da senha, $quem entra e cria uma senha nova.',
+        style: AppTheme.texto(size: 13, color: AppColors.muted),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(
+            'Cancelar',
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(
+            'Liberar',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmou != true || !context.mounted) return;
+
+  final r = await liberar();
+  if (!context.mounted) return;
+  if (!r.sucesso) {
+    mostrarErro(context, r.erro ?? 'Não foi possível liberar a nova senha');
+    return;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Código provisório', style: AppTheme.titulo(size: 18)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            r.codigo!,
+            textAlign: TextAlign.center,
+            // Sem serifa: os algarismos ficam da mesma altura, mais fáceis
+            // de ditar.
+            style: AppTheme.texto(
+              size: 32,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+              letterSpacing: 6,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Entregue este código a $nome. No login, $quem usa o '
+            'e-mail $email e este código no lugar da senha, e o app '
+            'pede uma senha nova. Vale por $horas horas, uma vez só, e não '
+            'aparece de novo.',
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text(
+            'Entendi',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.amarelo,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Formata valores no padrão brasileiro: `R$ 2.800,00`, `-R$ 27,50`.
 ///
 /// Usa a mesma formatação dos campos de valor (com separador de milhar) e

@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../models/models.dart';
+
 /// Máscaras de entrada do SysBarber.
 ///
 /// Implementadas como [TextInputFormatter] próprios para não depender de
@@ -150,4 +152,31 @@ class ValidadeCartaoInputFormatter extends _MascaraDigitos {
 /// CVV: 3 ou 4 dígitos.
 class CvvInputFormatter extends _MascaraDigitos {
   const CvvInputFormatter() : super('####');
+}
+
+/// Código do convite do barbeiro em dois blocos (`K7MP-Q2XR`), mais fácil de
+/// ditar e de digitar.
+String formatarCodigoConvite(String codigo) {
+  final c = ConviteBarbeiro.normalizarCodigo(codigo);
+  return c.length <= 4 ? c : '${c.substring(0, 4)}-${c.substring(4)}';
+}
+
+/// Código do convite: maiúsculas, até 8 letras e números, com o hífen no
+/// meio.
+class CodigoConviteInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue anterior,
+    TextEditingValue novo,
+  ) {
+    var codigo = ConviteBarbeiro.normalizarCodigo(novo.text);
+    if (codigo.length > ConviteBarbeiro.tamanhoCodigo) {
+      codigo = codigo.substring(0, ConviteBarbeiro.tamanhoCodigo);
+    }
+    final texto = formatarCodigoConvite(codigo);
+    return TextEditingValue(
+      text: texto,
+      selection: TextSelection.collapsed(offset: texto.length),
+    );
+  }
 }

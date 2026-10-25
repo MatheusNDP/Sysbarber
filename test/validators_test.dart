@@ -100,42 +100,56 @@ void main() {
     });
   });
 
-  group('Validators.validarBarbeiro', () {
+  group('Validators.validarDadosBarbeiro', () {
     String? validar({
       String nome = 'Carlos Eduardo',
       String especialidade = 'Especialista em barba',
-      String telefone = '(67) 99101-1001',
-      String email = 'carlos@sysbarber.com',
-      String senha = 'barbeiro123',
       double salario = 2800,
-      bool senhaObrigatoria = true,
-    }) => Validators.validarBarbeiro(
+    }) => Validators.validarDadosBarbeiro(
       nome: nome,
       especialidade: especialidade,
-      telefone: telefone,
-      email: email,
-      senha: senha,
       salario: salario,
-      senhaObrigatoria: senhaObrigatoria,
     );
 
-    test('retorna null quando o cadastro está completo', () {
+    test('retorna null quando os dados estão completos', () {
       expect(validar(), isNull);
     });
 
-    test('cobra especialidade e salário', () {
+    test('cobra nome, especialidade e salário', () {
+      expect(validar(nome: 'Jo'), 'Nome deve ter pelo menos 3 caracteres');
       expect(
         validar(especialidade: 'x'),
         'Especialidade deve ter pelo menos 3 caracteres',
       );
       expect(validar(salario: 0), 'Salário deve ser maior que zero');
     });
+  });
 
-    test('na edição a senha em branco é aceita', () {
-      expect(validar(senha: '', senhaObrigatoria: false), isNull);
+  group('Validators.validarContatoBarbeiro', () {
+    test('retorna null com e-mail e telefone válidos', () {
       expect(
-        validar(senha: '', senhaObrigatoria: true),
-        'Senha deve ter no mínimo 6 caracteres',
+        Validators.validarContatoBarbeiro(
+          email: 'carlos@sysbarber.com',
+          telefone: '(67) 99101-1001',
+        ),
+        isNull,
+      );
+    });
+
+    test('recusa e-mail ou telefone inválido', () {
+      expect(
+        Validators.validarContatoBarbeiro(
+          email: 'carlos',
+          telefone: '(67) 99101-1001',
+        ),
+        'E-mail inválido',
+      );
+      expect(
+        Validators.validarContatoBarbeiro(
+          email: 'carlos@sysbarber.com',
+          telefone: '(67) 999',
+        ),
+        'Telefone inválido',
       );
     });
   });

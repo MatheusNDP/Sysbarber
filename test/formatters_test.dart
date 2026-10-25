@@ -125,4 +125,17 @@ void main() {
       expect(mascararEmail('@email.com'), '@email.com');
     });
   });
+
+  group('Código do convite', () {
+    test('a máscara põe maiúsculas, o hífen no meio e para em 8', () {
+      final f = CodigoConviteInputFormatter();
+      expect(aplicar(f, 'k7mp'), 'K7MP');
+      expect(aplicar(f, 'k7mpq'), 'K7MP-Q');
+      expect(aplicar(f, 'k7 mp-q2xr99'), 'K7MP-Q2XR');
+    });
+
+    test('formatarCodigoConvite mostra o código em dois blocos', () {
+      expect(formatarCodigoConvite('K7MPQ2XR'), 'K7MP-Q2XR');
+    });
+  });
 }

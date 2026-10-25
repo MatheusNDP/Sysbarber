@@ -69,7 +69,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Future<void> _editarDados() async {
     final salvou = await showDialog<bool>(
       context: context,
-      builder: (_) => const _EditarDadosDialog(),
+      builder: (_) => AuthService.instance.ehBarbeiro
+          ? const _EditarContatoBarbeiroDialog()
+          : const _EditarDadosDialog(),
     );
     if (salvou != true || !mounted) return;
     setState(() {}); // o nome e o telefone exibidos vêm da sessão
@@ -206,21 +208,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         'Telefone',
                         telefone.isEmpty ? '-' : telefone,
                       ),
-                      // Os dados do barbeiro são cadastrados pelo
-                      // administrador, em Gerenciar Barbeiros.
+                      // Nome e especialidade do barbeiro são do administrador,
+                      // em Gerenciar Barbeiros; o e-mail e o telefone, dele.
                       if (barbeiro != null)
                         _item(
                           Icons.content_cut_rounded,
                           'Especialidade',
                           barbeiro.especialidade,
-                        )
-                      else
-                        _item(
-                          Icons.edit_outlined,
-                          'Editar dados',
-                          'Nome e telefone',
-                          onTap: _editarDados,
                         ),
+                      _item(
+                        Icons.edit_outlined,
+                        'Editar dados',
+                        barbeiro != null
+                            ? 'E-mail e telefone'
+                            : 'Nome e telefone',
+                        onTap: _editarDados,
+                      ),
                       _item(
                         Icons.lock_outline_rounded,
                         'Alterar senha',
@@ -499,6 +502,72 @@ class _EditarDadosDialogState extends State<_EditarDadosDialog> {
       onSalvar: _salvar,
       campos: [
         _campo(_nome, 'Nome completo', teclado: TextInputType.name),
+        _campo(
+          _telefone,
+          'Telefone',
+          teclado: TextInputType.phone,
+          formatters: [TelefoneInputFormatter()],
+        ),
+      ],
+    );
+  }
+}
+
+/// O barbeiro muda o próprio e-mail e telefone (regra de negócio 10). O
+/// nome e a especialidade ficam com o administrador.
+class _EditarContatoBarbeiroDialog extends StatefulWidget {
+  const _EditarContatoBarbeiroDialog();
+
+  @override
+  State<_EditarContatoBarbeiroDialog> createState() =>
+      _EditarContatoBarbeiroDialogState();
+}
+
+class _EditarContatoBarbeiroDialogState
+    extends State<_EditarContatoBarbeiroDialog> {
+  late final TextEditingController _email;
+  late final TextEditingController _telefone;
+  bool _salvando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final barbeiro = AuthService.instance.barbeiroAtual;
+    _email = TextEditingController(text: barbeiro?.email ?? '');
+    _telefone = TextEditingController(text: barbeiro?.telefone ?? '');
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _telefone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _salvar() async {
+    setState(() => _salvando = true);
+    final r = await AuthService.instance.atualizarContatoBarbeiro(
+      email: _email.text,
+      telefone: _telefone.text,
+    );
+    if (!mounted) return;
+    if (r.sucesso) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() => _salvando = false);
+      mostrarErro(context, r.erro ?? 'Não foi possível salvar');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _dialogo(
+      context: context,
+      titulo: 'Editar dados',
+      salvando: _salvando,
+      onSalvar: _salvar,
+      campos: [
+        _campo(_email, 'E-mail', teclado: TextInputType.emailAddress),
         _campo(
           _telefone,
           'Telefone',

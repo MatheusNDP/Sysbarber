@@ -11,6 +11,7 @@ import 'package:sysbarber/screens/admin_servicos_screen.dart';
 import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/barbeiro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
+import 'package:sysbarber/screens/convite_barbeiro_screen.dart';
 import 'package:sysbarber/screens/home_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
@@ -23,6 +24,7 @@ import 'package:sysbarber/services/auth_service.dart';
 import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/email.dart';
+import 'package:sysbarber/services/formatters.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/services/suporte.dart';
@@ -1393,14 +1395,283 @@ void main() {
     expect(find.text('Carlos Eduardo'), findsOneWidget);
     expect(find.text('Especialidade'), findsOneWidget);
     expect(find.text('Alterar senha'), findsOneWidget);
-    // Os dados dele são do administrador, em Gerenciar Barbeiros.
-    expect(find.text('Editar dados'), findsNothing);
+    // Nome e especialidade são do administrador; e-mail e telefone, dele.
+    expect(find.text('E-mail e telefone'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Sair'),
       200,
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Suporte'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P33 — convite do barbeiro
+  // -------------------------------------------------------------------------
+
+  /// Deixa terminar o que a tela pediu ao banco depois de um toque.
+  Future<void> esperarBanco(WidgetTester tester) async {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 500)),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  /// Texto do código do convite na tela, em dois blocos (`K7MP-Q2XR`).
+  final codigoNaTela = find.byWidgetPredicate(
+    (w) =>
+        w is Text &&
+        RegExp(r'^[A-Z2-9]{4}-[A-Z2-9]{4}$').hasMatch(w.data ?? ''),
+  );
+
+  testWidgets('o administrador convida o barbeiro pelo sheet, compartilha a '
+      'mensagem pronta e vê o convite pendente', (tester) async {
+    await adminLogado(tester);
+    final compartilhados = <String>[];
+    await abrir(
+      tester,
+      AdminBarbeirosScreen(
+        compartilhar: (texto) async => compartilhados.add(texto),
+      ),
+    );
+
+    await tocarEsperando(tester, find.byTooltip('Convidar barbeiro'));
+    await tester.pumpAndSettle();
+    expect(find.text('Convidar barbeiro'), findsOneWidget);
+    // O administrador não define mais e-mail nem senha.
+    expect(find.byType(TextField), findsNWidgets(3));
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome completo'),
+      'Pedro Alves',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Especialidade'),
+      'Degradê',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Salário (R\$)'),
+      '240000',
+    );
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Convite para Pedro Alves'), findsOneWidget);
+    expect(codigoNaTela, findsOneWidget);
+    final codigo = tester.widget<Text>(codigoNaTela).data!;
+
+    await tocarEsperando(tester, find.text('Compartilhar'));
+    expect(compartilhados.single, contains(codigo));
+    expect(compartilhados.single, contains('Tenho um convite de barbeiro'));
+
+    await tocarEsperando(tester, find.text('Concluir'));
+    await esperarBanco(tester);
+
+    expect(find.text('Convites pendentes'), findsOneWidget);
+    expect(find.text('Convite pendente'), findsOneWidget);
+    expect(find.text('Pedro Alves'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o convite pendente ganha outro código ou é cancelado, e o '
+      'vencido aparece como vencido', (tester) async {
+    await adminLogado(tester);
+    await tester.runAsync(() async {
+      await service.criarConviteBarbeiro(
+        nome: 'Pedro Alves',
+        especialidade: 'Degradê',
+        salario: 2400,
+      );
+      await service.criarConviteBarbeiro(
+        nome: 'João Lima',
+        especialidade: 'Barba',
+        salario: 2400,
+        agora: DateTime.now().subtract(const Duration(days: 8)),
+      );
+    });
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    expect(find.text('Convite pendente'), findsOneWidget);
+    expect(find.text('Convite vencido'), findsOneWidget);
+
+    // Outro código para o vencido.
+    await tocarEsperando(tester, find.text('Gerar outro código').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Gerar outro código?'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Gerar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Convite para João Lima'), findsOneWidget);
+    expect(codigoNaTela, findsOneWidget);
+    await tocarEsperando(tester, find.text('Concluir'));
+    await esperarBanco(tester);
+    expect(find.text('Convite vencido'), findsNothing);
+    final convites = await tester.runAsync(service.listarConvitesBarbeiro);
+    expect(convites!.where((c) => c.vencido(DateTime.now())), isEmpty);
+
+    // Cancelar o do Pedro, o primeiro da lista.
+    await tester.drag(find.byType(ListView), const Offset(0, 600));
+    await tester.pumpAndSettle();
+    await tocarEsperando(tester, find.text('Cancelar convite').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelar o convite?'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Cancelar convite').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pedro Alves'), findsNothing);
+    expect(find.text('João Lima'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('editar o barbeiro muda só nome, especialidade e salário, e o '
+      'administrador libera uma nova senha para ele', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    await tocarEsperando(tester, find.text('Carlos Eduardo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Editar barbeiro'), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(3));
+    expect(find.widgetWithText(TextField, 'E-mail de acesso'), findsNothing);
+
+    await tocarEsperando(tester, find.text('Liberar nova senha'));
+    await tester.pumpAndSettle();
+    expect(find.text('Liberar nova senha?'), findsOneWidget);
+    await tocarEsperando(tester, find.text('Liberar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Código provisório'), findsOneWidget);
+    expect(
+      find.textContaining('o barbeiro usa o e-mail carlos.eduardo@'),
+      findsOneWidget,
+    );
+    final gravado = await tester.runAsync(
+      () => service.database.then((db) => db.query('codigo_senha')),
+    );
+    expect(gravado!.single['id_barbeiro'], isNotNull);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('no login, "Tenho um convite de barbeiro" abre o convite, que '
+      'confere o código e cria a conta do barbeiro', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    late String codigo;
+    await tester.runAsync(() async {
+      codigo = (await service.criarConviteBarbeiro(
+        nome: 'Pedro Alves',
+        especialidade: 'Degradê',
+        salario: 2400,
+      )).codigo;
+    });
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          home: const LoginScreen(),
+          routes: {
+            '/home': (_) => const Scaffold(body: Text('INÍCIO')),
+            AuthService.rotaConvite: (_) => const ConviteBarbeiroScreen(),
+          },
+        ),
+      ),
+    );
+
+    await tocarEsperando(tester, find.text('Tenho um convite de barbeiro'));
+    await tester.pumpAndSettle();
+    expect(find.text('Entrar na equipe'), findsOneWidget);
+
+    // Código errado: avisa e continua na mesma etapa.
+    await tester.enterText(find.byType(TextField), 'zzzzzzzz');
+    await tocarEsperando(tester, find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Convite não encontrado'), findsOneWidget);
+    expect(find.text('Entrar na equipe'), findsOneWidget);
+    // O aviso some sozinho; antes disso, cobriria o botão do fim da tela.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), codigo.toLowerCase());
+    expect(find.text(formatarCodigoConvite(codigo)), findsOneWidget);
+    await tocarEsperando(tester, find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Convite para Pedro Alves'), findsOneWidget);
+
+    await tester.enterText(
+      find.byType(TextField).at(0),
+      'pedro.alves@sysbarber.com',
+    );
+    await tester.enterText(find.byType(TextField).at(1), '67994044004');
+    await tester.enterText(find.byType(TextField).at(2), 'senha123');
+    await tester.enterText(find.byType(TextField).at(3), 'senha123');
+    await tocarEsperando(tester, find.text('Criar conta e entrar'));
+    await esperarBanco(tester);
+
+    expect(find.text('INÍCIO'), findsOneWidget);
+    expect(AuthService.instance.ehBarbeiro, isTrue);
+    expect(AuthService.instance.barbeiroAtual!.telefone, '(67) 99404-4004');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('no Perfil, o barbeiro edita o próprio e-mail e telefone', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'rafael.souza@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const PerfilScreen());
+
+    await tocarEsperando(tester, find.text('Editar dados'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'E-mail'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Telefone'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Nome completo'), findsNothing);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'E-mail'),
+      'rafael@barbearia.com',
+    );
+    await tocarEsperando(tester, find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('rafael@barbearia.com'), findsOneWidget);
+    expect(AuthService.instance.barbeiroAtual!.email, 'rafael@barbearia.com');
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('fechar o sheet pelo voltar, sem "Concluir", também mostra o '
+      'convite pendente', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    await tocarEsperando(tester, find.byTooltip('Convidar barbeiro'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome completo'),
+      'Pedro Alves',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Especialidade'),
+      'Degradê',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Salário (R\$)'),
+      '240000',
+    );
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+    expect(codigoNaTela, findsOneWidget);
+
+    // O voltar do Android fecha o sheet.
+    await tester.binding.handlePopRoute();
+    await esperarBanco(tester);
+
+    expect(find.text('Convite para Pedro Alves'), findsNothing);
+    expect(find.text('Convite pendente'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 

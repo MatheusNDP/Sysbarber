@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -29,7 +30,9 @@ class DatabaseService {
   /// índices únicos por barbeiro e horário e por e-mail de barbeiro (só
   /// quando o banco antigo não tem duplicados) e índices de consulta.
   /// v6: tabela `codigo_senha`, com os códigos para criar uma senha nova.
-  static const int versaoBanco = 6;
+  /// v7: tabela `convite_barbeiro`, com os convites que o administrador gera
+  /// para o barbeiro criar a própria conta.
+  static const int versaoBanco = 7;
 
   /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
   /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
@@ -49,6 +52,13 @@ class DatabaseService {
 
   /// Validade do código provisório que o administrador libera no balcão.
   static const Duration validadeCodigoBarbearia = Duration(hours: 24);
+
+  /// Validade do convite do barbeiro (regra de negócio 10).
+  static const Duration validadeConviteBarbeiro = Duration(days: 7);
+
+  /// Letras e números do código do convite, sem os que se confundem ao
+  /// ditar ou digitar (0 e O, 1, I e L).
+  static const String _alfabetoConvite = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
   /// Tentativas erradas que cancelam o código.
   static const int tentativasCodigo = 5;
@@ -265,6 +275,7 @@ class DatabaseService {
     ''');
 
     await _criarTabelaCodigoSenha(db);
+    await _criarTabelaConviteBarbeiro(db);
 
     await _criarIndiceHorario(db);
     await _criarIndicesDeConsulta(db);
@@ -288,6 +299,22 @@ class DatabaseService {
           FOREIGN KEY (id_cliente) REFERENCES cliente(id) ON DELETE CASCADE,
           FOREIGN KEY (id_barbeiro) REFERENCES barbeiro(id) ON DELETE CASCADE,
           CHECK ((id_cliente IS NULL) != (id_barbeiro IS NULL))
+        )
+      ''');
+
+  /// Convites para o barbeiro criar a própria conta (regra de negócio 10).
+  /// Guardam o que o administrador informou; o barbeiro só entra na tabela
+  /// `barbeiro` quando usa o código.
+  static Future<void> _criarTabelaConviteBarbeiro(DatabaseExecutor db) =>
+      db.execute('''
+        CREATE TABLE convite_barbeiro (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome TEXT NOT NULL,
+          especialidade TEXT NOT NULL,
+          salario REAL NOT NULL,
+          codigo_hash TEXT NOT NULL,
+          criado_em TEXT NOT NULL,
+          expira_em TEXT NOT NULL
         )
       ''');
 
@@ -323,8 +350,7 @@ class DatabaseService {
   /// Última barreira contra horário duplicado: o próprio banco recusa dois
   /// agendamentos ativos do mesmo barbeiro no mesmo horário. (A sobreposição
   /// por duração é conferida em [reservar], dentro da transação.)
-  static Future<void> _criarIndiceHorario(DatabaseExecutor db) =>
-      db.execute('''
+  static Future<void> _criarIndiceHorario(DatabaseExecutor db) => db.execute('''
         CREATE UNIQUE INDEX IF NOT EXISTS idx_agendamento_horario
         ON agendamento (id_barbeiro, data_hora)
         WHERE status != 'cancelado'
@@ -465,6 +491,7 @@ class DatabaseService {
     }
 
     if (versaoAntiga < 6) await _criarTabelaCodigoSenha(db);
+    if (versaoAntiga < 7) await _criarTabelaConviteBarbeiro(db);
   }
 
   /// `Carlos Eduardo` → `carlos.eduardo@sysbarber.com`
@@ -982,18 +1009,46 @@ class DatabaseService {
     if (cliente == null) {
       throw const RegraNegocioException('Cliente não encontrado');
     }
+    return _liberarCodigo((
+      tabela: 'cliente',
+      id: idCliente,
+      nome: cliente.nome,
+      telefone: cliente.telefone,
+    ), agora ?? DateTime.now());
+  }
+
+  /// O mesmo código provisório, para o barbeiro [idBarbeiro]: o
+  /// administrador não define mais a senha dele (regra de negócio 16).
+  Future<String> liberarCodigoDaBarbeariaParaBarbeiro(
+    int idBarbeiro, {
+    DateTime? agora,
+  }) async {
+    final barbeiro = await buscarBarbeiroPorId(idBarbeiro);
+    if (barbeiro == null) {
+      throw const RegraNegocioException('Barbeiro não encontrado');
+    }
+    // Sem e-mail não há como entrar, nem com o código.
+    if (barbeiro.email.isEmpty) {
+      throw const RegraNegocioException(
+        'Este barbeiro não tem e-mail de acesso',
+      );
+    }
+    return _liberarCodigo((
+      tabela: 'barbeiro',
+      id: idBarbeiro,
+      nome: barbeiro.nome,
+      telefone: barbeiro.telefone,
+    ), agora ?? DateTime.now());
+  }
+
+  Future<String> _liberarCodigo(_Conta conta, DateTime agora) async {
     final codigo = _novoCodigo();
     await _gravarCodigo(
       await database,
-      (
-        tabela: 'cliente',
-        id: idCliente,
-        nome: cliente.nome,
-        telefone: cliente.telefone,
-      ),
+      conta,
       OrigemCodigo.barbearia,
       await Senhas.gerarHashEmSegundoPlano(codigo),
-      agora ?? DateTime.now(),
+      agora,
       validadeCodigoBarbearia,
     );
     return codigo;
@@ -1083,11 +1138,8 @@ class DatabaseService {
         (origem != null && registro.origem != origem)) {
       throw const RegraNegocioException(_codigoInvalido);
     }
-    Future<void> apagar() => db.delete(
-      'codigo_senha',
-      where: 'id = ?',
-      whereArgs: [registro.id],
-    );
+    Future<void> apagar() =>
+        db.delete('codigo_senha', where: 'id = ?', whereArgs: [registro.id]);
 
     if (registro.vencido(agora)) {
       await apagar();
@@ -1278,6 +1330,10 @@ class DatabaseService {
     return barbeiro.copyWith(senhaHash: novo);
   }
 
+  /// Grava um barbeiro pronto, já com o acesso. Só os testes usam: no app,
+  /// o barbeiro entra pelo convite ([aceitarConviteBarbeiro]) ou pelos dados
+  /// de exemplo.
+  @visibleForTesting
   Future<int> cadastrarBarbeiro(Barbeiro b) async {
     final db = await database;
     final dados = b.toMap()
@@ -1286,17 +1342,258 @@ class DatabaseService {
     return db.insert('barbeiro', dados);
   }
 
-  /// Atualiza o cadastro do profissional.
+  /// O administrador edita o que é dele: nome, especialidade e salário
+  /// (regra de negócio 10). O e-mail, o telefone e a senha são do barbeiro.
   ///
-  /// A disponibilidade (`ativo`) fica de fora de propósito: ela só muda por
+  /// A disponibilidade (`ativo`) também fica de fora: ela só muda por
   /// [definirBarbeiroAtivo]. Antes, salvar o formulário de um barbeiro
   /// indisponível o reativava sem ninguém pedir.
-  Future<int> atualizarBarbeiro(Barbeiro b) async {
+  Future<void> atualizarDadosDoBarbeiro(
+    int id, {
+    required String nome,
+    required String especialidade,
+    required double salario,
+  }) async {
+    final erro = Validators.validarDadosBarbeiro(
+      nome: nome,
+      especialidade: especialidade,
+      salario: salario,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
     final db = await database;
-    final dados = b.toMap()
-      ..remove('ativo')
-      ..['email'] = b.email.trim().toLowerCase();
-    return db.update('barbeiro', dados, where: 'id = ?', whereArgs: [b.id]);
+    final alterados = await db.update(
+      'barbeiro',
+      {
+        'nome': nome.trim(),
+        'especialidade': especialidade.trim(),
+        'iniciais': Barbeiro.iniciaisDe(nome),
+        'salario': salario,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (alterados == 0) {
+      throw const RegraNegocioException('Barbeiro não encontrado');
+    }
+  }
+
+  /// O próprio barbeiro troca o e-mail e o telefone, no Perfil (regra de
+  /// negócio 10). O e-mail continua único no sistema (regra 12).
+  Future<void> atualizarContatoBarbeiro(
+    int id, {
+    required String email,
+    required String telefone,
+  }) async {
+    final erro = Validators.validarContatoBarbeiro(
+      email: email,
+      telefone: telefone,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
+    final normalizado = email.trim().toLowerCase();
+    final db = await database;
+    await db.transaction((txn) async {
+      final dono = await _contaPorEmail(txn, normalizado);
+      if (dono != null && !(dono.tabela == 'barbeiro' && dono.id == id)) {
+        throw const RegraNegocioException('Este e-mail já está cadastrado');
+      }
+      final alterados = await txn.update(
+        'barbeiro',
+        {'email': normalizado, 'telefone': telefone.trim()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (alterados == 0) {
+        throw const RegraNegocioException('Barbeiro não encontrado');
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // CONVITE DO BARBEIRO
+  // -------------------------------------------------------------------------
+
+  /// Convites que ainda não foram usados, vencidos ou não, do mais antigo
+  /// para o mais novo.
+  Future<List<ConviteBarbeiro>> listarConvitesBarbeiro() async {
+    final db = await database;
+    final linhas = await db.query('convite_barbeiro', orderBy: 'id');
+    return linhas.map(ConviteBarbeiro.fromMap).toList();
+  }
+
+  /// O administrador convida um barbeiro (regra de negócio 10): informa nome,
+  /// especialidade e salário e recebe o código, que vale por
+  /// [validadeConviteBarbeiro] e uma vez só. Devolve o convite e o código em
+  /// texto, que não fica gravado.
+  Future<({ConviteBarbeiro convite, String codigo})> criarConviteBarbeiro({
+    required String nome,
+    required String especialidade,
+    required double salario,
+    DateTime? agora,
+  }) async {
+    final erro = Validators.validarDadosBarbeiro(
+      nome: nome,
+      especialidade: especialidade,
+      salario: salario,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
+
+    final momento = agora ?? DateTime.now();
+    final codigo = _novoCodigoConvite();
+    final convite = ConviteBarbeiro(
+      nome: nome.trim(),
+      especialidade: especialidade.trim(),
+      salario: salario,
+      codigoHash: await Senhas.gerarHashEmSegundoPlano(codigo),
+      criadoEm: momento.toIso8601String(),
+      expiraEm: momento.add(validadeConviteBarbeiro).toIso8601String(),
+    );
+    final db = await database;
+    final id = await db.insert(
+      'convite_barbeiro',
+      convite.toMap()..remove('id'),
+    );
+    return (
+      convite: ConviteBarbeiro.fromMap({...convite.toMap(), 'id': id}),
+      codigo: codigo,
+    );
+  }
+
+  /// Gera outro código para o convite [id], com a validade contada de novo.
+  /// O código anterior deixa de valer.
+  Future<({ConviteBarbeiro convite, String codigo})> gerarNovoCodigoDoConvite(
+    int id, {
+    DateTime? agora,
+  }) async {
+    final momento = agora ?? DateTime.now();
+    final codigo = _novoCodigoConvite();
+    final dados = {
+      'codigo_hash': await Senhas.gerarHashEmSegundoPlano(codigo),
+      'criado_em': momento.toIso8601String(),
+      'expira_em': momento.add(validadeConviteBarbeiro).toIso8601String(),
+    };
+    final db = await database;
+    final alterados = await db.update(
+      'convite_barbeiro',
+      dados,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (alterados == 0) {
+      throw const RegraNegocioException('Convite não encontrado');
+    }
+    final linhas = await db.query(
+      'convite_barbeiro',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return (convite: ConviteBarbeiro.fromMap(linhas.first), codigo: codigo);
+  }
+
+  /// Cancela o convite [id]: o código deixa de valer.
+  Future<void> cancelarConviteBarbeiro(int id) async {
+    final db = await database;
+    await db.delete('convite_barbeiro', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// O convite do [codigo] digitado pelo barbeiro, se ainda vale. O código
+  /// é aceito com ou sem o hífen e em minúsculas.
+  Future<ConviteBarbeiro> buscarConvitePorCodigo(
+    String codigo, {
+    DateTime? agora,
+  }) async {
+    final normalizado = ConviteBarbeiro.normalizarCodigo(codigo);
+    if (normalizado.length != ConviteBarbeiro.tamanhoCodigo) {
+      throw const RegraNegocioException(
+        'O código do convite tem ${ConviteBarbeiro.tamanhoCodigo} letras e '
+        'números',
+      );
+    }
+    // Só o hash fica gravado: o código é conferido contra cada convite.
+    // São poucos, os que o administrador ainda não viu serem usados.
+    for (final convite in await listarConvitesBarbeiro()) {
+      if (await Senhas.conferirEmSegundoPlano(
+        normalizado,
+        convite.codigoHash,
+      )) {
+        if (convite.vencido(agora ?? DateTime.now())) {
+          throw const RegraNegocioException(
+            'Este convite venceu. Peça um novo ao administrador',
+          );
+        }
+        return convite;
+      }
+    }
+    throw const RegraNegocioException(
+      'Convite não encontrado. Confira o código ou peça um novo ao '
+      'administrador',
+    );
+  }
+
+  /// O barbeiro usa o convite e cria a própria conta (regra de negócio 10):
+  /// nome, especialidade e salário vêm do convite; e-mail, telefone e senha,
+  /// dele. A conta nova e o fim do convite acontecem na mesma transação, e o
+  /// mesmo código não serve duas vezes. Devolve o barbeiro.
+  Future<Barbeiro> aceitarConviteBarbeiro({
+    required String codigo,
+    required String email,
+    required String telefone,
+    required String senha,
+    DateTime? agora,
+  }) async {
+    final erro = Validators.validarContatoBarbeiro(
+      email: email,
+      telefone: telefone,
+    );
+    if (erro != null) throw RegraNegocioException(erro);
+    if (!Validators.senhaValida(senha)) {
+      throw const RegraNegocioException(
+        'Senha deve ter no mínimo 6 caracteres',
+      );
+    }
+    final momento = agora ?? DateTime.now();
+    final convite = await buscarConvitePorCodigo(codigo, agora: momento);
+    final normalizado = email.trim().toLowerCase();
+    final senhaHash = await Senhas.gerarHashEmSegundoPlano(senha);
+
+    final db = await database;
+    return db.transaction((txn) async {
+      // Gasto o convite primeiro: se outro código foi gerado ou o convite foi
+      // cancelado nesse meio-tempo, nada é apagado e a conta não é criada.
+      final apagados = await txn.delete(
+        'convite_barbeiro',
+        where: 'id = ? AND codigo_hash = ? AND expira_em > ?',
+        whereArgs: [convite.id, convite.codigoHash, momento.toIso8601String()],
+      );
+      if (apagados == 0) {
+        throw const RegraNegocioException(
+          'Este convite não vale mais. Peça um novo ao administrador',
+        );
+      }
+      if (await _contaPorEmail(txn, normalizado) != null) {
+        throw const RegraNegocioException('Este e-mail já está cadastrado');
+      }
+      final barbeiro = Barbeiro(
+        nome: convite.nome,
+        especialidade: convite.especialidade,
+        iniciais: convite.iniciais,
+        telefone: telefone.trim(),
+        email: normalizado,
+        senhaHash: senhaHash,
+        salario: convite.salario,
+      );
+      final id = await txn.insert('barbeiro', barbeiro.toMap()..remove('id'));
+      return barbeiro.copyWith(id: id);
+    });
+  }
+
+  /// Código do convite: [ConviteBarbeiro.tamanhoCodigo] letras e números, de
+  /// um gerador próprio para segredos.
+  static String _novoCodigoConvite() {
+    final aleatorio = Random.secure();
+    return List.generate(
+      ConviteBarbeiro.tamanhoCodigo,
+      (_) => _alfabetoConvite[aleatorio.nextInt(_alfabetoConvite.length)],
+    ).join();
   }
 
   Future<int> excluirBarbeiro(int id) async {
@@ -1353,12 +1650,7 @@ class DatabaseService {
 
   Future<int> atualizarServico(Servico s) async {
     final db = await database;
-    return db.update(
-      'servico',
-      s.toMap(),
-      where: 'id = ?',
-      whereArgs: [s.id],
-    );
+    return db.update('servico', s.toMap(), where: 'id = ?', whereArgs: [s.id]);
   }
 
   Future<int> excluirServico(int id) async {
@@ -1508,14 +1800,15 @@ class DatabaseService {
 
   /// Cliente trazido pelas listagens (colunas `c_*`), só com os dados de
   /// contato: o hash da senha não sai do banco.
-  static Cliente _clienteDaLinha(Map<String, Object?> linha) => Cliente.fromMap({
-    'id': linha['c_id'],
-    'nome': linha['c_nome'],
-    'email': linha['c_email'],
-    'telefone': linha['c_telefone'],
-    'senha_hash': '',
-    'criado_em': linha['c_criado_em'],
-  });
+  static Cliente _clienteDaLinha(Map<String, Object?> linha) =>
+      Cliente.fromMap({
+        'id': linha['c_id'],
+        'nome': linha['c_nome'],
+        'email': linha['c_email'],
+        'telefone': linha['c_telefone'],
+        'senha_hash': '',
+        'criado_em': linha['c_criado_em'],
+      });
 
   /// Agenda de um profissional, com o cliente, o serviço e o pagamento já
   /// carregados.
@@ -1619,8 +1912,7 @@ class DatabaseService {
   Future<int> atualizarStatusAgendamento(
     int id,
     StatusAgendamento status,
-  ) async =>
-      _atualizarStatusAgendamento(await database, id, status);
+  ) async => _atualizarStatusAgendamento(await database, id, status);
 
   Future<int> _atualizarStatusAgendamento(
     DatabaseExecutor db,
@@ -1724,8 +2016,7 @@ class DatabaseService {
     );
     return linhas.map((l) {
       final inicio = DateTime.parse(l['data_hora'] as String);
-      final minutos =
-          (l['duracao_minutos'] as num?)?.toInt() ?? intervaloGrade;
+      final minutos = (l['duracao_minutos'] as num?)?.toInt() ?? intervaloGrade;
       return (inicio: inicio, fim: inicio.add(Duration(minutes: minutos)));
     }).toList();
   }
@@ -1765,9 +2056,11 @@ class DatabaseService {
   }
 
   /// [dia] fica depois do último dia da janela de agendamento?
-  static bool _depoisDaJanela(DateTime dia, DateTime referencia) =>
-      DateTime(dia.year, dia.month, dia.day)
-          .isAfter(ultimoDiaDaAgenda(referencia));
+  static bool _depoisDaJanela(DateTime dia, DateTime referencia) => DateTime(
+    dia.year,
+    dia.month,
+    dia.day,
+  ).isAfter(ultimoDiaDaAgenda(referencia));
 
   /// Confere, sem gravar nada, se o horário ainda pode ser reservado.
   ///
@@ -1919,8 +2212,7 @@ class DatabaseService {
           dataHora: dataHora.toIso8601String(),
           duracaoMinutos: servico.duracaoMinutos,
           preco: servico.preco,
-        ).toMap()
-          ..remove('id'),
+        ).toMap()..remove('id'),
       );
 
       final criadoEm = DateTime.now().toIso8601String();
@@ -2156,16 +2448,15 @@ class DatabaseService {
     );
     if (linhas.isEmpty) return const ResultadoCancelamento(comMulta: false);
 
-    final status = StatusAgendamentoX.fromDb(
-      linhas.first['status'] as String,
-    );
+    final status = StatusAgendamentoX.fromDb(linhas.first['status'] as String);
     if (status != StatusAgendamento.confirmado) {
       throw const RegraNegocioException(
         'Este agendamento já foi encerrado e não pode ser cancelado',
       );
     }
-    final motivo =
-        novoStatus == StatusAgendamento.faltou ? 'falta' : 'cancelamento';
+    final motivo = novoStatus == StatusAgendamento.faltou
+        ? 'falta'
+        : 'cancelamento';
 
     final idCliente = (linhas.first['id_cliente'] as num).toInt();
     final dataHora = DateTime.parse(linhas.first['data_hora'] as String);
@@ -2177,10 +2468,7 @@ class DatabaseService {
 
     await _atualizarStatusAgendamento(txn, idAgendamento, novoStatus);
 
-    final pagamento = await _buscarPagamentoDoAgendamento(
-      txn,
-      idAgendamento,
-    );
+    final pagamento = await _buscarPagamentoDoAgendamento(txn, idAgendamento);
     if (pagamento == null) {
       // Sem pagamento registrado, a multa nasce como pendência.
       if (multa > 0) {
@@ -2322,11 +2610,7 @@ class DatabaseService {
           'O atendimento só pode ser concluído a partir do dia marcado',
         );
       }
-      return _atualizarStatusAgendamento(
-        txn,
-        id,
-        StatusAgendamento.finalizado,
-      );
+      return _atualizarStatusAgendamento(txn, id, StatusAgendamento.finalizado);
     });
   }
 
@@ -2387,8 +2671,9 @@ class DatabaseService {
         ''',
         [pagamento.idAgendamento],
       );
-      final nomeServico =
-          servico.isEmpty ? 'Serviço' : servico.first['nome'] as String;
+      final nomeServico = servico.isEmpty
+          ? 'Serviço'
+          : servico.first['nome'] as String;
 
       await _movimentarPontos(
         txn,

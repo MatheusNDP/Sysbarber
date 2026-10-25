@@ -51,8 +51,8 @@ estas contas e veem a própria agenda e o Perfil (regra 17):
 
 **Marcos Lima começa indisponível**, para demonstrar a regra 14: ele aparece
 apagado na escolha do profissional, mas entra no app normalmente. Desmarcada a
-opção, a barbearia começa vazia, e o administrador cadastra os próprios
-serviços e barbeiros.
+opção, a barbearia começa vazia: o administrador cadastra os próprios
+serviços e convida os barbeiros (regra 10).
 
 Contas criadas pelo formulário de cadastro nascem **sempre como cliente
 comum** e não enxergam a área administrativa.
@@ -148,18 +148,18 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **287 testes** no total:
+São **312 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
-| `test/unit_test.dart` | 24 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele), enums e regras de estado do agendamento |
-| `test/validators_test.dart` | 20 | Validação de cadastro, telefone, barbeiro e cartão (Luhn) |
-| `test/formatters_test.dart` | 17 | Máscaras de telefone, moeda e cartão (até 19 dígitos, Amex), `formatarReal`, `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
+| `test/unit_test.dart` | 25 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele, e do convite do barbeiro, com o código digitado), enums e regras de estado do agendamento |
+| `test/validators_test.dart` | 21 | Validação de cadastro, telefone, dados e contato do barbeiro e cartão (Luhn) |
+| `test/formatters_test.dart` | 19 | Máscaras de telefone, moeda, cartão (até 19 dígitos, Amex) e código do convite, `formatarReal`, `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 53 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro e os filtros da agenda geral (select de barbeiro e calendário de período) |
-| `integration_test/database_integration_test.dart` | 160 | Configuração inicial, CRUD, agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail, sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, e o barbeiro troca a própria senha) e migrações |
+| `test/telas_test.dart` | 59 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, e o barbeiro trocando o próprio e-mail e telefone |
+| `integration_test/database_integration_test.dart` | 175 | Configuração inicial, CRUD, convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -168,7 +168,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 287 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 312 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -204,7 +204,7 @@ lib/
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
 │   └── booking_flow.dart        # Rascunho do agendamento em andamento
 ├── widgets/common_widgets.dart  # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-└── screens/                     # 20 telas (uma por arquivo)
+└── screens/                     # 21 telas (uma por arquivo)
 ```
 
 **Padrões aplicados**
@@ -229,15 +229,17 @@ lib/
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
-  (`abrirLink`, que por padrão usa o pacote `url_launcher`), e a agenda geral
+  (`abrirLink`, que por padrão usa o pacote `url_launcher`), a agenda geral
   recebe quem abre o calendário do período (`escolherPeriodo`, que por padrão
-  usa o calendário do Material); os testes trocam os dois por falsos.
+  usa o calendário do Material), e Gerenciar Barbeiros, quem abre o menu de
+  compartilhar do convite (`compartilhar`, que por padrão usa o pacote
+  `share_plus`); os testes trocam os três por falsos.
 
 ---
 
 ## Banco de dados
 
-8 tabelas relacionais criadas automaticamente, vazias, na primeira execução
+9 tabelas relacionais criadas automaticamente, vazias, na primeira execução
 (`sysbarber.db`, no diretório de documentos do app). O administrador e, se o
 dono quiser, os dados de exemplo nascem na configuração inicial (veja
 [Primeiro acesso](#primeiro-acesso)).
@@ -250,12 +252,18 @@ cliente ──┬──< agendamento >──── barbeiro ──┐
           ├──── fidelidade                  │
           ├──< historico_ponto              │
           └──── codigo_senha ───────────────┘
+
+convite_barbeiro   (vira um barbeiro quando o código é usado)
 ```
 
 `codigo_senha` guarda os códigos para criar uma senha nova (regra 16): cada
 um é de um cliente ou de um barbeiro, e cada conta tem no máximo um.
+`convite_barbeiro` guarda os convites que o administrador gera (regra 10):
+nome, especialidade, salário, o hash do código e a validade. Ele não se liga
+a outra tabela: quando o barbeiro usa o código, o convite é apagado e o
+barbeiro entra na tabela `barbeiro`, na mesma transação.
 
-Versão atual do schema: **v6**. Um banco de qualquer versão anterior é
+Versão atual do schema: **v7**. Um banco de qualquer versão anterior é
 migrado sem perder dados (há testes que partem de um banco montado no formato
 v2):
 
@@ -266,6 +274,7 @@ v2):
 | v4 | Disponibilidade do barbeiro para novos agendamentos |
 | v5 | Natureza do pagamento (serviço, multa, estorno, resgate); duração e preço registrados no agendamento; índice único por barbeiro e horário; e-mail de barbeiro único; índices de consulta. Os dois índices únicos só são criados se o banco antigo não tiver duplicados; sem eles, a reserva e o cadastro de barbeiro continuam conferindo no app |
 | v6 | Tabela `codigo_senha`, com os códigos da recuperação de senha |
+| v7 | Tabela `convite_barbeiro`, com os convites do barbeiro |
 
 ---
 
@@ -312,17 +321,35 @@ v2):
    ação.
 9. Preço e duração ficam registrados no agendamento: reajustar um serviço não
    muda multa nem histórico de quem já marcou.
-10. O administrador cadastra, edita e exclui serviços e barbeiros, liga e
-    desliga a disponibilidade dos barbeiros e consulta os clientes (sem
-    editar os dados deles), podendo liberar uma nova senha para quem a
-    esqueceu (regra 16). Serviço ou barbeiro com agendamentos não pode ser
-    excluído: os atendimentos sumiriam do histórico dos clientes.
+10. O administrador cadastra, edita e exclui serviços; convida, edita e
+    exclui barbeiros e liga e desliga a disponibilidade deles; e consulta os
+    clientes (sem editar os dados deles). Ele pode liberar uma nova senha
+    para o cliente ou o barbeiro que a esqueceu (regra 16). Serviço ou
+    barbeiro com agendamentos não pode ser excluído: os atendimentos
+    sumiriam do histórico dos clientes.
+
+    O barbeiro entra pelo **convite**. Em Gerenciar Barbeiros, o
+    administrador informa nome, especialidade e salário e recebe um código
+    de 8 letras e números (sem 0, O, 1, I e L, que se confundem), que vale
+    por 7 dias e uma vez só. Ele envia o código pelo botão Compartilhar, que
+    abre o menu do aparelho (WhatsApp ou outro app) com uma mensagem pronta,
+    ou o copia. No login, em "Tenho um convite de barbeiro", o barbeiro
+    digita o código e cria a conta com e-mail, telefone e senha. Enquanto o
+    convite não é usado, ele aparece só em "Convites pendentes", e o cliente
+    não pode agendar com ele. Gerar outro código cancela o anterior e conta a
+    validade de novo; o convite também pode ser cancelado. Depois, o
+    administrador edita só nome, especialidade e salário: o e-mail, o
+    telefone e a senha são do barbeiro, que muda o e-mail e o telefone no
+    Perfil. O banco confere a validade, o uso único e os dados, e a conta
+    nova e o fim do convite acontecem na mesma transação.
 11. Senhas nunca são armazenadas em texto puro — PBKDF2 com salt individual.
-    O mesmo vale para os códigos da recuperação de senha (regra 16).
+    O mesmo vale para os códigos da recuperação de senha (regra 16) e do
+    convite do barbeiro (regra 10).
 12. E-mail é único no sistema: não se repete entre clientes, entre barbeiros
     nem entre um cliente e um barbeiro. No banco, cada tabela tem o próprio
     índice único; o cruzamento entre as duas é conferido pelo app no cadastro
-    e pelo banco na configuração inicial.
+    do cliente e pelo banco na configuração inicial, no convite do barbeiro e
+    quando o barbeiro troca o e-mail.
 13. Confirmar o recebimento (informando Pix, Cartão ou Dinheiro), concluir o
     atendimento e registrar falta são ações da barbearia: o barbeiro faz isso
     na própria agenda, e o administrador, na agenda geral, para qualquer
@@ -353,9 +380,10 @@ v2):
       [Recuperação de senha por e-mail](#recuperação-de-senha-por-e-mail-emailjs));
       sem isso, ele é simulado. O SMS é sempre simulado, como o Pix e o
       cartão. Simulados, o e-mail e o SMS aparecem na própria tela;
-    - **pela barbearia:** o cliente pede no balcão, e o administrador, no
-      detalhe do cliente em Gerenciar Clientes, libera um código provisório,
-      que vale por 24 horas. O cliente entra com o e-mail e esse código no
+    - **pela barbearia:** a pessoa pede ao administrador, que libera um
+      código provisório, válido por 24 horas: para o cliente, no detalhe
+      dele em Gerenciar Clientes; para o barbeiro, em Editar barbeiro, em
+      Gerenciar Barbeiros. Quem recebe entra com o e-mail e esse código no
       lugar da senha e é obrigado a criar uma senha nova antes de usar o
       app; o administrador não fica sabendo dela. Os códigos do e-mail e do
       SMS não servem para entrar pelo login.
@@ -363,8 +391,7 @@ v2):
     Os códigos valem uma vez só e são cancelados depois de 5 tentativas
     erradas. Cada conta tem no máximo um código valendo: um novo, de
     qualquer canal, substitui o anterior. Se o e-mail não sai (sem internet,
-    por exemplo), o código é descartado. O banco confere tudo isso. O barbeiro também pode receber uma
-    senha nova do administrador, em Gerenciar Barbeiros.
+    por exemplo), o código é descartado. O banco confere tudo isso.
 17. Cada perfil vê só as próprias telas (veja [Navegação](#navegação)):
     - **cliente:** agenda, paga, acompanha os próprios agendamentos e os
       pontos (Fidelidade) e mantém os dados no Perfil;
@@ -373,8 +400,9 @@ v2):
       pontos ou Fidelidade: o banco recusa a reserva feita pela conta dele.
       Ele também não conta como cliente: fica fora de Gerenciar Clientes e
       das contagens de clientes e de pontos do painel e dos relatórios;
-    - **barbeiro:** vê a própria agenda e o Perfil, com os dados dele e a
-      troca da própria senha (o banco confere a atual), sem Suporte.
+    - **barbeiro:** vê a própria agenda e o Perfil, com os dados dele, a
+      troca do próprio e-mail e telefone (regra 10) e da própria senha (o
+      banco confere a atual), sem Suporte.
 
 ---
 
@@ -382,7 +410,7 @@ v2):
 
 - **Senhas:** PBKDF2-HMAC-SHA256, 50 mil iterações, salt aleatório de 16 bytes
   por conta, comparação em tempo constante. No login, no cadastro, na
-  configuração inicial, na troca e na recuperação de senha e no cadastro de
+  configuração inicial, na troca e na recuperação de senha e no convite do
   barbeiro, o hash é calculado em outro isolate, sem travar a tela (só a migração de bancos
   antigos calcula antes de a tela abrir). Hashes
   do formato antigo (SHA-256 com salt fixo) ainda entram e são **regravados
@@ -396,6 +424,11 @@ v2):
   cancelam. O e-mail vai só para o endereço da própria conta; o SMS só sai
   quando o e-mail e o celular são da mesma conta; e sai no máximo um código
   por minuto. Liberar uma nova senha confere se quem pede é o administrador.
+- **Convite do barbeiro:** o código sai do mesmo gerador para segredos, tem
+  8 letras e números e fica guardado só como hash PBKDF2; o administrador o
+  vê uma vez, ao gerar. Usar o convite apaga o registro na mesma transação
+  que cria a conta, e só se o código ainda for o mesmo e estiver valendo:
+  um código trocado, cancelado ou vencido não cria a conta.
 - **EmailJS:** o app leva só a chave pública, que fica fora do Git e entra no
   build. O texto do e-mail está no modelo da conta do EmailJS, então quem
   extrair a chave do APK só consegue disparar esse mesmo e-mail com código,
@@ -423,7 +456,8 @@ v2):
 |---|---|---|
 | `/` | Splash — entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
 | `/configuracao` | Configuração inicial: cria o administrador e, se marcado, os dados de exemplo | só antes de existir o administrador |
-| `/login` | Login, com "Esqueci minha senha" | todos |
+| `/login` | Login, com "Esqueci minha senha" e "Tenho um convite de barbeiro" | todos |
+| `/convite-barbeiro` | Convite de barbeiro: o código que o administrador enviou e, conferido, a conta (e-mail, telefone e senha); já entra na agenda | todos |
 | `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta (já entra logado) | todos |
 | `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o acesso rápido | todos os perfis |
@@ -434,7 +468,7 @@ v2):
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
-| `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro vê a especialidade | todos os perfis |
+| `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro vê a especialidade e edita o e-mail e o telefone | todos os perfis |
 | `/admin` | Painel administrativo (também é a aba Painel): movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
 
 Nas rotas marcadas "cliente", o administrador não entra: ele só gerencia
@@ -448,7 +482,7 @@ elas; a agenda geral e os relatórios também são abas dele):
 |---|---|
 | Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa). Dois filtros, que valem para as duas abas (em aberto e histórico): o barbeiro, num select, e o período, de um dia até outro, escolhido no calendário (que vai até o último dia que aceita reserva). O período escolhido aparece embaixo, com o botão de limpar |
 | Gerenciar Serviços | Cadastrar, editar e excluir serviços. O ícone do serviço é escolhido entre cinco ícones de linha (corte, barba, combo, hidratação e coloração) |
-| Gerenciar Barbeiros | Cadastrar, editar e excluir barbeiros e ligar ou desligar a disponibilidade |
+| Gerenciar Barbeiros | Convidar barbeiros (o + abre um sheet: nome, especialidade e salário, depois o código, com Compartilhar e Copiar código), convites pendentes (gerar outro código e cancelar), editar nome, especialidade e salário, liberar uma nova senha para o barbeiro, excluir e ligar ou desligar a disponibilidade |
 | Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
 | Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e rankings: formas de pagamento, 5 serviços mais procurados e 5 barbeiros mais requisitados. Recortes: este mês, mês passado ou tudo |
 
@@ -561,8 +595,19 @@ Login → Esqueci minha senha → e-mail → por e-mail: código no e-mail (Emai
                                                        │
                                      código + senha nova → entra no app
 
-Gerenciar Clientes → Liberar nova senha → código provisório, entregue no balcão
+Gerenciar Clientes (ou Editar barbeiro) → Liberar nova senha → código provisório
 Login com o e-mail e o código → Crie sua nova senha → entra no app
+```
+
+Convite do barbeiro (regra 10):
+
+```
+Gerenciar Barbeiros → + → nome, especialidade e salário → código → Compartilhar
+                                                              │
+Login → Tenho um convite de barbeiro → código → e-mail, telefone e senha
+                                                              │
+                              conta criada e convite gasto na mesma transação
+                              → Minha agenda
 ```
 
 ---
@@ -588,7 +633,7 @@ Login com o e-mail e o código → Crie sua nova senha → entra no app
   central, o envio sairia dele.
 - O celular e o e-mail não são confirmados no cadastro: o código vai para o
   que a pessoa informou, mesmo errado. Nesse caso, o administrador libera uma
-  nova senha para o cliente, ou define uma para o barbeiro.
+  nova senha para o cliente ou para o barbeiro.
 - Não há troca de e-mail nem exclusão de conta pelo próprio cliente.
 - O build de release ainda é assinado com a chave de debug (é preciso criar
   um keystore próprio antes de publicar).

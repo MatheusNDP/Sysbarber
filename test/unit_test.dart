@@ -234,6 +234,29 @@ void main() {
     });
   });
 
+  group('Entidade ConviteBarbeiro', () {
+    const convite = ConviteBarbeiro(
+      id: 4,
+      nome: 'Pedro Alves',
+      especialidade: 'Degradê',
+      salario: 2400,
+      codigoHash: 'hash',
+      criadoEm: '2030-03-04T10:00:00.000',
+      expiraEm: '2030-03-11T10:00:00.000',
+    );
+
+    test('vai e volta pelo banco, vence no fim da validade e normaliza o '
+        'código digitado', () {
+      final lido = ConviteBarbeiro.fromMap(convite.toMap());
+      expect(lido.nome, 'Pedro Alves');
+      expect(lido.salario, 2400);
+      expect(lido.iniciais, 'PA');
+      expect(convite.vencido(DateTime(2030, 3, 11, 9, 59)), isFalse);
+      expect(convite.vencido(DateTime(2030, 3, 11, 10)), isTrue);
+      expect(ConviteBarbeiro.normalizarCodigo(' k7mp-q2xr '), 'K7MPQ2XR');
+    });
+  });
+
   group('Regras de estado do Agendamento', () {
     Agendamento em(DateTime quando, [StatusAgendamento? status]) =>
         Agendamento(
