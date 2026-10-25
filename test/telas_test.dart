@@ -602,6 +602,10 @@ void main() {
 
   testWidgets('a agenda geral mostra os atendimentos de todos os barbeiros, '
       'com as ações da barbearia', (tester) async {
+    // Tela alta: com os filtros no topo, os dois cards cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await adminLogado(tester);
     await tester.runAsync(() async {
       final idCliente = await cadastrarClienteTeste();
@@ -1668,6 +1672,114 @@ void main() {
 
     expect(find.text('Convite para Pedro Alves'), findsNothing);
     expect(find.text('Convite pendente'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // Filtros da agenda geral
+  // -------------------------------------------------------------------------
+
+  /// Atendimentos de amanhã (Carlos e Rafael) e de depois de amanhã (Carlos)
+  /// para os filtros da agenda geral.
+  Future<(DateTime, DateTime)> atendimentosParaFiltrar(
+    WidgetTester tester,
+  ) async {
+    final amanha = DateTime.now().add(const Duration(days: 1));
+    final depois = DateTime.now().add(const Duration(days: 2));
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      for (final (idBarbeiro, dia, hora) in [
+        (1, amanha, 9),
+        (2, amanha, 10),
+        (1, depois, 9),
+      ]) {
+        await service.criarAgendamento(
+          Agendamento(
+            idCliente: idCliente,
+            idBarbeiro: idBarbeiro,
+            idServico: 1,
+            dataHora: DateTime(
+              dia.year,
+              dia.month,
+              dia.day,
+              hora,
+            ).toIso8601String(),
+          ),
+        );
+      }
+    });
+    return (amanha, depois);
+  }
+
+  /// Tela alta: os três atendimentos cabem sem rolar.
+  void telaAlta(WidgetTester tester) {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
+
+  testWidgets('a agenda geral filtra pelo barbeiro escolhido no select', (
+    tester,
+  ) async {
+    telaAlta(tester);
+    await adminLogado(tester);
+    await atendimentosParaFiltrar(tester);
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+    expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
+    expect(find.text('com Rafael Souza'), findsOneWidget);
+
+    // Antes não havia filtro: era preciso achar o nome em cada card.
+    await tester.tap(find.byType(DropdownButton<int?>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Carlos Eduardo').last);
+    await tester.pumpAndSettle();
+    expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
+    expect(find.text('com Rafael Souza'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o calendário da agenda geral filtra por período, de um dia até '
+      'outro, e o período pode ser limpo', (tester) async {
+    telaAlta(tester);
+    await adminLogado(tester);
+    final (amanha, depois) = await atendimentosParaFiltrar(tester);
+    DateTimeRange? recebido;
+    await abrir(
+      tester,
+      AgendamentosScreen(
+        agendaGeral: true,
+        // No lugar do calendário: escolhe só amanhã.
+        escolherPeriodo: (_, atual) async {
+          recebido = atual;
+          return DateTimeRange(start: amanha, end: amanha);
+        },
+      ),
+    );
+
+    await tester.tap(find.bySemanticsLabel('Escolher período'));
+    await tester.pump();
+    expect(recebido, isNull);
+    expect(find.text('com Carlos Eduardo'), findsOneWidget);
+    expect(find.text('com Rafael Souza'), findsOneWidget);
+    expect(find.text(formatarDataCurta(amanha)), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Limpar período'));
+    await tester.pump();
+    expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
+    expect(find.text(formatarDataCurta(depois)), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o botão do calendário abre o calendário de período', (
+    tester,
+  ) async {
+    await adminLogado(tester);
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+
+    await tester.tap(find.bySemanticsLabel('Escolher período'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DateRangePickerDialog), findsOneWidget);
+    expect(find.text('Escolha o período'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
   });
 }

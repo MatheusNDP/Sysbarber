@@ -197,6 +197,48 @@ class AppTheme {
               : AppColors.muted,
         ),
       ),
+      // Calendário (período da agenda geral) com as cores do app.
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: AppColors.dark,
+        surfaceTintColor: Colors.transparent,
+        headerBackgroundColor: AppColors.dark,
+        headerForegroundColor: AppColors.text,
+        rangePickerBackgroundColor: AppColors.background,
+        rangePickerSurfaceTintColor: Colors.transparent,
+        rangePickerHeaderBackgroundColor: AppColors.background,
+        rangePickerHeaderForegroundColor: AppColors.text,
+        rangeSelectionBackgroundColor: AppColors.amarelo.withValues(
+          alpha: 0.18,
+        ),
+        dayForegroundColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? Colors.black
+              : s.contains(WidgetState.disabled)
+              ? AppColors.muted.withValues(alpha: 0.4)
+              : AppColors.text,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? AppColors.amarelo
+              : Colors.transparent,
+        ),
+        todayForegroundColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? Colors.black
+              : AppColors.amarelo,
+        ),
+        todayBackgroundColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? AppColors.amarelo
+              : Colors.transparent,
+        ),
+        todayBorder: const BorderSide(color: AppColors.amarelo),
+        dayStyle: texto(size: 13),
+        weekdayStyle: texto(size: 12, color: AppColors.muted),
+        headerHeadlineStyle: titulo(size: 22),
+        headerHelpStyle: texto(size: 13, color: AppColors.muted),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.card2,

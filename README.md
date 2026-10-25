@@ -3,11 +3,12 @@
 Trabalho de Conclusão de Curso — Engenharia de Software.
 Aplicativo mobile em **Flutter/Dart** com banco **SQLite local** (sem Firebase) e
 autenticação própria com senhas em **PBKDF2-HMAC-SHA256** e salt individual.
-Todos os dados ficam no aparelho: o sistema completo funciona em **um aparelho
-compartilhado** (veja [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)).
+O SysBarber é pensado para funcionar **online**, cada pessoa no próprio
+celular; neste trabalho, o servidor é **simulado** pelo banco do próprio
+aparelho (veja [Pensado para ser online](#pensado-para-ser-online)).
 
-**Por que "portátil":** o SysBarber é 100% mobile, sem versão web, e a
-barbearia inteira funciona num celular ou tablet. É feito para barbearias
+**Por que "portátil":** o SysBarber é 100% mobile, sem versão web: cliente,
+barbeiro e administrador fazem tudo pelo celular. É feito para barbearias
 pequenas e médias em fase de crescimento, que não têm verba para sistemas
 grandes.
 
@@ -99,41 +100,45 @@ jeito, mas o e-mail é **simulado**: a mensagem aparece na própria tela.
 O app usa só a chave **pública** do EmailJS; nenhuma chave privada vai no
 APK.
 
-### Funciona offline
+### Uso da internet
 
-A única requisição de rede do app é o envio do e-mail da recuperação de senha,
-quando o EmailJS está configurado. Todo o resto funciona sem internet: o banco
-é local (SQLite) e a fonte **Montserrat** está
-embarcada no APK (`assets/fonts/`, declarada em `pubspec.yaml`), e não
-baixada em tempo de execução. A identidade visual fica idêntica com ou sem
-internet — importante para a apresentação. O SMS da recuperação de senha é
-simulado (regra 16). Os botões do [Suporte](#suporte), no Perfil, também não
-fazem requisição: só abrem o WhatsApp ou o app de e-mail do aparelho, e são
-eles que usam a internet.
+Como o servidor é simulado no aparelho, a única requisição de rede do app é o
+envio do e-mail da recuperação de senha, quando o EmailJS está configurado.
+Todo o resto funciona sem internet: o banco é local (SQLite) e a fonte
+**Montserrat** está embarcada no APK (`assets/fonts/`, declarada em
+`pubspec.yaml`), e não baixada em tempo de execução. A identidade visual fica
+idêntica com ou sem internet — importante para a apresentação. O SMS da
+recuperação de senha é simulado (regra 16). Os botões do [Suporte](#suporte),
+no Perfil, também não fazem requisição: só abrem o WhatsApp ou o app de e-mail
+do aparelho, e são eles que usam a internet.
 
-### Os dados ficam no aparelho
+### Pensado para ser online
 
-Não existe servidor. Clientes, barbeiros, serviços, agendamentos, pagamentos e
-pontos ficam no arquivo `sysbarber.db`, guardado no próprio aparelho onde o app
-está instalado. Isso tem três consequências:
+O SysBarber é pensado para funcionar online: cada pessoa (cliente, barbeiro e
+administrador) usa o app no próprio celular, e um servidor central guarda os
+dados da barbearia. Neste trabalho o servidor não foi feito: o banco do
+próprio aparelho faz o papel dele, simulado, como o Pix, o cartão e o SMS da
+recuperação de senha.
+
+Clientes, barbeiros, serviços, agendamentos, pagamentos e pontos ficam no
+arquivo `sysbarber.db`, guardado no aparelho onde o app está instalado. Na
+prática:
 
 - **Cada instalação é uma barbearia separada.** O banco é criado na primeira
-  abertura do app. O mesmo app instalado em dois celulares gera dois
-  bancos que não se comunicam: o que é cadastrado num não aparece no outro. O
-  cliente que instala o app no próprio celular não vê os barbeiros nem os
-  horários cadastrados no aparelho da barbearia.
-- **O sistema completo funciona em um aparelho compartilhado**, por exemplo um
-  tablet no balcão: clientes, barbeiros e administrador usam o mesmo aparelho,
-  cada um entrando com a própria conta. É assim que o app é demonstrado, no
-  emulador.
-- **Cada pessoa precisa sair da conta ao terminar.** A sessão fica salva, e o
-  app reabre direto na última conta usada. Num aparelho compartilhado, quem
-  termina toca em **Sair**, no Perfil (o barbeiro também tem o ícone de saída
-  na própria agenda).
+  abertura do app. O mesmo app instalado em dois celulares gera dois bancos
+  que não se comunicam: o que é cadastrado num não aparece no outro. Por isso,
+  na demonstração (no emulador), clientes, barbeiros e administrador usam o
+  mesmo aparelho, cada um entrando com a própria conta.
+- **Cada pessoa sai da conta ao terminar.** A sessão fica salva, e o app
+  reabre direto na última conta usada. Como na demonstração todos usam o mesmo
+  aparelho, quem termina toca em **Sair**, no Perfil (o barbeiro também tem o
+  ícone de saída na própria agenda).
 
-Levar o app para o celular de cada cliente exige um servidor central, com o
-banco na nuvem e sincronização entre os aparelhos. Isso fica fora do escopo
-deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
+O `DatabaseService` é a camada que o servidor substituiria: nenhuma tela
+executa SQL, e as regras de negócio são conferidas por ele (veja
+[Arquitetura](#arquitetura)). Fazer o servidor, com o banco na nuvem e os
+dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
+(veja [Limitações conhecidas](#limitações-conhecidas)).
 
 ---
 
@@ -143,7 +148,7 @@ deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
 flutter test
 ```
 
-São **309 testes** no total:
+São **312 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -153,7 +158,7 @@ São **309 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 56 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, e o barbeiro trocando o próprio e-mail e telefone |
+| `test/telas_test.dart` | 59 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, e o barbeiro trocando o próprio e-mail e telefone |
 | `integration_test/database_integration_test.dart` | 175 | Configuração inicial, CRUD, convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -163,7 +168,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 309 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 312 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -224,9 +229,11 @@ lib/
 - **Injeção de dependência para teste** — `injetarBancoParaTeste()` troca o
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
-  (`abrirLink`, que por padrão usa o pacote `url_launcher`), e Gerenciar
-  Barbeiros, quem abre o menu de compartilhar do convite (`compartilhar`, que
-  por padrão usa o pacote `share_plus`); os testes os trocam por falsos.
+  (`abrirLink`, que por padrão usa o pacote `url_launcher`), a agenda geral
+  recebe quem abre o calendário do período (`escolherPeriodo`, que por padrão
+  usa o calendário do Material), e Gerenciar Barbeiros, quem abre o menu de
+  compartilhar do convite (`compartilhar`, que por padrão usa o pacote
+  `share_plus`); os testes trocam os três por falsos.
 
 ---
 
@@ -473,7 +480,7 @@ elas; a agenda geral e os relatórios também são abas dele):
 
 | Tela | O que faz |
 |---|---|
-| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa) |
+| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa). Dois filtros, que valem para as duas abas (em aberto e histórico): o barbeiro, num select, e o período, de um dia até outro, escolhido no calendário (que vai até o último dia que aceita reserva). O período escolhido aparece embaixo, com o botão de limpar |
 | Gerenciar Serviços | Cadastrar, editar e excluir serviços. O ícone do serviço é escolhido entre cinco ícones de linha (corte, barba, combo, hidratação e coloração) |
 | Gerenciar Barbeiros | Convidar barbeiros (o + abre um sheet: nome, especialidade e salário, depois o código, com Compartilhar e Copiar código), convites pendentes (gerar outro código e cancelar), editar nome, especialidade e salário, liberar uma nova senha para o barbeiro, excluir e ligar ou desligar a disponibilidade |
 | Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
@@ -533,6 +540,10 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
 O ícone de cada serviço continua gravado no banco como um emoji (os dados de
 exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
 correspondente, e um valor fora dessa lista aparece como a tesoura.
+
+Os textos prontos do Material, como os do calendário e os menus de copiar e
+colar, ficam em português: o app usa as traduções do Flutter
+(`flutter_localizations`), em pt_BR.
 
 ### Suporte
 
@@ -603,12 +614,11 @@ Login → Tenho um convite de barbeiro → código → e-mail, telefone e senha
 
 ## Limitações conhecidas
 
-- Não há servidor: os dados não são compartilhados entre aparelhos, e cada
-  instalação é uma barbearia separada. O sistema completo funciona em um
-  aparelho compartilhado (veja
-  [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)). Para clientes e
-  barbearia usarem aparelhos diferentes, seria preciso um servidor central com
-  sincronização — trabalho futuro.
+- O servidor central não foi feito: o banco do aparelho faz o papel dele (veja
+  [Pensado para ser online](#pensado-para-ser-online)). Os dados não são
+  compartilhados entre aparelhos, e cada instalação é uma barbearia separada.
+  Para cada pessoa usar o app no próprio celular, falta o servidor, com o
+  banco na nuvem — trabalho futuro.
 - Valores em dinheiro são `REAL` no SQLite; multa e estorno são arredondados
   para centavos, mas a migração completa para centavos inteiros não foi feita.
 - Os dias de funcionamento, os turnos, a grade e a janela de agendamento são
