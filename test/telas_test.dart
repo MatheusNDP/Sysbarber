@@ -1638,4 +1638,36 @@ void main() {
     expect(AuthService.instance.barbeiroAtual!.email, 'rafael@barbearia.com');
     await tester.runAsync(AuthService.instance.logout);
   });
+
+  testWidgets('fechar o sheet pelo voltar, sem "Concluir", também mostra o '
+      'convite pendente', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    await tocarEsperando(tester, find.byTooltip('Convidar barbeiro'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome completo'),
+      'Pedro Alves',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Especialidade'),
+      'Degradê',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Salário (R\$)'),
+      '240000',
+    );
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+    expect(codigoNaTela, findsOneWidget);
+
+    // O voltar do Android fecha o sheet.
+    await tester.binding.handlePopRoute();
+    await esperarBanco(tester);
+
+    expect(find.text('Convite para Pedro Alves'), findsNothing);
+    expect(find.text('Convite pendente'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
 }

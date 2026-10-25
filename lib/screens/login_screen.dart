@@ -187,6 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: AppTheme.texto(
                           size: 13,
                           weight: FontWeight.w600,
+                          color: AppColors.muted,
                         ),
                       ),
                       style: TextButton.styleFrom(

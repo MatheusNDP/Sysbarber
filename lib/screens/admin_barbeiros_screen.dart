@@ -81,14 +81,16 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
   Future<void> _abrirSheet({
     ({ConviteBarbeiro convite, String codigo})? gerado,
   }) async {
-    final mudou = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) =>
           _ConviteSheet(gerado: gerado, compartilhar: widget.compartilhar),
     );
-    if ((mudou == true || gerado != null) && mounted) await _carregar();
+    // O convite já foi gravado ao gerar o código: recarrega mesmo se o sheet
+    // foi fechado pelo voltar ou por um toque fora, sem "Concluir".
+    if (mounted) await _carregar();
   }
 
   /// Outro código para o convite: o anterior deixa de valer.
@@ -373,29 +375,43 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
           _linha(Icons.payments_outlined, formatarReal(c.salario)),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 8,
+            spacing: 4,
             children: [
-              TextButton.icon(
-                onPressed: () => _novoCodigo(c),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(
-                  'Gerar outro código',
-                  style: AppTheme.texto(size: 13, weight: FontWeight.w600),
-                ),
-                style: TextButton.styleFrom(foregroundColor: AppColors.amarelo),
+              _acaoConvite(
+                'Gerar outro código',
+                Icons.refresh_rounded,
+                AppColors.amarelo,
+                () => _novoCodigo(c),
               ),
-              TextButton.icon(
-                onPressed: () => _cancelarConvite(c),
-                icon: const Icon(Icons.close_rounded, size: 18),
-                label: Text(
-                  'Cancelar convite',
-                  style: AppTheme.texto(size: 13, weight: FontWeight.w600),
-                ),
-                style: TextButton.styleFrom(foregroundColor: AppColors.red),
+              _acaoConvite(
+                'Cancelar convite',
+                Icons.close_rounded,
+                AppColors.red,
+                () => _cancelarConvite(c),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _acaoConvite(
+    String texto,
+    IconData icone,
+    Color cor,
+    VoidCallback onPressed,
+  ) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icone, size: 18),
+      label: Text(
+        texto,
+        style: AppTheme.texto(size: 13, weight: FontWeight.w600, color: cor),
+      ),
+      style: TextButton.styleFrom(
+        foregroundColor: cor,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
       ),
     );
   }
@@ -665,7 +681,7 @@ class _ConviteSheetState extends State<_ConviteSheet> {
         ),
         const SizedBox(height: 4),
         TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
+          onPressed: () => Navigator.of(context).pop(),
           child: Text(
             'Concluir',
             style: AppTheme.texto(size: 14, color: AppColors.muted),
@@ -796,7 +812,11 @@ class _FormularioBarbeiroState extends State<_FormularioBarbeiro> {
                 icon: const Icon(Icons.key_outlined, size: 18),
                 label: Text(
                   'Liberar nova senha',
-                  style: AppTheme.texto(size: 13, weight: FontWeight.w600),
+                  style: AppTheme.texto(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.amarelo,
+                  ),
                 ),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.amarelo,
