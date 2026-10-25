@@ -3,11 +3,12 @@
 Trabalho de Conclusão de Curso — Engenharia de Software.
 Aplicativo mobile em **Flutter/Dart** com banco **SQLite local** (sem Firebase) e
 autenticação própria com senhas em **PBKDF2-HMAC-SHA256** e salt individual.
-Todos os dados ficam no aparelho: o sistema completo funciona em **um aparelho
-compartilhado** (veja [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)).
+O SysBarber é pensado para funcionar **online**, cada pessoa no próprio
+celular; neste trabalho, o servidor é **simulado** pelo banco do próprio
+aparelho (veja [Pensado para ser online](#pensado-para-ser-online)).
 
-**Por que "portátil":** o SysBarber é 100% mobile, sem versão web, e a
-barbearia inteira funciona num celular ou tablet. É feito para barbearias
+**Por que "portátil":** o SysBarber é 100% mobile, sem versão web: cliente,
+barbeiro e administrador fazem tudo pelo celular. É feito para barbearias
 pequenas e médias em fase de crescimento, que não têm verba para sistemas
 grandes.
 
@@ -99,41 +100,45 @@ jeito, mas o e-mail é **simulado**: a mensagem aparece na própria tela.
 O app usa só a chave **pública** do EmailJS; nenhuma chave privada vai no
 APK.
 
-### Funciona offline
+### Uso da internet
 
-A única requisição de rede do app é o envio do e-mail da recuperação de senha,
-quando o EmailJS está configurado. Todo o resto funciona sem internet: o banco
-é local (SQLite) e a fonte **Montserrat** está
-embarcada no APK (`assets/fonts/`, declarada em `pubspec.yaml`), e não
-baixada em tempo de execução. A identidade visual fica idêntica com ou sem
-internet — importante para a apresentação. O SMS da recuperação de senha é
-simulado (regra 16). Os botões do [Suporte](#suporte), no Perfil, também não
-fazem requisição: só abrem o WhatsApp ou o app de e-mail do aparelho, e são
-eles que usam a internet.
+Como o servidor é simulado no aparelho, a única requisição de rede do app é o
+envio do e-mail da recuperação de senha, quando o EmailJS está configurado.
+Todo o resto funciona sem internet: o banco é local (SQLite) e a fonte
+**Montserrat** está embarcada no APK (`assets/fonts/`, declarada em
+`pubspec.yaml`), e não baixada em tempo de execução. A identidade visual fica
+idêntica com ou sem internet — importante para a apresentação. O SMS da
+recuperação de senha é simulado (regra 16). Os botões do [Suporte](#suporte),
+no Perfil, também não fazem requisição: só abrem o WhatsApp ou o app de e-mail
+do aparelho, e são eles que usam a internet.
 
-### Os dados ficam no aparelho
+### Pensado para ser online
 
-Não existe servidor. Clientes, barbeiros, serviços, agendamentos, pagamentos e
-pontos ficam no arquivo `sysbarber.db`, guardado no próprio aparelho onde o app
-está instalado. Isso tem três consequências:
+O SysBarber é pensado para funcionar online: cada pessoa (cliente, barbeiro e
+administrador) usa o app no próprio celular, e um servidor central guarda os
+dados da barbearia. Neste trabalho o servidor não foi feito: o banco do
+próprio aparelho faz o papel dele, simulado, como o Pix, o cartão e o SMS da
+recuperação de senha.
+
+Clientes, barbeiros, serviços, agendamentos, pagamentos e pontos ficam no
+arquivo `sysbarber.db`, guardado no aparelho onde o app está instalado. Na
+prática:
 
 - **Cada instalação é uma barbearia separada.** O banco é criado na primeira
-  abertura do app. O mesmo app instalado em dois celulares gera dois
-  bancos que não se comunicam: o que é cadastrado num não aparece no outro. O
-  cliente que instala o app no próprio celular não vê os barbeiros nem os
-  horários cadastrados no aparelho da barbearia.
-- **O sistema completo funciona em um aparelho compartilhado**, por exemplo um
-  tablet no balcão: clientes, barbeiros e administrador usam o mesmo aparelho,
-  cada um entrando com a própria conta. É assim que o app é demonstrado, no
-  emulador.
-- **Cada pessoa precisa sair da conta ao terminar.** A sessão fica salva, e o
-  app reabre direto na última conta usada. Num aparelho compartilhado, quem
-  termina toca em **Sair**, no Perfil (o barbeiro também tem o ícone de saída
-  na própria agenda).
+  abertura do app. O mesmo app instalado em dois celulares gera dois bancos
+  que não se comunicam: o que é cadastrado num não aparece no outro. Por isso,
+  na demonstração (no emulador), clientes, barbeiros e administrador usam o
+  mesmo aparelho, cada um entrando com a própria conta.
+- **Cada pessoa sai da conta ao terminar.** A sessão fica salva, e o app
+  reabre direto na última conta usada. Como na demonstração todos usam o mesmo
+  aparelho, quem termina toca em **Sair**, no Perfil (o barbeiro também tem o
+  ícone de saída na própria agenda).
 
-Levar o app para o celular de cada cliente exige um servidor central, com o
-banco na nuvem e sincronização entre os aparelhos. Isso fica fora do escopo
-deste trabalho (veja [Limitações conhecidas](#limitações-conhecidas)).
+O `DatabaseService` é a camada que o servidor substituiria: nenhuma tela
+executa SQL, e as regras de negócio são conferidas por ele (veja
+[Arquitetura](#arquitetura)). Fazer o servidor, com o banco na nuvem e os
+dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
+(veja [Limitações conhecidas](#limitações-conhecidas)).
 
 ---
 
@@ -559,12 +564,11 @@ Login com o e-mail e o código → Crie sua nova senha → entra no app
 
 ## Limitações conhecidas
 
-- Não há servidor: os dados não são compartilhados entre aparelhos, e cada
-  instalação é uma barbearia separada. O sistema completo funciona em um
-  aparelho compartilhado (veja
-  [Os dados ficam no aparelho](#os-dados-ficam-no-aparelho)). Para clientes e
-  barbearia usarem aparelhos diferentes, seria preciso um servidor central com
-  sincronização — trabalho futuro.
+- O servidor central não foi feito: o banco do aparelho faz o papel dele (veja
+  [Pensado para ser online](#pensado-para-ser-online)). Os dados não são
+  compartilhados entre aparelhos, e cada instalação é uma barbearia separada.
+  Para cada pessoa usar o app no próprio celular, falta o servidor, com o
+  banco na nuvem — trabalho futuro.
 - Valores em dinheiro são `REAL` no SQLite; multa e estorno são arredondados
   para centavos, mas a migração completa para centavos inteiros não foi feita.
 - Os dias de funcionamento, os turnos, a grade e a janela de agendamento são
