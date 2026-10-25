@@ -6,6 +6,7 @@ import 'booking_flow.dart';
 import 'database_service.dart';
 import 'email.dart';
 import 'erros.dart';
+import 'lembretes.dart';
 import 'sms.dart';
 import 'validators.dart';
 
@@ -143,6 +144,38 @@ class AuthService {
   @visibleForTesting
   set envioEmail(EnvioEmail envio) => _email = envio;
 
+  /// Onde ficam os lembretes do horário (regra de negócio 20): as
+  /// notificações do próprio aparelho.
+  Lembretes _lembretes = LembretesLocais.instance;
+
+  /// Troca os lembretes (os testes os guardam em memória).
+  @visibleForTesting
+  set lembretes(Lembretes lembretes) => _lembretes = lembretes;
+
+  /// Refaz os lembretes a partir do banco (regra de negócio 20): um para
+  /// cada agendamento em aberto do cliente logado. Sem cliente logado, o
+  /// aparelho fica sem lembretes. Chamado ao entrar, ao abrir o app e depois
+  /// de reservar, cancelar ou reagendar.
+  Future<void> atualizarLembretes({DateTime? agora}) async {
+    try {
+      final id = _usuarioAtual?.id;
+      if (id == null || !ehCliente) {
+        await _lembretes.apagarTodos();
+        return;
+      }
+      final agendamentos = await _db.listarAgendamentosCliente(id);
+      await _lembretes.substituir(
+        lembretesDe(agendamentos, agora ?? DateTime.now()),
+      );
+    } catch (_) {
+      // Sem lembrete o app continua funcionando; o agendamento vale igual.
+    }
+  }
+
+  /// Pede a permissão de notificação no primeiro agendamento (regra de
+  /// negócio 20).
+  Future<void> pedirPermissaoDosLembretes() => _lembretes.pedirPermissao();
+
   /// Lê do banco se a barbearia já foi configurada (chamado na abertura do
   /// app, antes da primeira tela).
   Future<void> carregarConfiguracao() async {
@@ -173,6 +206,7 @@ class AuthService {
       _usuarioAtual = admin;
       _barbeiroAtual = null;
       await _salvarSessao(admin.id!, _tipoCliente);
+      await atualizarLembretes();
       return (sucesso: true, erro: null);
     } catch (e) {
       // Se outra configuração terminou antes, a tela precisa saber.
@@ -198,6 +232,7 @@ class AuthService {
         if (barbeiro != null) {
           _barbeiroAtual = barbeiro;
           _usuarioAtual = null;
+          await atualizarLembretes();
           return;
         }
       } else {
@@ -205,6 +240,7 @@ class AuthService {
         if (cliente != null) {
           _usuarioAtual = cliente;
           _barbeiroAtual = null;
+          await atualizarLembretes();
           return;
         }
       }
@@ -242,6 +278,7 @@ class AuthService {
         _usuarioAtual = cliente;
         _barbeiroAtual = null;
         await _salvarSessao(cliente.id!, _tipoCliente);
+        await atualizarLembretes();
         return (sucesso: true, erro: null, criarNovaSenha: false);
       }
 
@@ -252,6 +289,7 @@ class AuthService {
         _barbeiroAtual = barbeiro;
         _usuarioAtual = null;
         await _salvarSessao(barbeiro.id!, _tipoBarbeiro);
+        await atualizarLembretes();
         return (sucesso: true, erro: null, criarNovaSenha: false);
       }
 
@@ -470,6 +508,7 @@ class AuthService {
       _barbeiroAtual = barbeiro;
       _usuarioAtual = null;
       await _salvarSessao(barbeiro.id!, _tipoBarbeiro);
+      await atualizarLembretes();
       return (sucesso: true, erro: null);
     } catch (e) {
       return (
@@ -500,6 +539,7 @@ class AuthService {
       _usuarioAtual = novo;
       _barbeiroAtual = null;
       await _salvarSessao(novo.id!, _tipoCliente);
+      await atualizarLembretes();
       return (sucesso: true, erro: null);
     } catch (e) {
       return (
@@ -538,6 +578,8 @@ class AuthService {
 
   Future<void> logout() async {
     esquecerSessaoEmMemoria();
+    // Os lembretes são da conta que saiu (regra de negócio 20).
+    await atualizarLembretes();
     try {
       await _limparSessaoSalva(await SharedPreferences.getInstance());
     } catch (_) {

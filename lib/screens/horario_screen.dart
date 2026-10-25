@@ -159,6 +159,8 @@ class _HorarioScreenState extends State<HorarioScreen> {
         idBarbeiro: barbeiro.id!,
         dataHora: novo,
       );
+      // O lembrete acompanha o horário novo (regra de negócio 20).
+      await AuthService.instance.atualizarLembretes();
       if (!mounted) return;
       mostrarSucesso(
         context,

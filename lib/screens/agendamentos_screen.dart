@@ -391,6 +391,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         a.id!,
         porBarbeiro: _pelaBarbearia,
       );
+      // Cancelado, o horário perde o lembrete (regra de negócio 20).
+      await AuthService.instance.atualizarLembretes();
       if (!mounted) return;
       await _mostrarDesfecho(r);
       if (!mounted) return;
