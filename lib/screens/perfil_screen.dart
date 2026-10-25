@@ -78,6 +78,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
     mostrarSucesso(context, 'Dados atualizados');
   }
 
+  /// Pede a senha, explica o que se perde e, confirmado, exclui a conta e
+  /// volta à abertura do app.
+  Future<void> _excluirConta() async {
+    final excluiu = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ExcluirContaDialog(pontos: _pontos),
+    );
+    if (excluiu != true || !mounted) return;
+    mostrarInfo(context, 'Conta excluída');
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+  }
+
   Future<void> _alterarSenha() async {
     final salvou = await showDialog<bool>(
       context: context,
@@ -230,12 +242,46 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         'Exige a senha atual',
                         onTap: _alterarSenha,
                       ),
+                      _item(
+                        Icons.description_outlined,
+                        'Termos e privacidade',
+                        'Termos de uso e política de privacidade',
+                        onTap: () =>
+                            Navigator.of(context)
+                                .pushNamed(AuthService.rotaTermos),
+                      ),
                       const SizedBox(height: 28),
                       BotaoSecundario(
                         texto: 'Sair',
                         icone: Icons.logout_rounded,
                         onPressed: _sair,
                       ),
+                      // Só o cliente exclui a própria conta (regra de
+                      // negócio 18).
+                      if (auth.ehCliente) ...[
+                        const SizedBox(height: 8),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _excluirConta,
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Excluir minha conta',
+                              style: AppTheme.texto(
+                                size: 13,
+                                weight: FontWeight.w600,
+                                color: AppColors.red,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.red,
+                              minimumSize: const Size(48, 48),
+                            ),
+                          ),
+                        ),
+                      ],
                       // O barbeiro não tem Suporte: ele fala com o
                       // administrador.
                       if (barbeiro == null) ...[
@@ -573,6 +619,103 @@ class _EditarContatoBarbeiroDialogState
           'Telefone',
           teclado: TextInputType.phone,
           formatters: [TelefoneInputFormatter()],
+        ),
+      ],
+    );
+  }
+}
+
+/// Confirmação da exclusão da conta: diz o que se perde e pede a senha
+/// (regra de negócio 18). O banco é quem recusa com agendamento em aberto ou
+/// valor pendente, e a mensagem aparece aqui.
+class _ExcluirContaDialog extends StatefulWidget {
+  final int pontos;
+
+  const _ExcluirContaDialog({required this.pontos});
+
+  @override
+  State<_ExcluirContaDialog> createState() => _ExcluirContaDialogState();
+}
+
+class _ExcluirContaDialogState extends State<_ExcluirContaDialog> {
+  final _senha = TextEditingController();
+  bool _excluindo = false;
+
+  @override
+  void dispose() {
+    _senha.dispose();
+    super.dispose();
+  }
+
+  Future<void> _excluir() async {
+    setState(() => _excluindo = true);
+    final r = await AuthService.instance.excluirConta(_senha.text);
+    if (!mounted) return;
+    if (r.sucesso) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() => _excluindo = false);
+      mostrarErro(context, r.erro ?? 'Não foi possível excluir a conta');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pontos = widget.pontos == 1 ? '1 ponto' : '${widget.pontos} pontos';
+    final estilo = AppTheme.texto(
+      size: 13,
+      color: AppColors.muted,
+      height: 1.4,
+    );
+    return AlertDialog(
+      title: Text('Excluir a sua conta?', style: AppTheme.titulo(size: 18)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Ao excluir a conta:', style: estilo),
+            const SizedBox(height: 6),
+            ItemDeLista(
+              'seu nome, e-mail, telefone e senha são apagados;',
+              estilo: estilo,
+            ),
+            if (widget.pontos > 0)
+              ItemDeLista('seus $pontos são perdidos;', estilo: estilo),
+            ItemDeLista(
+              'os atendimentos que já aconteceram ficam só nos relatórios da '
+              'barbearia, sem o seu nome.',
+              estilo: estilo,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Não dá para desfazer. Com agendamento em aberto ou valor '
+              'pendente com a barbearia, resolva isso antes.',
+              style: estilo,
+            ),
+            const SizedBox(height: 16),
+            _campo(_senha, 'Sua senha', obscuro: true),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _excluindo ? null : () => Navigator.of(context).pop(false),
+          child: Text(
+            'Cancelar',
+            style: AppTheme.texto(size: 13, color: AppColors.muted),
+          ),
+        ),
+        TextButton(
+          onPressed: _excluindo ? null : _excluir,
+          child: Text(
+            _excluindo ? 'Excluindo...' : 'Excluir conta',
+            style: AppTheme.texto(
+              size: 13,
+              weight: FontWeight.w600,
+              color: AppColors.red,
+            ),
+          ),
         ),
       ],
     );

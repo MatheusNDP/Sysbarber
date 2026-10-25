@@ -95,6 +95,15 @@ class Cliente {
   /// pelo formulário de cadastro nascem sempre como cliente comum.
   final bool admin;
 
+  /// Quando a pessoa aceitou os termos de uso e a política de privacidade,
+  /// ao criar a conta (regra de negócio 18). Contas mais antigas não têm.
+  final String? termosAceitosEm;
+
+  /// Quando o cliente excluiu a própria conta (regra de negócio 18). Os
+  /// dados pessoais já foram apagados; a linha fica só para os atendimentos
+  /// passados continuarem nos relatórios.
+  final String? excluidoEm;
+
   const Cliente({
     this.id,
     required this.nome,
@@ -103,7 +112,11 @@ class Cliente {
     required this.senhaHash,
     required this.criadoEm,
     this.admin = false,
+    this.termosAceitosEm,
+    this.excluidoEm,
   });
+
+  bool get excluido => excluidoEm != null;
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -113,6 +126,8 @@ class Cliente {
     'senha_hash': senhaHash,
     'criado_em': criadoEm,
     'admin': admin ? 1 : 0,
+    'termos_aceitos_em': termosAceitosEm,
+    'excluido_em': excluidoEm,
   };
 
   factory Cliente.fromMap(Map<String, dynamic> map) => Cliente(
@@ -123,6 +138,8 @@ class Cliente {
     senhaHash: map['senha_hash'] as String,
     criadoEm: map['criado_em'] as String,
     admin: ((map['admin'] as num?)?.toInt() ?? 0) == 1,
+    termosAceitosEm: map['termos_aceitos_em'] as String?,
+    excluidoEm: map['excluido_em'] as String?,
   );
 
   Cliente copyWith({
@@ -133,6 +150,7 @@ class Cliente {
     String? senhaHash,
     String? criadoEm,
     bool? admin,
+    String? termosAceitosEm,
   }) => Cliente(
     id: id ?? this.id,
     nome: nome ?? this.nome,
@@ -141,6 +159,8 @@ class Cliente {
     senhaHash: senhaHash ?? this.senhaHash,
     criadoEm: criadoEm ?? this.criadoEm,
     admin: admin ?? this.admin,
+    termosAceitosEm: termosAceitosEm ?? this.termosAceitosEm,
+    excluidoEm: excluidoEm,
   );
 
   /// Iniciais do nome, usadas no avatar do perfil.
@@ -172,6 +192,10 @@ class Barbeiro {
   /// inativo continua visível na escolha, porém esmaecido e sem seleção.
   final bool ativo;
 
+  /// Quando o barbeiro aceitou os termos, ao usar o convite (regra de
+  /// negócio 18). Os barbeiros de exemplo e os mais antigos não têm.
+  final String? termosAceitosEm;
+
   const Barbeiro({
     this.id,
     required this.nome,
@@ -182,6 +206,7 @@ class Barbeiro {
     this.senhaHash = '',
     this.salario = 0,
     this.ativo = true,
+    this.termosAceitosEm,
   });
 
   Map<String, dynamic> toMap() => {
@@ -194,6 +219,7 @@ class Barbeiro {
     'senha_hash': senhaHash,
     'salario': salario,
     'ativo': ativo ? 1 : 0,
+    'termos_aceitos_em': termosAceitosEm,
   };
 
   factory Barbeiro.fromMap(Map<String, dynamic> map) => Barbeiro(
@@ -207,6 +233,7 @@ class Barbeiro {
     salario: (map['salario'] as num?)?.toDouble() ?? 0,
     // Bancos anteriores à v4 não têm a coluna: quem não tem marca é ativo.
     ativo: ((map['ativo'] as num?)?.toInt() ?? 1) == 1,
+    termosAceitosEm: map['termos_aceitos_em'] as String?,
   );
 
   Barbeiro copyWith({
@@ -229,6 +256,7 @@ class Barbeiro {
     senhaHash: senhaHash ?? this.senhaHash,
     salario: salario ?? this.salario,
     ativo: ativo ?? this.ativo,
+    termosAceitosEm: termosAceitosEm,
   );
 
   /// Gera as iniciais a partir do nome (usado ao cadastrar pelo admin).

@@ -27,6 +27,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
   final _confirmacaoCtrl = TextEditingController();
   bool _ocultarSenha = true;
   bool _dadosDeExemplo = false;
+  bool _aceitouTermos = false;
   bool _salvando = false;
 
   @override
@@ -52,6 +53,7 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       email: _emailCtrl.text,
       telefone: _telefoneCtrl.text,
       senha: _senhaCtrl.text,
+      aceitouTermos: _aceitouTermos,
       dadosDeExemplo: _dadosDeExemplo,
     );
 
@@ -221,7 +223,14 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     obscuro: _ocultarSenha,
                   ),
                   _opcaoDadosDeExemplo(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  AceiteTermos(
+                    aceito: _aceitouTermos,
+                    onChanged: (v) => setState(() => _aceitouTermos = v),
+                    aoLerTermos: () =>
+                        Navigator.of(context).pushNamed(AuthService.rotaTermos),
+                  ),
+                  const SizedBox(height: 16),
                   BotaoPrincipal(
                     texto: _salvando
                         ? 'Configurando...'

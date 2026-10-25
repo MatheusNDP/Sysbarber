@@ -6,7 +6,6 @@ import 'booking_flow.dart';
 import 'database_service.dart';
 import 'email.dart';
 import 'erros.dart';
-import 'senhas.dart';
 import 'sms.dart';
 import 'validators.dart';
 
@@ -35,6 +34,7 @@ class AuthService {
     '/cadastro',
     rotaRecuperarSenha,
     rotaConvite,
+    rotaTermos,
   };
 
   /// "Esqueci minha senha" (regra de negócio 16).
@@ -42,6 +42,10 @@ class AuthService {
 
   /// "Tenho um convite de barbeiro", no login (regra de negócio 10).
   static const String rotaConvite = '/convite-barbeiro';
+
+  /// Termos de uso e política de privacidade (regra de negócio 18). Abre
+  /// para todos, até antes da configuração inicial, que pede o aceite.
+  static const String rotaTermos = '/termos';
 
   /// Tela da configuração inicial, a única aberta antes de existir o
   /// administrador (regra de negócio 15).
@@ -107,7 +111,9 @@ class AuthService {
   bool podeAcessar(String rota) {
     // Antes da configuração inicial não há contas para entrar: só a abertura
     // e a própria configuração. Depois dela, a configuração não abre mais.
-    if (!_barbeariaConfigurada) return rota == '/' || rota == rotaConfiguracao;
+    if (!_barbeariaConfigurada) {
+      return rota == '/' || rota == rotaConfiguracao || rota == rotaTermos;
+    }
     if (rota == rotaConfiguracao) return false;
     if (_rotasPublicas.contains(rota)) return true;
     if (_rotasLogado.contains(rota)) return estaLogado;
@@ -150,6 +156,7 @@ class AuthService {
     required String email,
     required String telefone,
     required String senha,
+    required bool aceitouTermos,
     required bool dadosDeExemplo,
   }) async {
     try {
@@ -158,6 +165,7 @@ class AuthService {
         email: email,
         telefone: telefone,
         senha: senha,
+        aceitouTermos: aceitouTermos,
         dadosDeExemplo: dadosDeExemplo,
       );
       _barbeariaConfigurada = true;
@@ -448,6 +456,7 @@ class AuthService {
     required String email,
     required String telefone,
     required String senha,
+    required bool aceitouTermos,
   }) async {
     try {
       final barbeiro = await _db.aceitarConviteBarbeiro(
@@ -455,6 +464,7 @@ class AuthService {
         email: email,
         telefone: telefone,
         senha: senha,
+        aceitouTermos: aceitouTermos,
       );
       BookingFlow.limpar();
       _barbeiroAtual = barbeiro;
@@ -469,50 +479,59 @@ class AuthService {
     }
   }
 
-  /// Cadastra o cliente e já o deixa logado.
+  /// Cadastra o cliente e já o deixa logado. O banco confere os dados, o
+  /// aceite dos termos e o e-mail único (regras de negócio 12 e 18).
   Future<({bool sucesso, String? erro})> cadastrar({
     required String nome,
     required String email,
     required String telefone,
     required String senha,
+    required bool aceitouTermos,
   }) async {
-    final erro = Validators.validarCadastro(
-      nome: nome,
-      email: email,
-      telefone: telefone,
-      senha: senha,
-    );
-    if (erro != null) return (sucesso: false, erro: erro);
-
-    final emailNormalizado = email.trim().toLowerCase();
-
     try {
-      if (await _db.emailExiste(emailNormalizado)) {
-        return (sucesso: false, erro: 'Este e-mail já está cadastrado');
-      }
-      // O e-mail também não pode colidir com o acesso de um profissional.
-      if (await _db.emailBarbeiroExiste(emailNormalizado)) {
-        return (sucesso: false, erro: 'Este e-mail já está cadastrado');
-      }
-
-      final novo = Cliente(
-        nome: nome.trim(),
-        email: emailNormalizado,
-        telefone: telefone.trim(),
-        senhaHash: await Senhas.gerarHashEmSegundoPlano(senha),
-        criadoEm: DateTime.now().toIso8601String(),
+      final novo = await _db.criarContaCliente(
+        nome: nome,
+        email: email,
+        telefone: telefone,
+        senha: senha,
+        aceitouTermos: aceitouTermos,
       );
-
-      final id = await _db.cadastrarCliente(novo);
       BookingFlow.limpar();
-      _usuarioAtual = novo.copyWith(id: id);
+      _usuarioAtual = novo;
       _barbeiroAtual = null;
-      await _salvarSessao(id, _tipoCliente);
+      await _salvarSessao(novo.id!, _tipoCliente);
       return (sucesso: true, erro: null);
     } catch (e) {
       return (
         sucesso: false,
         erro: mensagemDeErro(e, 'Não foi possível salvar o cadastro'),
+      );
+    }
+  }
+
+  /// O cliente exclui a própria conta, com a senha atual (regra de negócio
+  /// 18), e sai dela. O barbeiro é excluído pelo administrador, e o
+  /// administrador não se exclui.
+  Future<({bool sucesso, String? erro})> excluirConta(String senha) async {
+    final id = _usuarioAtual?.id;
+    if (id == null || !ehCliente) {
+      return (
+        sucesso: false,
+        erro: ehBarbeiro
+            ? 'A conta do barbeiro é excluída pelo administrador'
+            : podeAdministrar
+            ? 'O administrador não pode excluir a própria conta'
+            : 'Entre na sua conta para excluí-la',
+      );
+    }
+    try {
+      await _db.excluirContaCliente(id, senha: senha);
+      await logout();
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível excluir a conta'),
       );
     }
   }
