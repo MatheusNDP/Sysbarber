@@ -3,7 +3,8 @@ import '../models/models.dart';
 /// Estado temporário do fluxo de agendamento.
 ///
 /// Percorre as telas Serviços → Barbeiro → Horário → Confirmação → Pagamento
-/// sem precisar passar argumentos por todas as rotas.
+/// sem precisar passar argumentos por todas as rotas. Num reagendamento, o
+/// caminho é só Barbeiro → Horário ([reagendando]).
 class BookingFlow {
   BookingFlow._();
 
@@ -11,6 +12,11 @@ class BookingFlow {
   static Barbeiro? barbeiroSelecionado;
   static DateTime? dataSelecionada;
   static String? horaSelecionada;
+
+  /// Agendamento que o cliente está reagendando (regra de negócio 19). Com
+  /// ele, o horário escolhido troca o do agendamento em vez de virar uma
+  /// reserva nova.
+  static Agendamento? reagendando;
 
   /// Data e hora combinadas, prontas para persistir no banco.
   static DateTime? get dataHoraCompleta {
@@ -34,7 +40,17 @@ class BookingFlow {
     servicoSelecionado = servico;
   }
 
+  /// Começa a reagendar [a]: o serviço é o mesmo, e o barbeiro atual vem
+  /// escolhido.
+  static void iniciarReagendamento(Agendamento a) {
+    limpar();
+    reagendando = a;
+    servicoSelecionado = a.servico;
+    barbeiroSelecionado = a.barbeiro;
+  }
+
   static void limpar() {
+    reagendando = null;
     servicoSelecionado = null;
     barbeiroSelecionado = null;
     dataSelecionada = null;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/auth_service.dart';
+import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
@@ -286,6 +287,15 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// desistência fora do prazo a penalidade é a perda dos pontos, não multa.
   static bool _pagoComPontos(Agendamento a) =>
       a.pagamento?.natureza == NaturezaPagamento.resgate;
+
+  /// Leva o cliente à escolha do profissional e do horário, com o serviço
+  /// do agendamento. Na volta, reagendado ou não, a lista é relida.
+  Future<void> _reagendar(Agendamento a) async {
+    BookingFlow.iniciarReagendamento(a);
+    await Navigator.of(context).pushNamed('/barbeiro');
+    BookingFlow.limpar();
+    if (mounted) await _carregar();
+  }
 
   Future<void> _cancelar(Agendamento a) async {
     final confirmou = await showDialog<bool>(
@@ -801,6 +811,16 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           Icons.person_off_outlined,
           AppColors.red,
           () => _registrarFalta(a),
+        ),
+      // O cliente reagenda até 1 hora antes (regra de negócio 19); a
+      // barbearia cancela.
+      if (!_pelaBarbearia &&
+          a.podeReagendar(agora, prazo: DatabaseService.prazoCancelamento))
+        _acao(
+          'Reagendar',
+          Icons.edit_calendar_outlined,
+          AppColors.amarelo,
+          () => _reagendar(a),
         ),
       if (a.podeCancelar(agora))
         _acao(

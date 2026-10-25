@@ -119,7 +119,12 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const RotuloCampo('Serviço escolhido'),
+                RotuloCampo(
+                  BookingFlow.reagendando == null
+                      ? 'Serviço escolhido'
+                      : 'Reagendando o horário de '
+                            '${formatarDataHora(BookingFlow.reagendando!.data)}',
+                ),
                 const SizedBox(height: 3),
                 Text(
                   servico.nome,

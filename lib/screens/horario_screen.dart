@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/booking_flow.dart';
 import '../services/database_service.dart';
@@ -52,16 +53,32 @@ class _HorarioScreenState extends State<HorarioScreen> {
 
     try {
       final barbeiro = BookingFlow.barbeiroSelecionado;
-      final horarios = barbeiro?.id == null
+      final reagendando = BookingFlow.reagendando;
+      var horarios = barbeiro?.id == null
           ? DatabaseService.horariosBase
           : await DatabaseService.instance.horariosDisponiveis(
               barbeiro!.id!,
               _dataSelecionada,
               // Só aparece o horário em que o serviço inteiro cabe e que não
-              // conflita com outro atendimento do próprio cliente.
-              duracaoMinutos: BookingFlow.servicoSelecionado?.duracaoMinutos,
+              // conflita com outro atendimento do próprio cliente. Num
+              // reagendamento, vale a duração registrada, e o horário atual
+              // não conta como ocupado.
+              duracaoMinutos:
+                  reagendando?.duracaoMinutos ??
+                  BookingFlow.servicoSelecionado?.duracaoMinutos,
               idCliente: AuthService.instance.usuarioAtual?.id,
+              ignorarAgendamento: reagendando?.id,
             );
+      // O horário atual, com o mesmo barbeiro, não é um horário novo.
+      if (reagendando != null && reagendando.idBarbeiro == barbeiro?.id) {
+        final atual = reagendando.data;
+        if (_mesmoDia(atual, _dataSelecionada)) {
+          final hora =
+              '${atual.hour.toString().padLeft(2, '0')}:'
+              '${atual.minute.toString().padLeft(2, '0')}';
+          horarios = horarios.where((h) => h != hora).toList();
+        }
+      }
 
       if (!mounted || consulta != _consulta) return;
       setState(() {
@@ -82,21 +99,88 @@ class _HorarioScreenState extends State<HorarioScreen> {
     _carregarHorarios();
   }
 
+  static bool _mesmoDia(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   Future<void> _confirmar() async {
     BookingFlow.dataSelecionada = _dataSelecionada;
     BookingFlow.horaSelecionada = _horaSelecionada;
+    final reagendando = BookingFlow.reagendando;
+    if (reagendando != null) return _reagendar(reagendando);
     await Navigator.of(context).pushNamed('/confirmacao');
     // Na volta a grade pode ter mudado (o horário foi ocupado no meio do
     // caminho, por exemplo), então ela é relida.
     if (mounted) _carregarHorarios();
   }
 
+  /// Troca o horário do agendamento (regra de negócio 19), depois de o
+  /// cliente confirmar, e volta à lista de agendamentos.
+  Future<void> _reagendar(Agendamento a) async {
+    final barbeiro = BookingFlow.barbeiroSelecionado!;
+    final novo = BookingFlow.dataHoraCompleta!;
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reagendar?', style: AppTheme.titulo(size: 18)),
+        content: Text(
+          'De ${formatarDataHora(a.data)}, com ${a.barbeiro?.nome ?? '-'}, '
+          'para ${formatarDataHora(novo)}, com ${barbeiro.nome}. O serviço e '
+          'o pagamento continuam os mesmos.',
+          style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Voltar',
+              style: AppTheme.texto(size: 13, color: AppColors.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Reagendar',
+              style: AppTheme.texto(
+                size: 13,
+                weight: FontWeight.w600,
+                color: AppColors.amarelo,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true || !mounted) return;
+
+    try {
+      await DatabaseService.instance.reagendarAgendamento(
+        a.id!,
+        idCliente: AuthService.instance.usuarioAtual!.id!,
+        idBarbeiro: barbeiro.id!,
+        dataHora: novo,
+      );
+      if (!mounted) return;
+      mostrarSucesso(
+        context,
+        'Horário alterado para ${formatarDataHora(novo)}',
+      );
+      // Volta por cima do Horário e do Profissional, até a lista.
+      var telas = 0;
+      Navigator.of(context).popUntil((_) => telas++ >= 2);
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Não foi possível reagendar'));
+      _carregarHorarios();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final barbeiro = BookingFlow.barbeiroSelecionado;
+    final reagendando = BookingFlow.reagendando != null;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'Horário'),
+      appBar: BarberAppBar(titulo: reagendando ? 'Novo horário' : 'Horário'),
       body: Column(
         children: [
           Expanded(
@@ -209,7 +293,7 @@ class _HorarioScreenState extends State<HorarioScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: BotaoPrincipal(
-              texto: 'Confirmar',
+              texto: reagendando ? 'Reagendar' : 'Confirmar',
               onPressed: _horaSelecionada == null ? null : _confirmar,
             ),
           ),

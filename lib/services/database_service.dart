@@ -2116,11 +2116,15 @@ class DatabaseService {
   /// Agendamentos cancelados não bloqueiam nada (regra de negócio 2). Domingo,
   /// dias além da janela de agendamento e profissional indisponível não
   /// oferecem horário nenhum.
+  ///
+  /// Num reagendamento, [ignorarAgendamento] é o próprio agendamento: o
+  /// horário que ele ocupa hoje não conta como ocupado (regra de negócio 19).
   Future<List<String>> horariosDisponiveis(
     int idBarbeiro,
     DateTime data, {
     int? duracaoMinutos,
     int? idCliente,
+    int? ignorarAgendamento,
     DateTime? agora,
   }) async => _horariosLivres(
     await database,
@@ -2128,6 +2132,7 @@ class DatabaseService {
     data,
     duracaoMinutos: duracaoMinutos,
     idCliente: idCliente,
+    ignorarAgendamento: ignorarAgendamento,
     agora: agora,
   );
 
@@ -2138,6 +2143,7 @@ class DatabaseService {
     DateTime? agora,
     int? duracaoMinutos,
     int? idCliente,
+    int? ignorarAgendamento,
   }) async {
     final barbeiro = await db.query(
       'barbeiro',
@@ -2153,10 +2159,20 @@ class DatabaseService {
     final referencia = agora ?? DateTime.now();
     if (!atendeNoDia(data) || _depoisDaJanela(data, referencia)) return [];
 
-    final doBarbeiro = await _ocupacoes(db, data, idBarbeiro: idBarbeiro);
+    final doBarbeiro = await _ocupacoes(
+      db,
+      data,
+      idBarbeiro: idBarbeiro,
+      ignorar: ignorarAgendamento,
+    );
     final doCliente = idCliente == null
         ? const <_Intervalo>[]
-        : await _ocupacoes(db, data, idCliente: idCliente);
+        : await _ocupacoes(
+            db,
+            data,
+            idCliente: idCliente,
+            ignorar: ignorarAgendamento,
+          );
     final duracao = Duration(minutes: duracaoMinutos ?? intervaloGrade);
 
     return horariosBase.where((h) {
@@ -2172,21 +2188,25 @@ class DatabaseService {
   }
 
   /// Intervalos já ocupados no dia, do barbeiro ou do cliente.
+  ///
+  /// [ignorar] deixa de fora um agendamento: o que está sendo reagendado.
   Future<List<_Intervalo>> _ocupacoes(
     DatabaseExecutor db,
     DateTime dia, {
     int? idBarbeiro,
     int? idCliente,
+    int? ignorar,
   }) async {
     final coluna = idBarbeiro != null ? 'id_barbeiro' : 'id_cliente';
     final linhas = await db.query(
       'agendamento',
       columns: ['data_hora', 'duracao_minutos'],
-      where: '$coluna = ? AND status != ? AND data_hora LIKE ?',
+      where: '$coluna = ? AND status != ? AND data_hora LIKE ? AND id != ?',
       whereArgs: [
         idBarbeiro ?? idCliente,
         StatusAgendamento.cancelado.dbValue,
         '${_formatarDia(dia)}%',
+        ignorar ?? -1,
       ],
     );
     return linhas.map((l) {
@@ -2268,6 +2288,7 @@ class DatabaseService {
     required DateTime dataHora,
     int? duracaoMinutos,
     int? idCliente,
+    int? ignorarAgendamento,
     DateTime? agora,
   }) async {
     // O administrador só gerencia: não agenda serviços (regra de negócio 17).
@@ -2316,12 +2337,22 @@ class DatabaseService {
     if (_passaDoTurno(dataHora, fim)) {
       return 'Começando às $hora, o serviço passaria do fim do turno';
     }
-    final doBarbeiro = await _ocupacoes(db, dataHora, idBarbeiro: idBarbeiro);
+    final doBarbeiro = await _ocupacoes(
+      db,
+      dataHora,
+      idBarbeiro: idBarbeiro,
+      ignorar: ignorarAgendamento,
+    );
     if (_sobrepoe(dataHora, fim, doBarbeiro)) {
       return 'O horário $hora não está mais livre';
     }
     if (idCliente != null) {
-      final doCliente = await _ocupacoes(db, dataHora, idCliente: idCliente);
+      final doCliente = await _ocupacoes(
+        db,
+        dataHora,
+        idCliente: idCliente,
+        ignorar: ignorarAgendamento,
+      );
       if (_sobrepoe(dataHora, fim, doCliente)) {
         return 'Você já tem outro atendimento nesse horário';
       }
@@ -2587,6 +2618,60 @@ class DatabaseService {
         idAgendamento,
         novoStatus: StatusAgendamento.faltou,
         agora: agora,
+      );
+    });
+  }
+
+  /// O cliente muda a data, o horário ou o barbeiro do próprio agendamento
+  /// (regra de negócio 19), até [prazoCancelamento] antes do horário. O
+  /// serviço, o preço, a duração e o pagamento (antecipado, na barbearia ou
+  /// com pontos) continuam os mesmos; o novo horário passa pelas mesmas
+  /// conferências de uma reserva, sem contar o próprio agendamento como
+  /// ocupado. Tudo numa transação.
+  Future<void> reagendarAgendamento(
+    int idAgendamento, {
+    required int idCliente,
+    required int idBarbeiro,
+    required DateTime dataHora,
+    DateTime? agora,
+  }) async {
+    final referencia = agora ?? DateTime.now();
+    final db = await database;
+    await db.transaction((txn) async {
+      final a = await _buscarAgendamento(txn, idAgendamento);
+      // Só o próprio cliente reagenda; a barbearia cancela.
+      if (a == null || a.idCliente != idCliente) {
+        throw const RegraNegocioException('Agendamento não encontrado');
+      }
+      if (!a.emAberto) {
+        throw const RegraNegocioException('Este atendimento já foi encerrado');
+      }
+      if (!a.podeReagendar(referencia, prazo: prazoCancelamento)) {
+        throw const RegraNegocioException(
+          'Com menos de 1 hora para o horário, não dá mais para reagendar: '
+          'só cancelar, com a penalidade do cancelamento em cima da hora',
+        );
+      }
+      if (a.idBarbeiro == idBarbeiro && a.data == dataHora) {
+        throw const RegraNegocioException(
+          'Escolha um horário diferente do atual',
+        );
+      }
+      final impedimento = await _impedimentoReserva(
+        txn,
+        idBarbeiro: idBarbeiro,
+        dataHora: dataHora,
+        duracaoMinutos: a.duracaoMinutos,
+        idCliente: idCliente,
+        ignorarAgendamento: idAgendamento,
+        agora: referencia,
+      );
+      if (impedimento != null) throw RegraNegocioException(impedimento);
+      await txn.update(
+        'agendamento',
+        {'id_barbeiro': idBarbeiro, 'data_hora': dataHora.toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [idAgendamento],
       );
     });
   }
