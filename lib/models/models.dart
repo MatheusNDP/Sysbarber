@@ -460,8 +460,11 @@ extension NaturezaPagamentoX on NaturezaPagamento {
   String get dbValue => name;
 
   /// Registros anteriores à coluna são tratados como serviço.
-  static NaturezaPagamento fromDb(String? valor) => NaturezaPagamento.values
-      .firstWhere((n) => n.name == valor, orElse: () => NaturezaPagamento.servico);
+  static NaturezaPagamento fromDb(String? valor) =>
+      NaturezaPagamento.values.firstWhere(
+        (n) => n.name == valor,
+        orElse: () => NaturezaPagamento.servico,
+      );
 }
 
 class Pagamento {
@@ -853,5 +856,67 @@ class CodigoSenha {
     criadoEm: map['criado_em'] as String,
     expiraEm: map['expira_em'] as String,
     tentativas: (map['tentativas'] as num).toInt(),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CONVITE DO BARBEIRO
+// ---------------------------------------------------------------------------
+
+/// Convite que o administrador gera em Gerenciar Barbeiros (regra de negócio
+/// 10). Guarda o que ele informou; o barbeiro só passa a existir quando usa
+/// o código e cria a própria conta, com e-mail, telefone e senha.
+///
+/// Como a senha, o código nunca é gravado em texto puro: só o hash.
+class ConviteBarbeiro {
+  final int? id;
+  final String nome;
+  final String especialidade;
+  final double salario;
+  final String codigoHash;
+  final String criadoEm;
+  final String expiraEm;
+
+  const ConviteBarbeiro({
+    this.id,
+    required this.nome,
+    required this.especialidade,
+    required this.salario,
+    required this.codigoHash,
+    required this.criadoEm,
+    required this.expiraEm,
+  });
+
+  String get iniciais => Barbeiro.iniciaisDe(nome);
+
+  /// Tamanho do código, em letras e números.
+  static const int tamanhoCodigo = 8;
+
+  /// Maiúsculas, sem espaço nem hífen: `k7mp-q2xr` vira `K7MPQ2XR`. O
+  /// código é mostrado em dois blocos, mas conferido sem eles.
+  static String normalizarCodigo(String texto) =>
+      texto.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+  /// O convite já não vale em [agora]?
+  bool vencido(DateTime agora) => !agora.isBefore(DateTime.parse(expiraEm));
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'nome': nome,
+    'especialidade': especialidade,
+    'salario': salario,
+    'codigo_hash': codigoHash,
+    'criado_em': criadoEm,
+    'expira_em': expiraEm,
+  };
+
+  factory ConviteBarbeiro.fromMap(Map<String, dynamic> map) => ConviteBarbeiro(
+    id: map['id'] as int?,
+    nome: map['nome'] as String,
+    especialidade: map['especialidade'] as String,
+    salario: (map['salario'] as num).toDouble(),
+    codigoHash: map['codigo_hash'] as String,
+    criadoEm: map['criado_em'] as String,
+    expiraEm: map['expira_em'] as String,
   );
 }

@@ -144,95 +144,14 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
   /// O cliente esqueceu a senha e pediu ajuda no balcão: o app gera um
   /// código provisório que o administrador entrega a ele (regra de negócio
   /// 16).
-  Future<void> _liberarNovaSenha(Cliente c) async {
-    final horas = DatabaseService.validadeCodigoBarbearia.inHours;
-    final confirmou = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Liberar nova senha?', style: AppTheme.titulo(size: 18)),
-        content: Text(
-          'Confira se quem pediu é mesmo ${c.nome}. O app vai gerar um '
-          'código provisório, que vale por $horas horas e uma vez só. Com '
-          'ele no lugar da senha, o cliente entra e cria uma senha nova.',
-          style: AppTheme.texto(size: 13, color: AppColors.muted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Cancelar',
-              style: AppTheme.texto(size: 13, color: AppColors.muted),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              'Liberar',
-              style: AppTheme.texto(
-                size: 13,
-                weight: FontWeight.w600,
-                color: AppColors.amarelo,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmou != true || !mounted) return;
-
-    final r = await AuthService.instance.liberarNovaSenha(c.id!);
-    if (!mounted) return;
-    if (!r.sucesso) {
-      mostrarErro(context, r.erro ?? 'Não foi possível liberar a nova senha');
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Código provisório', style: AppTheme.titulo(size: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              r.codigo!,
-              textAlign: TextAlign.center,
-              // Sem serifa: os algarismos ficam da mesma altura, mais fáceis
-              // de ditar ao cliente.
-              style: AppTheme.texto(
-                size: 32,
-                weight: FontWeight.w600,
-                color: AppColors.amarelo,
-                letterSpacing: 6,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Entregue este código a ${c.nome}. No login, o cliente usa o '
-              'e-mail ${c.email} e este código no lugar da senha, e o app '
-              'pede uma senha nova. Vale por $horas horas, uma vez só, e não '
-              'aparece de novo.',
-              style: AppTheme.texto(size: 13, color: AppColors.muted),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Entendi',
-              style: AppTheme.texto(
-                size: 13,
-                weight: FontWeight.w600,
-                color: AppColors.amarelo,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> _liberarNovaSenha(Cliente c) => liberarNovaSenhaNoBalcao(
+    context,
+    nome: c.nome,
+    email: c.email,
+    quem: 'o cliente',
+    horas: DatabaseService.validadeCodigoBarbearia.inHours,
+    liberar: () => AuthService.instance.liberarNovaSenha(c.id!),
+  );
 
   String _dataCadastro(String iso) {
     try {

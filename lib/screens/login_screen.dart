@@ -174,6 +174,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
+                  // O barbeiro não se cadastra: entra pelo convite que o
+                  // administrador enviou (regra de negócio 10).
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pushNamed(AuthService.rotaConvite),
+                      icon: const Icon(Icons.content_cut_rounded, size: 18),
+                      label: Text(
+                        'Tenho um convite de barbeiro',
+                        style: AppTheme.texto(
+                          size: 13,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.muted,
+                        minimumSize: const Size(48, 48),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

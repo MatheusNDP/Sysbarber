@@ -55,29 +55,29 @@ class Validators {
 
   static bool especialidadeValida(String v) => v.trim().length >= 3;
 
-  /// Valida o formulário de cadastro/edição de barbeiro.
-  ///
-  /// [senhaObrigatoria] é `false` na edição: deixar o campo em branco mantém
-  /// a senha atual do profissional.
-  static String? validarBarbeiro({
+  /// Valida o que o administrador informa do barbeiro: no convite e na
+  /// edição (regra de negócio 10).
+  static String? validarDadosBarbeiro({
     required String nome,
     required String especialidade,
-    required String telefone,
-    required String email,
-    required String senha,
     required double salario,
-    bool senhaObrigatoria = true,
   }) {
     if (!nomeValido(nome)) return 'Nome deve ter pelo menos 3 caracteres';
     if (!especialidadeValida(especialidade)) {
       return 'Especialidade deve ter pelo menos 3 caracteres';
     }
-    if (!telefoneValido(telefone)) return 'Telefone inválido';
-    if (!emailValido(email)) return 'E-mail inválido';
-    if (senhaObrigatoria || senha.isNotEmpty) {
-      if (!senhaValida(senha)) return 'Senha deve ter no mínimo 6 caracteres';
-    }
     if (!salarioValido(salario)) return 'Salário deve ser maior que zero';
+    return null;
+  }
+
+  /// Valida o e-mail e o telefone que o próprio barbeiro informa: ao usar o
+  /// convite e no Perfil.
+  static String? validarContatoBarbeiro({
+    required String email,
+    required String telefone,
+  }) {
+    if (!emailValido(email)) return 'E-mail inválido';
+    if (!telefoneValido(telefone)) return 'Telefone inválido';
     return null;
   }
 

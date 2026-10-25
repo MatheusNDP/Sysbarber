@@ -34,10 +34,14 @@ class AuthService {
     '/login',
     '/cadastro',
     rotaRecuperarSenha,
+    rotaConvite,
   };
 
   /// "Esqueci minha senha" (regra de negócio 16).
   static const String rotaRecuperarSenha = '/recuperar-senha';
+
+  /// "Tenho um convite de barbeiro", no login (regra de negócio 10).
+  static const String rotaConvite = '/convite-barbeiro';
 
   /// Tela da configuração inicial, a única aberta antes de existir o
   /// administrador (regra de negócio 15).
@@ -400,6 +404,71 @@ class AuthService {
     }
   }
 
+  /// O administrador libera uma nova senha para o barbeiro [idBarbeiro]
+  /// (regra de negócio 16): ele não define mais a senha do barbeiro.
+  Future<({bool sucesso, String? erro, String? codigo})>
+  liberarNovaSenhaDoBarbeiro(int idBarbeiro) async {
+    if (!podeAdministrar) {
+      return (
+        sucesso: false,
+        erro: 'Só o administrador pode liberar uma nova senha',
+        codigo: null,
+      );
+    }
+    try {
+      final codigo = await _db.liberarCodigoDaBarbeariaParaBarbeiro(idBarbeiro);
+      return (sucesso: true, erro: null, codigo: codigo);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível liberar a nova senha'),
+        codigo: null,
+      );
+    }
+  }
+
+  /// Confere o código do convite digitado pelo barbeiro (regra de negócio
+  /// 10) e devolve o convite, para a tela mostrar de quem é.
+  Future<({ConviteBarbeiro? convite, String? erro})> conferirConvite(
+    String codigo,
+  ) async {
+    try {
+      return (convite: await _db.buscarConvitePorCodigo(codigo), erro: null);
+    } catch (e) {
+      return (
+        convite: null,
+        erro: mensagemDeErro(e, 'Não foi possível conferir o convite'),
+      );
+    }
+  }
+
+  /// O barbeiro usa o convite, cria a própria conta e já entra.
+  Future<({bool sucesso, String? erro})> aceitarConvite({
+    required String codigo,
+    required String email,
+    required String telefone,
+    required String senha,
+  }) async {
+    try {
+      final barbeiro = await _db.aceitarConviteBarbeiro(
+        codigo: codigo,
+        email: email,
+        telefone: telefone,
+        senha: senha,
+      );
+      BookingFlow.limpar();
+      _barbeiroAtual = barbeiro;
+      _usuarioAtual = null;
+      await _salvarSessao(barbeiro.id!, _tipoBarbeiro);
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível criar a conta'),
+      );
+    }
+  }
+
   /// Cadastra o cliente e já o deixa logado.
   Future<({bool sucesso, String? erro})> cadastrar({
     required String nome,
@@ -484,6 +553,28 @@ class AuthService {
     try {
       await _db.atualizarContatoCliente(id, nome: nome, telefone: telefone);
       await recarregarUsuario();
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível salvar seus dados'),
+      );
+    }
+  }
+
+  /// Atualiza o e-mail e o telefone do barbeiro logado (regra de negócio
+  /// 10): o administrador não mexe mais neles.
+  Future<({bool sucesso, String? erro})> atualizarContatoBarbeiro({
+    required String email,
+    required String telefone,
+  }) async {
+    final id = _barbeiroAtual?.id;
+    if (id == null) {
+      return (sucesso: false, erro: 'Entre na sua conta para editar o perfil');
+    }
+    try {
+      await _db.atualizarContatoBarbeiro(id, email: email, telefone: telefone);
+      _barbeiroAtual = await _db.buscarBarbeiroPorId(id);
       return (sucesso: true, erro: null);
     } catch (e) {
       return (

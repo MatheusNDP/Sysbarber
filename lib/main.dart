@@ -11,6 +11,7 @@ import 'screens/barbeiro_screen.dart';
 import 'screens/cadastro_screen.dart';
 import 'screens/configuracao_screen.dart';
 import 'screens/confirmacao_screen.dart';
+import 'screens/convite_barbeiro_screen.dart';
 import 'screens/fidelidade_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/horario_screen.dart';
@@ -118,6 +119,7 @@ class SysBarberApp extends StatelessWidget {
     '/login': (_) => const LoginScreen(),
     '/cadastro': (_) => const CadastroScreen(),
     AuthService.rotaRecuperarSenha: (_) => const RecuperarSenhaScreen(),
+    AuthService.rotaConvite: (_) => const ConviteBarbeiroScreen(),
     AuthService.rotaConfiguracao: (_) => const ConfiguracaoScreen(),
     '/home': (_) => const HomeScreen(),
     '/servicos': (_) => const ServicosScreen(),
