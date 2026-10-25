@@ -91,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Sistema de barbearia',
+                    'A barbearia na palma da sua mão',
                     style: AppTheme.texto(size: 14, color: AppColors.muted),
                   ),
                   const Spacer(flex: 3),
