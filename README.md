@@ -149,7 +149,7 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **329 testes** no total:
+São **339 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -159,8 +159,8 @@ São **329 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/telas_test.dart` | 63 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) e a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) |
-| `integration_test/database_integration_test.dart` | 188 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone) e migrações |
+| `test/telas_test.dart` | 65 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) |
+| `integration_test/database_integration_test.dart` | 196 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -169,7 +169,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 329 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 339 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -203,7 +203,7 @@ lib/
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
-│   └── booking_flow.dart        # Rascunho do agendamento em andamento
+│   └── booking_flow.dart        # Rascunho do agendamento (ou do reagendamento) em andamento
 ├── widgets/common_widgets.dart  # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
 └── screens/                     # 22 telas (uma por arquivo)
 ```
@@ -426,6 +426,15 @@ v2):
       de clientes, não entra mais, e o e-mail fica livre para uma conta nova,
       que começa do zero. O barbeiro continua sendo excluído pelo
       administrador (regra 10), e o administrador não se exclui.
+19. O cliente **reagenda** o próprio agendamento até 1 hora antes do horário,
+    o mesmo prazo do cancelamento sem multa; com menos de 1 hora, só resta
+    cancelar, com a penalidade da regra 7. Ele pode trocar a data, o horário
+    e o barbeiro, sem limite de vezes; o serviço não muda. O preço, a duração
+    e o pagamento (antecipado, na barbearia ou com pontos) continuam os
+    mesmos. O novo horário passa pelas mesmas conferências de uma reserva
+    (regras 1, 2 e 14), sem contar o próprio agendamento como ocupado, e não
+    pode ser igual ao atual. A barbearia não reagenda: ela cancela (regra
+    13). O banco confere tudo isso, numa transação.
 
 ---
 
@@ -490,11 +499,11 @@ v2):
 | `/termos` | Termos de uso e política de privacidade: o que o app guarda, para quê, onde ficam os dados, com quem são compartilhados e os direitos de quem usa (LGPD) | todos, até antes da configuração inicial |
 | `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o acesso rápido | todos os perfis |
 | `/servicos` | Catálogo de serviços (também é a aba Serviços) | cliente |
-| `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção) | cliente |
-| `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível | cliente |
+| `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção). Num reagendamento, o atual vem escolhido, com o aviso "Reagendando o horário de…" | cliente |
+| `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível. Num reagendamento, vira "Novo horário": não oferece o horário atual com o mesmo barbeiro e, confirmado, troca o horário e volta à lista | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva | cliente |
-| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda | cliente e barbeiro |
+| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda. O cliente tem "Reagendar" até 1 hora antes e "Cancelar agendamento" até o horário | cliente e barbeiro |
 | `/fidelidade` | Pontos e histórico | cliente |
 | `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro vê a especialidade e edita o e-mail e o telefone. Todos têm "Termos e privacidade"; o cliente também tem "Excluir minha conta", embaixo do Sair | todos os perfis |
 | `/admin` | Painel administrativo (também é a aba Painel): movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
@@ -646,6 +655,15 @@ Perfil → Excluir minha conta → senha → o banco confere agendamentos em abe
                                               │
                     dados pessoais, pontos e extrato apagados na mesma
                     transação → abertura do app
+```
+
+Reagendamento (regra 19):
+
+```
+Meus agendamentos → Reagendar (até 1 h antes) → Profissional → Novo horário
+                                                                   │
+                         confirma "de… para…" → o banco confere o novo horário
+                         e troca data e barbeiro → volta à lista
 ```
 
 ---
