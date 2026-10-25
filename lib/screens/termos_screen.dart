@@ -97,6 +97,9 @@ class TermosScreen extends StatelessWidget {
     ),
   ];
 
+  /// Começo dos parágrafos que são itens de uma lista.
+  static const String _marcador = '•  ';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,10 +133,12 @@ class TermosScreen extends StatelessWidget {
             for (final paragrafo in paragrafos)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  paragrafo,
-                  style: AppTheme.texto(size: 14, height: 1.5),
-                ),
+                child: paragrafo.startsWith(_marcador)
+                    ? ItemDeLista(paragrafo.substring(_marcador.length))
+                    : Text(
+                        paragrafo,
+                        style: AppTheme.texto(size: 14, height: 1.5),
+                      ),
               ),
           ],
           const SizedBox(height: 16),

@@ -676,12 +676,16 @@ class _ExcluirContaDialogState extends State<_ExcluirContaDialog> {
           children: [
             Text('Ao excluir a conta:', style: estilo),
             const SizedBox(height: 6),
-            Text(
-              '•  seu nome, e-mail, telefone e senha são apagados;\n'
-              '•  seus $pontos são perdidos;\n'
-              '•  os atendimentos que já aconteceram ficam só nos relatórios '
-              'da barbearia, sem o seu nome.',
-              style: estilo,
+            ItemDeLista(
+              'seu nome, e-mail, telefone e senha são apagados;',
+              estilo: estilo,
+            ),
+            if (widget.pontos > 0)
+              ItemDeLista('seus $pontos são perdidos;', estilo: estilo),
+            ItemDeLista(
+              'os atendimentos que já aconteceram ficam só nos relatórios da '
+              'barbearia, sem o seu nome.',
+              estilo: estilo,
             ),
             const SizedBox(height: 10),
             Text(

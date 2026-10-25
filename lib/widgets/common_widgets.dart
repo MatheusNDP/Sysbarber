@@ -825,6 +825,39 @@ void mostrarInfo(BuildContext context, String mensagem) {
     );
 }
 
+/// Item de lista com um ponto amarelo e o texto recuado: o "•" da fonte
+/// fica pequeno demais.
+class ItemDeLista extends StatelessWidget {
+  final String texto;
+  final TextStyle? estilo;
+
+  const ItemDeLista(this.texto, {super.key, this.estilo});
+
+  @override
+  Widget build(BuildContext context) {
+    final estiloDoTexto = estilo ?? AppTheme.texto(size: 14, height: 1.5);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          margin: EdgeInsets.only(
+            top: (estiloDoTexto.fontSize ?? 14) * 0.55,
+            right: 12,
+            left: 2,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.amarelo,
+            shape: BoxShape.circle,
+          ),
+        ),
+        Expanded(child: Text(texto, style: estiloDoTexto)),
+      ],
+    );
+  }
+}
+
 /// Aceite dos termos de uso e da política de privacidade, ao criar a conta
 /// (regra de negócio 18). "Ler os termos" chama [aoLerTermos].
 class AceiteTermos extends StatelessWidget {
