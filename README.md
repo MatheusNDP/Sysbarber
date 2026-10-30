@@ -505,7 +505,7 @@ v2):
 
 | Rota | Tela | Quem acessa |
 |---|---|---|
-| `/` | Splash — entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
+| `/` | Splash — o nome do app e o slogan, "A barbearia na palma da sua mão"; entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
 | `/configuracao` | Configuração inicial: cria o administrador, com o aceite dos termos, e, se marcado, os dados de exemplo | só antes de existir o administrador |
 | `/login` | Login, com "Esqueci minha senha" e "Tenho um convite de barbeiro" | todos |
 | `/convite-barbeiro` | Convite de barbeiro: o código que o administrador enviou e, conferido, a conta (e-mail, telefone, senha e o aceite dos termos); já entra na agenda | todos |
