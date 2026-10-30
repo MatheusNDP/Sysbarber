@@ -5,6 +5,7 @@ import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 
 /// Catálogo de serviços (`/servicos`). Todos os dados vêm do banco.
@@ -75,17 +76,22 @@ class _ServicosScreenState extends State<ServicosScreen> {
                         'Cadastre serviços na área administrativa para '
                         'que apareçam aqui.',
                   )
-                : ListView.separated(
-                    // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      20,
-                      20,
-                      20 + MediaQuery.paddingOf(context).bottom,
+                : Cascata(
+                    child: ListView.separated(
+                      // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        20,
+                        20,
+                        20 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                      itemCount: _servicos.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) => ItemDaCascata(
+                        ordem: i,
+                        child: _cardServico(_servicos[i]),
+                      ),
                     ),
-                    itemCount: _servicos.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _cardServico(_servicos[i]),
                   ),
           ),
         ],

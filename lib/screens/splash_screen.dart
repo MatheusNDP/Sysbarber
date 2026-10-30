@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 
 /// Tela inicial (`/`). Se houver sessão salva, entra direto na Home. Na
@@ -59,96 +60,125 @@ class _SplashScreenState extends State<SplashScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 2),
-                  const IconeCirculo(
-                    icone: Icons.content_cut_rounded,
-                    tamanho: 96,
-                    destaque: true,
-                  ),
-                  const SizedBox(height: 28),
-                  RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Sys',
-                          style: AppTheme.titulo(
-                            size: 38,
-                            color: AppColors.amarelo,
-                          ),
-                        ),
-                        TextSpan(
-                          text: 'Barber',
-                          style: AppTheme.titulo(
-                            size: 38,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ],
+              // Na abertura, a cascata é mais lenta: cerca de 1 segundo.
+              child: Cascata(
+                intervalo: const Duration(milliseconds: 120),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Spacer(flex: 2),
+                    const ItemDaCascata(
+                      ordem: 0,
+                      escalaInicial: 0.6,
+                      child: IconeCirculo(
+                        icone: Icons.content_cut_rounded,
+                        tamanho: 96,
+                        destaque: true,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'A barbearia na palma da sua mão',
-                    style: AppTheme.texto(size: 14, color: AppColors.muted),
-                  ),
-                  const Spacer(flex: 3),
-                  if (_restaurandoSessao)
-                    Column(
-                      children: [
-                        const SizedBox(
-                          width: 26,
-                          height: 26,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.amarelo,
-                          ),
+                    const SizedBox(height: 28),
+                    ItemDaCascata(
+                      ordem: 1,
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Sys',
+                              style: AppTheme.titulo(
+                                size: 38,
+                                color: AppColors.amarelo,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Barber',
+                              style: AppTheme.titulo(
+                                size: 38,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Entrando como ${nome ?? ''}...',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ItemDaCascata(
+                      ordem: 2,
+                      child: Text(
+                        'A barbearia na palma da sua mão',
+                        style: AppTheme.texto(size: 14, color: AppColors.muted),
+                      ),
+                    ),
+                    const Spacer(flex: 3),
+                    if (_restaurandoSessao)
+                      ItemDaCascata(
+                        ordem: 3,
+                        child: Column(
+                          children: [
+                            const SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.amarelo,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Entrando como ${nome ?? ''}...',
+                              style: AppTheme.texto(
+                                size: 13,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (!auth.barbeariaConfigurada) ...[
+                      ItemDaCascata(
+                        ordem: 3,
+                        child: Text(
+                          'Primeiro acesso: crie a conta de administrador da '
+                          'barbearia para começar.',
+                          textAlign: TextAlign.center,
                           style: AppTheme.texto(
                             size: 13,
                             color: AppColors.muted,
+                            height: 1.4,
                           ),
                         ),
-                      ],
-                    )
-                  else if (!auth.barbeariaConfigurada) ...[
-                    Text(
-                      'Primeiro acesso: crie a conta de administrador da '
-                      'barbearia para começar.',
-                      textAlign: TextAlign.center,
-                      style: AppTheme.texto(
-                        size: 13,
-                        color: AppColors.muted,
-                        height: 1.4,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    BotaoPrincipal(
-                      texto: 'Configurar barbearia',
-                      onPressed: () =>
-                          Navigator.of(context)
-                              .pushNamed(AuthService.rotaConfiguracao),
-                    ),
-                  ] else ...[
-                    BotaoPrincipal(
-                      texto: 'Entrar',
-                      onPressed: () =>
-                          Navigator.of(context).pushNamed('/login'),
-                    ),
-                    const SizedBox(height: 12),
-                    BotaoSecundario(
-                      texto: 'Criar conta',
-                      onPressed: () =>
-                          Navigator.of(context).pushNamed('/cadastro'),
-                    ),
+                      const SizedBox(height: 16),
+                      ItemDaCascata(
+                        ordem: 4,
+                        child: BotaoPrincipal(
+                          texto: 'Configurar barbearia',
+                          onPressed: () =>
+                              Navigator.of(context)
+                                  .pushNamed(AuthService.rotaConfiguracao),
+                        ),
+                      ),
+                    ] else ...[
+                      ItemDaCascata(
+                        ordem: 3,
+                        child: BotaoPrincipal(
+                          texto: 'Entrar',
+                          onPressed: () =>
+                              Navigator.of(context).pushNamed('/login'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ItemDaCascata(
+                        ordem: 4,
+                        child: BotaoSecundario(
+                          texto: 'Criar conta',
+                          onPressed: () =>
+                              Navigator.of(context).pushNamed('/cadastro'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 40),
                   ],
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
           ),

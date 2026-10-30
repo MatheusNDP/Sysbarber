@@ -6,6 +6,7 @@ import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 import 'acesso_negado_screen.dart';
 
@@ -769,18 +770,21 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       color: AppColors.amarelo,
       backgroundColor: AppColors.card,
       onRefresh: _carregar,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
-        padding: EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          20 + MediaQuery.paddingOf(context).bottom,
+      child: Cascata(
+        child: ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          // Embaixo, o espaço da barra de navegação quando a tela é uma aba.
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            20 + MediaQuery.paddingOf(context).bottom,
+          ),
+          itemCount: itens.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, i) =>
+              ItemDaCascata(ordem: i, child: _card(itens[i])),
         ),
-        itemCount: itens.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _card(itens[i]),
       ),
     );
   }
