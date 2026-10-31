@@ -150,7 +150,7 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **367 testes** no total:
+São **372 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -162,8 +162,8 @@ São **367 testes** no total:
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
 | `test/animacoes_test.dart` | 9 | Animações de entrada: a cascata (a ordem dos itens, o item montado depois que ela terminou e o item fora dela), o "Remover animações" do Android, a contagem dos pontos (a partir do 0 e do valor anterior, com o valor final para o leitor de tela), a barra de progresso e o corte da tesoura na abertura (a pausa, a tesoura atravessando a tela, o conteúdo só com as metades se abrindo e, sem animações, a abertura direto) |
 | `test/android_test.dart` | 5 | Identidade no Android: as cores iguais às do app, a tela nativa da abertura só em grafite (também a do Android 12 em diante, sem ícone), o nome "SysBarber", o ícone adaptativo e a tesoura como ícone das notificações, mantida no APK release |
-| `test/telas_test.dart` | 73 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) |
-| `integration_test/database_integration_test.dart` | 200 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador) e migrações |
+| `test/telas_test.dart` | 77 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) e o último serviço do Início (só o concluído mais recente, sem cancelamentos e faltas, e nada sem um atendimento concluído; o "Repetir" direto no horário com o mesmo serviço e barbeiro ou, com o barbeiro indisponível, na escolha do profissional) |
+| `integration_test/database_integration_test.dart` | 201 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador), a disponibilidade do barbeiro na lista do cliente (para o "Repetir" do último serviço) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -172,7 +172,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 367 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 372 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -207,7 +207,7 @@ lib/
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
-│   └── booking_flow.dart        # Rascunho do agendamento (ou do reagendamento) em andamento
+│   └── booking_flow.dart        # Rascunho do agendamento (novo, repetido ou reagendamento) em andamento
 ├── widgets/
 │   ├── common_widgets.dart      # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
 │   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso e o corte da abertura
@@ -454,6 +454,15 @@ v2):
     diante) é pedida no primeiro agendamento feito no aparelho. Só o cliente
     recebe: avisar o barbeiro de um agendamento novo precisaria de um
     servidor, porque o aviso sairia de outro celular.
+21. O Início do cliente mostra o **último serviço**: o atendimento concluído
+    mais recente (cancelamentos e faltas não contam), com o serviço, o
+    barbeiro e a data, mesmo quando já há um horário marcado; sem nenhum
+    atendimento concluído, a seção não aparece. "Repetir" começa um
+    agendamento novo com o mesmo serviço e o mesmo barbeiro e abre direto a
+    escolha do horário; daí em diante é uma reserva como outra qualquer
+    (confirmação, pagamento e o preço atual do serviço, regras 1, 2, 3 e 9).
+    Se o barbeiro ficou indisponível (regra 14), "Repetir" abre a escolha do
+    profissional, com o serviço já escolhido.
 
 ---
 
@@ -516,10 +525,10 @@ v2):
 | `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta, com o aceite dos termos (já entra logado) | todos |
 | `/termos` | Termos de uso e política de privacidade: o que o app guarda, para quê, onde ficam os dados, com quem são compartilhados e os direitos de quem usa (LGPD) | todos, até antes da configuração inicial |
-| `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o acesso rápido | todos os perfis |
+| `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o último serviço, com o "Repetir" (regra 21) | todos os perfis |
 | `/servicos` | Catálogo de serviços (também é a aba Serviços) | cliente |
 | `/barbeiro` | Escolha do profissional (indisponível aparece apagado, sem seleção). Num reagendamento, o atual vem escolhido, com o aviso "Reagendando o horário de…" | cliente |
-| `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível. Num reagendamento, vira "Novo horário": não oferece o horário atual com o mesmo barbeiro e, confirmado, troca o horário e volta à lista | cliente |
+| `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível. O "Repetir" do Início abre direto aqui, com o serviço e o barbeiro do último atendimento. Num reagendamento, vira "Novo horário": não oferece o horário atual com o mesmo barbeiro e, confirmado, troca o horário e volta à lista | cliente |
 | `/confirmacao` | Revisão do agendamento (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva e agenda o lembrete; no primeiro agendamento do aparelho, o Android pede a permissão de notificação | cliente |
 | `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro); nos dois, também é a aba Agenda. O cliente tem "Reagendar" até 1 hora antes e "Cancelar agendamento" até o horário | cliente e barbeiro |
@@ -565,10 +574,11 @@ barra de navegação, com as abas de quem entrou (regra 17):
 Tocar na barra troca a aba sem abrir uma tela nova: a barra continua no lugar
 e uma pílula amarela desliza até a aba escolhida, enquanto o conteúdo da aba
 nova entra deslizando pelo mesmo lado. Cada aba relê o banco ao ser aberta.
-Os atalhos do Início do cliente (Serviços, Agenda e Perfil), o cartão do
-próximo horário e o "Agendamentos" do Perfil também trocam de aba, assim como
-a Agenda geral e os Relatórios no Painel. Fora da primeira aba, o voltar do
-Android volta para ela.
+O cartão do próximo horário, no Início do cliente, e o "Agendamentos" do
+Perfil também trocam de aba, assim como a Agenda geral e os Relatórios no
+Painel. Fora da primeira aba, o voltar do Android volta para ela. O Início não
+tem atalhos para as abas, que já estão na barra; a Fidelidade abre pelo cartão
+de pontos.
 
 Fidelidade, Gerenciar Serviços, Barbeiros e Clientes e o agendamento
 (profissional, horário, revisão e pagamento) abrem por cima, sem a barra, com
@@ -619,8 +629,8 @@ elemento, com um intervalo curto entre eles. Os componentes ficam em
   conta, por exemplo), ela aparece sem o corte;
 - abertura: o ícone surge crescendo, o nome e o slogan sobem em seguida e os
   botões entram por último, em cerca de 1 segundo;
-- Início: a saudação, o card do próximo horário, o card de pontos e o acesso
-  rápido entram em cascata;
+- Início: a saudação, o card do próximo horário, o card de pontos e o último
+  serviço entram em cascata;
 - pontos: contam até o valor em 0,8 s, no Início e na Fidelidade, onde a
   barra de progresso também enche; o leitor de tela lê sempre o valor final;
 - listas: Serviços, a escolha do profissional, os agendamentos (do cliente,
@@ -676,6 +686,14 @@ Serviços → Barbeiro → Horário → Confirmação → Pagamento → Home
                               (não grava nada)     na mesma transação e credita
                                                    os pontos (se pago agora) ou
                                                    debita os 500 do resgate
+```
+
+Repetindo o último serviço (regra 21), o caminho começa no Horário:
+
+```
+Início → Repetir → Horário → Confirmação → Pagamento → Home
+            │
+            └→ barbeiro indisponível: Barbeiro → Horário → …
 ```
 
 Recuperação de senha (regra 16):

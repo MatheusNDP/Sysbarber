@@ -581,6 +581,33 @@ void main() {
       expect((await service.listarAgendamentosBarbeiro(b.id!)).length, 1);
       expect((await service.listarAgendamentosCliente(idCliente)).length, 1);
     });
+
+    test('a lista do cliente diz se o barbeiro continua disponível, para o '
+        '"Repetir" do último serviço', () async {
+      final idCliente = await criarClienteTeste();
+      final b = (await service.listarBarbeirosAtivos()).first;
+      final s = (await service.listarServicos()).first;
+      await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: b.id!,
+          idServico: s.id!,
+          dataHora: DateTime.now()
+              .subtract(const Duration(days: 3))
+              .toIso8601String(),
+          status: StatusAgendamento.finalizado,
+        ),
+      );
+
+      var lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.single.barbeiro!.ativo, isTrue);
+
+      // Antes a lista não trazia a disponibilidade, e todo barbeiro parecia
+      // ativo.
+      await service.definirBarbeiroAtivo(b.id!, false);
+      lista = await service.listarAgendamentosCliente(idCliente);
+      expect(lista.single.barbeiro!.ativo, isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------

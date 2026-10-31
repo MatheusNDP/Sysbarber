@@ -1365,7 +1365,8 @@ void main() {
   // Navegação principal com abas
   // -------------------------------------------------------------------------
 
-  /// O botão [rotulo] da barra de navegação (e não o atalho de mesmo nome).
+  /// O botão [rotulo] da barra de navegação (e não outro texto de mesmo nome
+  /// na tela).
   Finder botaoDaBarra(String rotulo) => find.descendant(
     of: find.byType(BarraNavegacao),
     matching: find.text(rotulo),
@@ -2249,7 +2250,6 @@ void main() {
     }
     expect(find.text('120 pts'), findsOneWidget);
     expect(opacidadeDe(tester, find.text('Pontos de fidelidade')), 1);
-    expect(opacidadeDe(tester, find.text('Acesso rápido')), 1);
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -2272,5 +2272,158 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(opacidadeDe(tester, primeiro), 1);
     expect(opacidadeDe(tester, terceiro), 1);
+  });
+  // -------------------------------------------------------------------------
+  // P41 — último serviço no Início
+  // -------------------------------------------------------------------------
+
+  /// Atendimento do cliente [idCliente] com o barbeiro 1 (Carlos Eduardo),
+  /// [dias] atrás, já com o desfecho [status].
+  Future<int> atendimentoPassado(
+    int idCliente, {
+    required int dias,
+    required StatusAgendamento status,
+    int idServico = 1,
+  }) => service.criarAgendamento(
+    Agendamento(
+      idCliente: idCliente,
+      idBarbeiro: 1,
+      idServico: idServico,
+      dataHora: DateTime.now().subtract(Duration(days: dias)).toIso8601String(),
+      status: status,
+    ),
+  );
+
+  /// Abre o Início do cliente `c@teste.com`, com o horário e a escolha do
+  /// profissional atrás do "Repetir". [historico] roda antes do login.
+  Future<void> abrirInicio(
+    WidgetTester tester,
+    Future<void> Function(int idCliente) historico,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(BookingFlow.limpar);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await historico(await cadastrarClienteTeste());
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await tester.runAsync(
+      () => tester.pumpWidget(
+        MaterialApp(
+          home: const HomeScreen(),
+          routes: {
+            '/barbeiro': (_) => const BarbeiroScreen(),
+            '/horario': (_) => const HorarioScreen(),
+          },
+        ),
+      ),
+    );
+    await esperarBanco(tester);
+  }
+
+  testWidgets('o Início mostra o último atendimento concluído no lugar do '
+      'acesso rápido; cancelamentos e faltas não contam', (tester) async {
+    await abrirInicio(tester, (id) async {
+      await atendimentoPassado(
+        id,
+        dias: 10,
+        status: StatusAgendamento.finalizado,
+        idServico: 2,
+      );
+      await atendimentoPassado(
+        id,
+        dias: 5,
+        status: StatusAgendamento.finalizado,
+      );
+      await atendimentoPassado(
+        id,
+        dias: 2,
+        status: StatusAgendamento.cancelado,
+        idServico: 3,
+      );
+      await atendimentoPassado(
+        id,
+        dias: 1,
+        status: StatusAgendamento.faltou,
+        idServico: 3,
+      );
+    });
+
+    // Antes o Início tinha o acesso rápido, que repetia a barra de navegação.
+    expect(find.text('Acesso rápido'), findsNothing);
+    expect(find.text('Último serviço'), findsOneWidget);
+    expect(find.text('Corte de Cabelo'), findsOneWidget);
+    final quando = DateTime.now().subtract(const Duration(days: 5));
+    expect(
+      find.text('com Carlos Eduardo · ${formatarDataCurta(quando)}'),
+      findsOneWidget,
+    );
+    expect(find.text('Barba'), findsNothing);
+    expect(find.text('Corte + Barba'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('sem atendimento concluído, o Início não mostra o último '
+      'serviço', (tester) async {
+    await abrirInicio(tester, (id) async {
+      await atendimentoPassado(
+        id,
+        dias: 2,
+        status: StatusAgendamento.cancelado,
+      );
+      await atendimentoPassado(id, dias: 1, status: StatusAgendamento.faltou);
+    });
+
+    expect(find.text('Nenhum horário marcado'), findsOneWidget);
+    expect(find.text('Último serviço'), findsNothing);
+    expect(find.text('Repetir'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('"Repetir" abre o horário com o mesmo serviço e o mesmo '
+      'barbeiro já escolhidos', (tester) async {
+    await abrirInicio(
+      tester,
+      (id) =>
+          atendimentoPassado(id, dias: 5, status: StatusAgendamento.finalizado),
+    );
+
+    await tocarEsperando(tester, find.text('Repetir'));
+    await esperarBanco(tester);
+
+    expect(find.byType(HorarioScreen), findsOneWidget);
+    expect(find.byType(BarbeiroScreen), findsNothing);
+    expect(BookingFlow.servicoSelecionado?.nome, 'Corte de Cabelo');
+    expect(BookingFlow.barbeiroSelecionado?.nome, 'Carlos Eduardo');
+    expect(BookingFlow.reagendando, isNull);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('com o barbeiro indisponível, "Repetir" abre a escolha do '
+      'profissional com o serviço já escolhido', (tester) async {
+    await abrirInicio(tester, (id) async {
+      await atendimentoPassado(
+        id,
+        dias: 5,
+        status: StatusAgendamento.finalizado,
+      );
+      await service.definirBarbeiroAtivo(1, false);
+    });
+
+    await tocarEsperando(tester, find.text('Repetir'));
+    await esperarBanco(tester);
+
+    expect(find.byType(HorarioScreen), findsNothing);
+    expect(find.byType(BarbeiroScreen), findsOneWidget);
+    expect(BookingFlow.servicoSelecionado?.nome, 'Corte de Cabelo');
+    // Carlos Eduardo aparece apagado, sem seleção: falta escolher outro.
+    final continuar = tester.widget<BotaoPrincipal>(
+      find.widgetWithText(BotaoPrincipal, 'Continuar'),
+    );
+    expect(continuar.onPressed, isNull);
+    await tester.runAsync(AuthService.instance.logout);
   });
 }

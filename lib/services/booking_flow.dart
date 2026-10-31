@@ -4,7 +4,8 @@ import '../models/models.dart';
 ///
 /// Percorre as telas Serviços → Barbeiro → Horário → Confirmação → Pagamento
 /// sem precisar passar argumentos por todas as rotas. Num reagendamento, o
-/// caminho é só Barbeiro → Horário ([reagendando]).
+/// caminho é só Barbeiro → Horário ([reagendando]); ao repetir o último
+/// serviço, começa no Horário ([repetir]).
 class BookingFlow {
   BookingFlow._();
 
@@ -38,6 +39,16 @@ class BookingFlow {
   static void iniciar(Servico servico) {
     limpar();
     servicoSelecionado = servico;
+  }
+
+  /// Começa um agendamento novo igual ao atendimento [a], o "Repetir" do
+  /// último serviço (regra de negócio 21): o serviço e o barbeiro vêm
+  /// escolhidos. Se o barbeiro ficou indisponível, a escolha do profissional
+  /// não o deixa selecionado.
+  static void repetir(Agendamento a) {
+    limpar();
+    servicoSelecionado = a.servico;
+    barbeiroSelecionado = a.barbeiro;
   }
 
   /// Começa a reagendar [a]: o serviço é o mesmo, e o barbeiro atual vem

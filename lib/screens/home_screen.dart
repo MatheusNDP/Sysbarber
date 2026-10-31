@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/auth_service.dart';
+import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
@@ -133,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Aba Início do cliente: próximo horário, pontos e acesso rápido.
+/// Aba Início do cliente: próximo horário, pontos e último serviço.
 class _Inicio extends StatefulWidget {
   const _Inicio();
 
@@ -145,6 +146,7 @@ class _InicioState extends State<_Inicio> {
   final _db = DatabaseService.instance;
 
   Agendamento? _proximo;
+  Agendamento? _ultimo;
   int _pontos = 0;
   bool _carregando = true;
   String? _erro;
@@ -184,9 +186,18 @@ class _InicioState extends State<_Inicio> {
               .toList()
             ..sort((a, b) => a.data.compareTo(b.data));
 
+      // O último serviço é o atendimento concluído mais recente (regra de
+      // negócio 21); cancelamentos e faltas não contam.
+      final concluidos =
+          agendamentos
+              .where((a) => a.status == StatusAgendamento.finalizado)
+              .toList()
+            ..sort((a, b) => b.data.compareTo(a.data));
+
       if (!mounted) return;
       setState(() {
         _proximo = futuros.isEmpty ? null : futuros.first;
+        _ultimo = concluidos.isEmpty ? null : concluidos.first;
         _pontos = pontos;
         _carregando = false;
       });
@@ -208,6 +219,15 @@ class _InicioState extends State<_Inicio> {
   /// Troca para outra aba da navegação principal.
   void _irParaAba(Aba aba, String rota) =>
       NavegacaoPrincipal.abrir(context, aba, rota);
+
+  /// Agenda de novo o último serviço (regra de negócio 21): direto no
+  /// horário, com o mesmo barbeiro, ou pela escolha do profissional, se ele
+  /// ficou indisponível.
+  Future<void> _repetir(Agendamento ultimo) {
+    BookingFlow.repetir(ultimo);
+    final barbeiroAtivo = ultimo.barbeiro?.ativo ?? false;
+    return _irPara(barbeiroAtivo ? '/horario' : '/barbeiro');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,18 +277,20 @@ class _InicioState extends State<_Inicio> {
                         ItemDaCascata(ordem: 1, child: _cardProximoHorario()),
                         const SizedBox(height: 16),
                         ItemDaCascata(ordem: 2, child: _cardFidelidade()),
-                        const SizedBox(height: 28),
-                        ItemDaCascata(
-                          ordem: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const TituloSecao('Acesso rápido'),
-                              const SizedBox(height: 14),
-                              _atalhos(),
-                            ],
+                        if (_ultimo case final ultimo?) ...[
+                          const SizedBox(height: 28),
+                          ItemDaCascata(
+                            ordem: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const TituloSecao('Último serviço'),
+                                const SizedBox(height: 14),
+                                _cardUltimoServico(ultimo),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -472,39 +494,48 @@ class _InicioState extends State<_Inicio> {
     );
   }
 
-  Widget _atalhos() {
-    // Serviços, Agenda e Perfil são abas; a Fidelidade abre por cima.
-    final itens = <(IconData, String, VoidCallback)>[
-      (
-        Icons.content_cut_rounded,
-        'Serviços',
-        () => _irParaAba(Aba.servicos, '/servicos'),
-      ),
-      (
-        Icons.calendar_month_outlined,
-        'Agenda',
-        () => _irParaAba(Aba.agenda, '/agendamentos'),
-      ),
-      (Icons.star_outline_rounded, 'Fidelidade', () => _irPara('/fidelidade')),
-      (
-        Icons.person_outline_rounded,
-        'Perfil',
-        () => _irParaAba(Aba.perfil, '/perfil'),
-      ),
-    ];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final item in itens)
-          Expanded(
-            child: AtalhoCirculo(
-              icone: item.$1,
-              rotulo: item.$2,
-              onTap: item.$3,
-            ),
+  /// O último atendimento concluído, com o botão de agendar de novo.
+  Widget _cardUltimoServico(Agendamento ultimo) {
+    return Cartao(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconeCirculo(
+                icone: iconeDoServico(ultimo.servico?.icone ?? ''),
+                cor: AppColors.amarelo,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ultimo.servico?.nome ?? 'Serviço',
+                      style: AppTheme.titulo(size: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'com ${ultimo.barbeiro?.nome ?? ''} · '
+                      '${formatarDataCurta(ultimo.data)}',
+                      style: AppTheme.texto(size: 13, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-      ],
+          const SizedBox(height: 16),
+          BotaoSecundario(
+            texto: 'Repetir',
+            icone: Icons.replay_rounded,
+            onPressed: () => _repetir(ultimo),
+          ),
+        ],
+      ),
     );
   }
 }

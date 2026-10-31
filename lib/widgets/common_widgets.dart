@@ -247,48 +247,6 @@ class IconeCirculo extends StatelessWidget {
   }
 }
 
-/// Atalho redondo com o nome embaixo, como as categorias da tela inicial.
-class AtalhoCirculo extends StatelessWidget {
-  final IconData icone;
-  final String rotulo;
-  final VoidCallback onTap;
-
-  const AtalhoCirculo({
-    super.key,
-    required this.icone,
-    required this.rotulo,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: rotulo,
-      excludeSemantics: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconeCirculo(icone: icone, tamanho: 60),
-              const SizedBox(height: 8),
-              Text(
-                rotulo,
-                textAlign: TextAlign.center,
-                style: AppTheme.texto(size: 12, weight: FontWeight.w500),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Pílula colorida usada para status.
 class Etiqueta extends StatelessWidget {
   final String texto;
