@@ -150,7 +150,7 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **357 testes** no total:
+São **367 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -160,8 +160,9 @@ São **357 testes** no total:
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
-| `test/animacoes_test.dart` | 7 | Animações de entrada: a cascata (a ordem dos itens, o item montado depois que ela terminou e o item fora dela), o "Remover animações" do Android, a contagem dos pontos (a partir do 0 e do valor anterior, com o valor final para o leitor de tela) e a barra de progresso |
-| `test/telas_test.dart` | 70 | Telas: primeira abertura e configuração inicial, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) |
+| `test/animacoes_test.dart` | 9 | Animações de entrada: a cascata (a ordem dos itens, o item montado depois que ela terminou e o item fora dela), o "Remover animações" do Android, a contagem dos pontos (a partir do 0 e do valor anterior, com o valor final para o leitor de tela), a barra de progresso e o corte da tesoura na abertura (a pausa, a tesoura atravessando a tela, o conteúdo só com as metades se abrindo e, sem animações, a abertura direto) |
+| `test/android_test.dart` | 5 | Identidade no Android: as cores iguais às do app, a tela nativa da abertura só em grafite (também a do Android 12 em diante, sem ícone), o nome "SysBarber", o ícone adaptativo e a tesoura como ícone das notificações, mantida no APK release |
+| `test/telas_test.dart` | 73 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) |
 | `integration_test/database_integration_test.dart` | 200 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -171,7 +172,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 357 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 367 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -209,7 +210,7 @@ lib/
 │   └── booking_flow.dart        # Rascunho do agendamento (ou do reagendamento) em andamento
 ├── widgets/
 │   ├── common_widgets.dart      # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-│   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos e barra de progresso
+│   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso e o corte da abertura
 └── screens/                     # 22 telas (uma por arquivo)
 ```
 
@@ -508,7 +509,7 @@ v2):
 
 | Rota | Tela | Quem acessa |
 |---|---|---|
-| `/` | Splash — o nome do app e o slogan, "A barbearia na palma da sua mão"; entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
+| `/` | Splash — o nome do app e o slogan, "A barbearia na palma da sua mão"; ao abrir o app, aparece depois do corte da tesoura; entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
 | `/configuracao` | Configuração inicial: cria o administrador, com o aceite dos termos, e, se marcado, os dados de exemplo | só antes de existir o administrador |
 | `/login` | Login, com "Esqueci minha senha" e "Tenho um convite de barbeiro" | todos |
 | `/convite-barbeiro` | Convite de barbeiro: o código que o administrador enviou e, conferido, a conta (e-mail, telefone, senha e o aceite dos termos); já entra na agenda | todos |
@@ -592,6 +593,17 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
 - abas e opções em pílula, com a escolhida em amarelo;
 - barra de navegação flutuante e translúcida, na área principal.
 
+O **ícone do app** é a tesoura preta num círculo amarelo sobre o grafite, como
+o da abertura: um ícone adaptativo (`android/app/src/main/res/`), com uma
+versão só da tesoura para os ícones com o tema do sistema (Android 13 em
+diante) e PNGs para os Androids que não têm ícone adaptativo. O nome no
+Android é "SysBarber". Nas notificações do lembrete, o ícone pequeno é só a
+tesoura, pintada de amarelo (`ic_notificacao`, mantida no APK release por
+`res/raw/keep.xml`, porque só o código Dart a cita). Enquanto o app inicia, a
+tela nativa do Android é só o grafite (sem o branco e o logo do Flutter); do
+Android 12 em diante, a tela de abertura do sistema também fica em grafite,
+sem o ícone.
+
 O ícone de cada serviço continua gravado no banco como um emoji (os dados de
 exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
 correspondente, e um valor fora dessa lista aparece como a tesoura.
@@ -600,6 +612,11 @@ As telas entram com **animações** sutis e rápidas, de cerca de 0,4 s por
 elemento, com um intervalo curto entre eles. Os componentes ficam em
 `lib/widgets/animacoes.dart`:
 
+- corte da abertura: ao abrir o app, depois de uma pausa curta, uma tesoura
+  atravessa a tela na horizontal, deixando um risco amarelo, e as duas
+  metades se abrem, mostrando a abertura (cerca de 1,6 s); com a sessão
+  salva, o app entra depois do corte. Ao voltar para a abertura (saindo da
+  conta, por exemplo), ela aparece sem o corte;
 - abertura: o ícone surge crescendo, o nome e o slogan sobem em seguida e os
   botões entram por último, em cerca de 1 segundo;
 - Início: a saudação, o card do próximo horário, o card de pontos e o acesso
@@ -737,7 +754,6 @@ Meus agendamentos → Reagendar (até 1 h antes) → Profissional → Novo horá
   lembrete fica inexato. Como os dados ficam no aparelho, o lembrete existe
   só no aparelho em que o cliente está logado, e sair da conta o apaga; com
   um servidor, ele viraria uma notificação enviada pelo servidor.
-- O app ainda usa o ícone padrão do Flutter, também nas notificações.
 - Instalações feitas antes da configuração inicial mantêm a conta de
   administrador criada na época (`admin@sysbarber.com`, com a senha
   `admin1234` se ela não foi trocada no Perfil). Para configurar do zero, é
