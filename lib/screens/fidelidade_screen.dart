@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 
 /// Programa de fidelidade (`/fidelidade`). Meta: 500 pontos = 1 serviço grátis.
@@ -127,9 +128,9 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
         children: [
           const TituloSecao('Seus pontos'),
           const SizedBox(height: 8),
-          Text(
-            '$_pontos',
-            style: AppTheme.titulo(size: 52, color: AppColors.amarelo),
+          ContagemAnimada(
+            valor: _pontos,
+            estilo: AppTheme.titulo(size: 52, color: AppColors.amarelo),
           ),
           Text(
             'Pontos acumulados',
@@ -138,13 +139,11 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
           const SizedBox(height: 22),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progresso,
-              minHeight: 10,
-              backgroundColor: AppColors.card2,
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.amarelo,
-              ),
+            child: BarraDeProgressoAnimada(
+              valor: progresso,
+              altura: 10,
+              corDeFundo: AppColors.card2,
+              cor: AppColors.amarelo,
             ),
           ),
           const SizedBox(height: 12),

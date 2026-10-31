@@ -2118,4 +2118,87 @@ void main() {
     expect(lembretes.agendados, isEmpty);
     await tester.runAsync(AuthService.instance.logout);
   });
+
+  // -------------------------------------------------------------------------
+  // Animações de entrada
+  // -------------------------------------------------------------------------
+
+  /// Opacidade com que [alvo] está sendo desenhado (1 = pronto).
+  double opacidadeDe(WidgetTester tester, Finder alvo) => tester
+      .widget<Opacity>(
+        find.ancestor(of: alvo, matching: find.byType(Opacity)).first,
+      )
+      .opacity;
+
+  testWidgets('a abertura anima: o ícone surge primeiro, e o slogan e o '
+      'botão entram depois', (tester) async {
+    await bancoNovo(tester);
+    await abrir(tester, const SplashScreen());
+
+    final icone = find.byType(IconeCirculo);
+    final slogan = find.text('A barbearia na palma da sua mão');
+    final botao = find.text('Configurar barbearia');
+    expect(opacidadeDe(tester, slogan), 0);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      opacidadeDe(tester, icone),
+      greaterThan(opacidadeDe(tester, slogan)),
+    );
+    expect(
+      opacidadeDe(tester, slogan),
+      greaterThan(opacidadeDe(tester, botao)),
+    );
+
+    await tester.pump(const Duration(seconds: 2));
+    for (final alvo in [icone, slogan, botao]) {
+      expect(opacidadeDe(tester, alvo), 1);
+    }
+  });
+
+  testWidgets('o Início entra em cascata e os pontos contam até o valor', (
+    tester,
+  ) async {
+    await clienteLogado(tester);
+    await tester.runAsync(
+      () => service.adicionarPontos(
+        AuthService.instance.usuarioAtual!.id!,
+        120,
+        'Pontos de teste',
+      ),
+    );
+    await abrir(tester, const HomeScreen());
+
+    expect(find.text('0 pts'), findsOneWidget);
+    expect(opacidadeDe(tester, find.text('Pontos de fidelidade')), 0);
+
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(find.text('120 pts'), findsOneWidget);
+    expect(opacidadeDe(tester, find.text('Pontos de fidelidade')), 1);
+    expect(opacidadeDe(tester, find.text('Acesso rápido')), 1);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('os serviços entram em cascata, um depois do outro', (
+    tester,
+  ) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await abrir(tester, const ServicosScreen());
+
+    final primeiro = find.text('Corte de Cabelo');
+    final terceiro = find.text('Corte + Barba');
+    expect(opacidadeDe(tester, primeiro), 0);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      opacidadeDe(tester, primeiro),
+      greaterThan(opacidadeDe(tester, terceiro)),
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(opacidadeDe(tester, primeiro), 1);
+    expect(opacidadeDe(tester, terceiro), 1);
+  });
 }

@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 import 'admin_relatorios_screen.dart';
 import 'admin_screen.dart';
@@ -219,37 +220,60 @@ class _InicioState extends State<_Inicio> {
           color: AppColors.amarelo,
           backgroundColor: AppColors.card,
           onRefresh: _carregarDados,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            // Embaixo, o espaço da barra de navegação, que fica por cima.
-            padding: EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              20 + MediaQuery.paddingOf(context).bottom,
-            ),
-            children: [
-              _saudacao(usuario),
-              const SizedBox(height: 24),
-              if (_carregando)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(
-                    child: CircularProgressIndicator(color: AppColors.amarelo),
+          child: Cascata(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              // Embaixo, o espaço da barra de navegação, que fica por cima.
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                20 + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                ItemDaCascata(ordem: 0, child: _saudacao(usuario)),
+                const SizedBox(height: 24),
+                if (_carregando)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.amarelo,
+                      ),
+                    ),
+                  )
+                else if (_erro != null)
+                  EstadoErro(
+                    mensagem: _erro!,
+                    onTentarNovamente: _carregarDados,
+                  )
+                else
+                  // Os cards só existem depois de carregar: a cascata deles
+                  // começa nessa hora, logo depois da saudação.
+                  Cascata(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ItemDaCascata(ordem: 1, child: _cardProximoHorario()),
+                        const SizedBox(height: 16),
+                        ItemDaCascata(ordem: 2, child: _cardFidelidade()),
+                        const SizedBox(height: 28),
+                        ItemDaCascata(
+                          ordem: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const TituloSecao('Acesso rápido'),
+                              const SizedBox(height: 14),
+                              _atalhos(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              else if (_erro != null)
-                EstadoErro(mensagem: _erro!, onTentarNovamente: _carregarDados)
-              else ...[
-                _cardProximoHorario(),
-                const SizedBox(height: 16),
-                _cardFidelidade(),
-                const SizedBox(height: 28),
-                const TituloSecao('Acesso rápido'),
-                const SizedBox(height: 14),
-                _atalhos(),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -434,7 +458,11 @@ class _InicioState extends State<_Inicio> {
                   style: AppTheme.texto(size: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
-                Text('$_pontos pts', style: AppTheme.titulo(size: 22)),
+                ContagemAnimada(
+                  valor: _pontos,
+                  formatar: (n) => '$n pts',
+                  estilo: AppTheme.titulo(size: 22),
+                ),
               ],
             ),
           ),

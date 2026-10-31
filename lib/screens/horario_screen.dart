@@ -6,6 +6,7 @@ import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 
 /// Escolha de data e horário (`/horario`).
@@ -363,36 +364,48 @@ class _HorarioScreenState extends State<HorarioScreen> {
   }
 
   Widget _chipsHorarios() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _horarios.map((hora) {
-        final selecionado = hora == _horaSelecionada;
-        return Semantics(
-          button: true,
-          selected: selecionado,
-          child: GestureDetector(
-            onTap: () => setState(() => _horaSelecionada = hora),
-            child: Container(
-              // 14 + 14 de respiro deixam o alvo de toque perto dos 48 pt
-              // recomendados.
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: ShapeDecoration(
-                color: selecionado ? AppColors.amarelo : AppColors.card,
-                shape: const StadiumBorder(),
-              ),
-              child: Text(
-                hora,
-                style: AppTheme.texto(
-                  size: 14,
-                  weight: FontWeight.w600,
-                  color: selecionado ? Colors.black : AppColors.text,
+    // Cada dia carregado é uma lista nova: os horários entram de novo.
+    return Cascata(
+      key: ObjectKey(_horarios),
+      intervalo: const Duration(milliseconds: 30),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: _horarios.indexed.map((item) {
+          final (i, hora) = item;
+          final selecionado = hora == _horaSelecionada;
+          return ItemDaCascata(
+            ordem: i,
+            child: Semantics(
+              button: true,
+              selected: selecionado,
+              child: GestureDetector(
+                onTap: () => setState(() => _horaSelecionada = hora),
+                child: Container(
+                  // 14 + 14 de respiro deixam o alvo de toque perto dos 48 pt
+                  // recomendados.
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  decoration: ShapeDecoration(
+                    color: selecionado ? AppColors.amarelo : AppColors.card,
+                    shape: const StadiumBorder(),
+                  ),
+                  child: Text(
+                    hora,
+                    style: AppTheme.texto(
+                      size: 14,
+                      weight: FontWeight.w600,
+                      color: selecionado ? Colors.black : AppColors.text,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }

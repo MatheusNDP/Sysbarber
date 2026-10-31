@@ -5,6 +5,7 @@ import '../services/booking_flow.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
 
 /// Escolha do profissional (`/barbeiro`).
@@ -76,14 +77,19 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
+                : Cascata(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 20,
+                      ),
+                      itemCount: _barbeiros.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) => ItemDaCascata(
+                        ordem: i,
+                        child: _cardBarbeiro(_barbeiros[i]),
+                      ),
                     ),
-                    itemCount: _barbeiros.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _cardBarbeiro(_barbeiros[i]),
                   ),
           ),
           Padding(
