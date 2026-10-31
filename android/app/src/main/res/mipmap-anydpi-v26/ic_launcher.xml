@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone adaptativo (Android 8 em diante): fundo grafite e, na frente, o
+     círculo amarelo com a tesoura, como o ícone da abertura. O monocromático
+     é usado quando a pessoa escolhe ícones com o tema do sistema. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/grafite" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

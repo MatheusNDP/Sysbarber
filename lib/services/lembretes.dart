@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/models.dart';
+import '../theme/app_theme.dart';
 
 /// Antecedência do lembrete do horário (regra de negócio 20): sobra 1 hora
 /// para cancelar ou reagendar sem multa.
@@ -79,6 +80,14 @@ class LembretesLocais implements Lembretes {
 
   static const String _chavePermissaoPedida = 'lembretes_permissao_pedida';
 
+  /// Ícone pequeno das notificações: a tesoura, um recurso do Android
+  /// (`android/app/src/main/res/drawable/ic_notificacao.xml`). O ícone do app
+  /// não serve: o Android desenha o ícone pequeno numa cor só.
+  static const String icone = 'ic_notificacao';
+
+  /// Cor com que o Android pinta o ícone pequeno: o amarelo do app.
+  static const cor = AppColors.amarelo;
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _iniciado = false;
@@ -90,6 +99,8 @@ class LembretesLocais implements Lembretes {
       channelDescription: 'Aviso 2 horas antes do atendimento',
       importance: Importance.high,
       priority: Priority.high,
+      icon: icone,
+      color: cor,
     ),
   );
 
@@ -99,7 +110,7 @@ class LembretesLocais implements Lembretes {
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(icone),
         ),
       );
       _iniciado = true;

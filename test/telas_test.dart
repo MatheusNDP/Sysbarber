@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sysbarber/main.dart' show SysBarberApp;
 import 'package:sysbarber/models/models.dart';
 import 'package:sysbarber/screens/admin_barbeiros_screen.dart';
 import 'package:sysbarber/screens/admin_clientes_screen.dart';
@@ -31,6 +32,7 @@ import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/services/suporte.dart';
+import 'package:sysbarber/widgets/animacoes.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
 
 /// Administrador criado pela configuração inicial nos testes (desde a P22 o
@@ -845,6 +847,76 @@ void main() {
     expect(find.text('Configurar barbearia'), findsOneWidget);
     expect(find.text('Entrar'), findsNothing);
     expect(find.text('Criar conta'), findsNothing);
+  });
+
+  testWidgets('o corte da tesoura aparece só ao abrir o app, e não ao voltar '
+      'para a abertura', (tester) async {
+    await bancoNovo(tester);
+
+    await tester.pumpWidget(const SysBarberApp());
+    expect(find.byType(CorteDeAbertura), findsOneWidget);
+    expect(find.text('Configurar barbearia'), findsNothing);
+
+    await tester.pump(Animacoes.duracaoCorte);
+    await tester.pumpAndSettle();
+    expect(find.text('Configurar barbearia'), findsOneWidget);
+
+    // Como ao sair da conta: a abertura volta sem o corte.
+    Navigator.of(tester.element(find.text('Configurar barbearia')))
+        .pushNamedAndRemoveUntil('/', (_) => false);
+    await tester.pumpAndSettle();
+    expect(find.byType(SplashScreen), findsOneWidget);
+    expect(find.byType(CorteDeAbertura), findsNothing);
+  });
+
+  /// Abre [abertura] com o cliente de teste logado; o Início é um texto.
+  Future<void> abrirLogado(WidgetTester tester, Widget abertura) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      SharedPreferences.setMockInitialValues({});
+      await cadastrarClienteTeste();
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: abertura,
+        routes: {'/home': (_) => const Scaffold(body: Text('INÍCIO'))},
+      ),
+    );
+  }
+
+  testWidgets('com a sessão salva, o app abre com o corte e só depois entra', (
+    tester,
+  ) async {
+    await abrirLogado(tester, const SplashScreen(comCorte: true));
+
+    // Sem o corte, ele entraria em 600 ms.
+    await tester.pump(Animacoes.duracaoCorte * 0.9);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('INÍCIO'), findsNothing);
+    expect(find.textContaining('Entrando como'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(find.text('INÍCIO'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('entrando com a sessão salva, a abertura fica no centro da '
+      'tela', (tester) async {
+    await abrirLogado(tester, const SplashScreen());
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final centro = tester.getCenter(find.byType(Scaffold)).dx;
+    expect(tester.getCenter(find.byType(IconeCirculo)).dx, closeTo(centro, 1));
+    expect(
+      tester.getCenter(find.textContaining('Entrando como')).dx,
+      closeTo(centro, 1),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('INÍCIO'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
   });
 
   testWidgets('a configuração cria o administrador e mostra como os '

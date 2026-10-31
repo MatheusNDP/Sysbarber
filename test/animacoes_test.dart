@@ -180,4 +180,67 @@ void main() {
     await tester.pumpAndSettle();
     expect(valorDaBarra(), 0.3);
   });
+
+  /// Onde a tesoura do corte está desenhada.
+  final tesoura = find.byIcon(Icons.content_cut_rounded);
+
+  /// Avança o corte até a fração [ate] do tempo total, a partir de [de].
+  Future<void> avancar(WidgetTester tester, double de, double ate) =>
+      tester.pump(Animacoes.duracaoCorte * (ate - de));
+
+  testWidgets('no corte da abertura, a tesoura atravessa a tela e o conteúdo '
+      'só aparece quando as metades se abrem', (tester) async {
+    var terminou = 0;
+    await tester.pumpWidget(
+      app(
+        CorteDeAbertura(aoTerminar: () => terminou++, child: const Text('app')),
+      ),
+    );
+    expect(find.text('app'), findsNothing);
+    // Antes de entrar, a tesoura espera fora da tela.
+    final fora = tester.getCenter(tesoura).dx;
+    expect(fora, lessThan(0));
+
+    await avancar(tester, 0, CorteDeAbertura.inicioDoCorte);
+    expect(tester.getCenter(tesoura).dx, fora);
+
+    const meioDoCorte =
+        (CorteDeAbertura.inicioDoCorte + CorteDeAbertura.fimDoCorte) / 2;
+    await avancar(tester, CorteDeAbertura.inicioDoCorte, meioDoCorte);
+    final largura = tester.getSize(find.byType(CorteDeAbertura)).width;
+    expect(tester.getCenter(tesoura).dx, closeTo(largura / 2, 1));
+    expect(find.text('app'), findsNothing);
+
+    // A tesoura já saiu pela direita, e as metades começam a se abrir.
+    await avancar(tester, meioDoCorte, CorteDeAbertura.inicioDaAbertura);
+    expect(tesoura, findsNothing);
+    expect(find.text('app'), findsOneWidget);
+    expect(terminou, 0);
+
+    await avancar(tester, CorteDeAbertura.inicioDaAbertura, 1.01);
+    expect(terminou, 1);
+    // As metades saíram da tela, e o desenho do corte também.
+    expect(
+      find.descendant(
+        of: find.byType(CorteDeAbertura),
+        matching: find.byType(IgnorePointer),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('com "Remover animações", a abertura aparece direto, sem o '
+      'corte', (tester) async {
+    var terminou = 0;
+    await tester.pumpWidget(
+      app(
+        CorteDeAbertura(aoTerminar: () => terminou++, child: const Text('app')),
+        semAnimacoes: true,
+      ),
+    );
+
+    expect(find.text('app'), findsOneWidget);
+    expect(tesoura, findsNothing);
+    expect(terminou, 1);
+  });
 }

@@ -10,24 +10,28 @@ import '../widgets/common_widgets.dart';
 /// Tela inicial (`/`). Se houver sessão salva, entra direto na Home. Na
 /// primeira abertura, sem administrador, leva à configuração da barbearia.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  /// Ao abrir o app, a tela aparece depois do corte da tesoura; ao voltar
+  /// para ela (saindo da conta, por exemplo), aparece direto.
+  final bool comCorte;
+
+  const SplashScreen({super.key, this.comCorte = false});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  bool _restaurandoSessao = false;
+  final bool _restaurandoSessao = AuthService.instance.estaLogado;
 
   @override
   void initState() {
     super.initState();
-    _verificarSessao();
+    // Com o corte, a sessão é restaurada quando ele termina.
+    if (!widget.comCorte) _verificarSessao();
   }
 
   Future<void> _verificarSessao() async {
-    if (!AuthService.instance.estaLogado) return;
-    setState(() => _restaurandoSessao = true);
+    if (!_restaurandoSessao) return;
     await Future<void>.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     // O barbeiro volta direto para a própria agenda.
@@ -42,148 +46,161 @@ class _SplashScreenState extends State<SplashScreen> {
     final nome = auth.nomeLogado;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Tesoura decorativa translúcida no canto inferior direito.
-          Positioned(
-            right: -40,
-            bottom: -30,
-            child: Transform.rotate(
-              angle: -math.pi / 8,
-              child: Icon(
-                Icons.content_cut_rounded,
-                size: 240,
-                color: AppColors.amarelo.withValues(alpha: 0.05),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              // Na abertura, a cascata é mais lenta: cerca de 1 segundo.
-              child: Cascata(
-                intervalo: const Duration(milliseconds: 120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Spacer(flex: 2),
-                    const ItemDaCascata(
-                      ordem: 0,
-                      escalaInicial: 0.6,
-                      child: IconeCirculo(
-                        icone: Icons.content_cut_rounded,
-                        tamanho: 96,
-                        destaque: true,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    ItemDaCascata(
-                      ordem: 1,
-                      child: RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Sys',
-                              style: AppTheme.titulo(
-                                size: 38,
-                                color: AppColors.amarelo,
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'Barber',
-                              style: AppTheme.titulo(
-                                size: 38,
-                                color: AppColors.text,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ItemDaCascata(
-                      ordem: 2,
-                      child: Text(
-                        'A barbearia na palma da sua mão',
-                        style: AppTheme.texto(size: 14, color: AppColors.muted),
-                      ),
-                    ),
-                    const Spacer(flex: 3),
-                    if (_restaurandoSessao)
-                      ItemDaCascata(
-                        ordem: 3,
-                        child: Column(
-                          children: [
-                            const SizedBox(
-                              width: 26,
-                              height: 26,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.amarelo,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Entrando como ${nome ?? ''}...',
-                              style: AppTheme.texto(
-                                size: 13,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (!auth.barbeariaConfigurada) ...[
-                      ItemDaCascata(
-                        ordem: 3,
-                        child: Text(
-                          'Primeiro acesso: crie a conta de administrador da '
-                          'barbearia para começar.',
-                          textAlign: TextAlign.center,
-                          style: AppTheme.texto(
-                            size: 13,
-                            color: AppColors.muted,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ItemDaCascata(
-                        ordem: 4,
-                        child: BotaoPrincipal(
-                          texto: 'Configurar barbearia',
-                          onPressed: () =>
-                              Navigator.of(context)
-                                  .pushNamed(AuthService.rotaConfiguracao),
-                        ),
-                      ),
-                    ] else ...[
-                      ItemDaCascata(
-                        ordem: 3,
-                        child: BotaoPrincipal(
-                          texto: 'Entrar',
-                          onPressed: () =>
-                              Navigator.of(context).pushNamed('/login'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ItemDaCascata(
-                        ordem: 4,
-                        child: BotaoSecundario(
-                          texto: 'Criar conta',
-                          onPressed: () =>
-                              Navigator.of(context).pushNamed('/cadastro'),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 40),
-                  ],
+      body: _comCorte(
+        Stack(
+          // Ocupa a tela toda: sem os botões, que são largos, o conteúdo
+          // (entrando com a sessão salva) ficava encostado à esquerda.
+          fit: StackFit.expand,
+          children: [
+            // Tesoura decorativa translúcida no canto inferior direito.
+            Positioned(
+              right: -40,
+              bottom: -30,
+              child: Transform.rotate(
+                angle: -math.pi / 8,
+                child: Icon(
+                  Icons.content_cut_rounded,
+                  size: 240,
+                  color: AppColors.amarelo.withValues(alpha: 0.05),
                 ),
               ),
             ),
-          ),
-        ],
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                // Na abertura, a cascata é mais lenta: cerca de 1 segundo.
+                child: Cascata(
+                  intervalo: const Duration(milliseconds: 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Spacer(flex: 2),
+                      const ItemDaCascata(
+                        ordem: 0,
+                        escalaInicial: 0.6,
+                        child: IconeCirculo(
+                          icone: Icons.content_cut_rounded,
+                          tamanho: 96,
+                          destaque: true,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      ItemDaCascata(
+                        ordem: 1,
+                        child: RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Sys',
+                                style: AppTheme.titulo(
+                                  size: 38,
+                                  color: AppColors.amarelo,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'Barber',
+                                style: AppTheme.titulo(
+                                  size: 38,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ItemDaCascata(
+                        ordem: 2,
+                        child: Text(
+                          'A barbearia na palma da sua mão',
+                          style: AppTheme.texto(
+                            size: 14,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ),
+                      const Spacer(flex: 3),
+                      if (_restaurandoSessao)
+                        ItemDaCascata(
+                          ordem: 3,
+                          child: Column(
+                            children: [
+                              const SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.amarelo,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Entrando como ${nome ?? ''}...',
+                                style: AppTheme.texto(
+                                  size: 13,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (!auth.barbeariaConfigurada) ...[
+                        ItemDaCascata(
+                          ordem: 3,
+                          child: Text(
+                            'Primeiro acesso: crie a conta de administrador da '
+                            'barbearia para começar.',
+                            textAlign: TextAlign.center,
+                            style: AppTheme.texto(
+                              size: 13,
+                              color: AppColors.muted,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ItemDaCascata(
+                          ordem: 4,
+                          child: BotaoPrincipal(
+                            texto: 'Configurar barbearia',
+                            onPressed: () =>
+                                Navigator.of(context)
+                                    .pushNamed(AuthService.rotaConfiguracao),
+                          ),
+                        ),
+                      ] else ...[
+                        ItemDaCascata(
+                          ordem: 3,
+                          child: BotaoPrincipal(
+                            texto: 'Entrar',
+                            onPressed: () =>
+                                Navigator.of(context).pushNamed('/login'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ItemDaCascata(
+                          ordem: 4,
+                          child: BotaoSecundario(
+                            texto: 'Criar conta',
+                            onPressed: () =>
+                                Navigator.of(context).pushNamed('/cadastro'),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  /// Ao abrir o app, [conteudo] aparece depois do corte da tesoura.
+  Widget _comCorte(Widget conteudo) => widget.comCorte
+      ? CorteDeAbertura(aoTerminar: _verificarSessao, child: conteudo)
+      : conteudo;
 }
