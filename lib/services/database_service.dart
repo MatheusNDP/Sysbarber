@@ -1939,6 +1939,7 @@ class DatabaseService {
         b.nome          AS b_nome,
         b.especialidade AS b_especialidade,
         b.iniciais      AS b_iniciais,
+        b.ativo         AS b_ativo,
         s.id            AS s_id,
         s.nome          AS s_nome,
         s.descricao     AS s_descricao,
@@ -1964,13 +1965,16 @@ class DatabaseService {
         .toList();
   }
 
-  /// Barbeiro trazido pelas listagens (colunas `b_*`).
+  /// Barbeiro trazido pelas listagens (colunas `b_*`). Só a do cliente traz
+  /// `b_ativo`, para o "Repetir" do último serviço (regra de negócio 21);
+  /// sem a coluna, o barbeiro conta como ativo.
   static Barbeiro _barbeiroDaLinha(Map<String, Object?> linha) =>
       Barbeiro.fromMap({
         'id': linha['b_id'],
         'nome': linha['b_nome'],
         'especialidade': linha['b_especialidade'],
         'iniciais': linha['b_iniciais'],
+        'ativo': linha['b_ativo'],
       });
 
   /// Cliente trazido pelas listagens (colunas `c_*`), só com os dados de
