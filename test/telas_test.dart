@@ -841,6 +841,7 @@ void main() {
 
     await abrir(tester, const SplashScreen());
 
+    expect(find.text('A barbearia na palma da sua mão'), findsOneWidget);
     expect(find.text('Configurar barbearia'), findsOneWidget);
     expect(find.text('Entrar'), findsNothing);
     expect(find.text('Criar conta'), findsNothing);
