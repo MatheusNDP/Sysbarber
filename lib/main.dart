@@ -167,6 +167,13 @@ class SysBarberApp extends StatelessWidget {
       supportedLocales: const [idioma],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       initialRoute: '/',
+      // Só ao abrir o app a abertura começa com o corte da tesoura.
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/'),
+          builder: (_) => const SplashScreen(comCorte: true),
+        ),
+      ],
       onGenerateRoute: _gerarRota,
     );
   }

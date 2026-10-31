@@ -13,7 +13,7 @@
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32"/>
     <application
-        android:label="sysbarber"
+        android:label="SysBarber"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

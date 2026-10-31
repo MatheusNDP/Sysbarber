@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Do Android 12 em diante, o sistema sempre mostra uma tela de abertura
+         com o ícone do app. Aqui ela fica só grafite, sem ícone: a abertura
+         do app começa com o corte da tesoura, e o ícone aparece depois. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/grafite</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/grafite</item>
+    </style>
+</resources>

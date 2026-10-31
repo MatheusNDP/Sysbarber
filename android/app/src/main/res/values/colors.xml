@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- As mesmas cores do app (AppColors, em lib/theme/app_theme.dart). -->
+    <color name="grafite">#151515</color>
+    <color name="amarelo">#FFD23F</color>
+</resources>

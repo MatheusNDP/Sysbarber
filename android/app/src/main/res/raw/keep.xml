@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O ícone das notificações só é citado pelo nome, no código Dart
+     (lib/services/lembretes.dart): sem esta linha, o APK release o removeria
+     como recurso sem uso. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notificacao" />
