@@ -1,22 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../services/formatters.dart';
+import '../services/fotos.dart';
 import '../services/suporte.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
 /// Perfil de quem está logado (`/perfil`). O cliente vê os agendamentos e
-/// os pontos; o administrador, os dados e o Suporte; o barbeiro, os dados,
-/// a troca de senha e sair (sem Suporte).
+/// os pontos; o administrador, os dados e o Suporte; o barbeiro, a foto, os
+/// dados, a troca de senha e sair (sem Suporte).
 class PerfilScreen extends StatefulWidget {
-  const PerfilScreen({super.key, this.abrirLink = abrirForaDoApp});
+  const PerfilScreen({
+    super.key,
+    this.abrirLink = abrirForaDoApp,
+    this.escolherFoto = escolherFotoDoAparelho,
+  });
 
   /// Abre o WhatsApp e o e-mail do suporte (os testes trocam por um falso).
   final AbrirLink abrirLink;
+
+  /// Abre a câmera ou a galeria para a foto do barbeiro (os testes trocam
+  /// por uma falsa).
+  final EscolherFoto escolherFoto;
 
   @override
   State<PerfilScreen> createState() => _PerfilScreenState();
@@ -97,6 +107,51 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
     if (salvou != true || !mounted) return;
     mostrarSucesso(context, 'Senha alterada');
+  }
+
+  /// O barbeiro põe, troca ou remove a própria foto (regra de negócio 22):
+  /// o sheet pergunta se a foto vem da câmera ou da galeria.
+  Future<void> _alterarFoto() async {
+    final opcao = await showModalBottomSheet<_OpcaoDaFoto>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) =>
+          _FotoSheet(temFoto: AuthService.instance.barbeiroAtual?.foto != null),
+    );
+    if (opcao == null || !mounted) return;
+
+    Uint8List? foto;
+    if (opcao != _OpcaoDaFoto.remover) {
+      final camera = opcao == _OpcaoDaFoto.camera;
+      try {
+        foto = await widget.escolherFoto(
+          camera ? OrigemDaFoto.camera : OrigemDaFoto.galeria,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        mostrarErro(
+          context,
+          mensagemDeErro(
+            e,
+            camera
+                ? 'Não foi possível abrir a câmera'
+                : 'Não foi possível abrir a galeria',
+          ),
+        );
+        return;
+      }
+      // Desistiu na câmera ou na galeria: fica a foto de antes.
+      if (foto == null || !mounted) return;
+    }
+
+    final r = await AuthService.instance.atualizarFotoBarbeiro(foto);
+    if (!mounted) return;
+    if (!r.sucesso) {
+      mostrarErro(context, r.erro!);
+      return;
+    }
+    setState(() {}); // a foto exibida vem da sessão
+    mostrarSucesso(context, foto == null ? 'Foto removida' : 'Foto atualizada');
   }
 
   Future<void> _sair() async {
@@ -192,11 +247,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     ),
                     children: [
                       Center(
-                        child: AvatarIniciais(
-                          texto: usuario?.iniciais ?? barbeiro?.iniciais ?? '?',
-                          tamanho: 92,
-                          large: true,
-                        ),
+                        child: barbeiro != null
+                            ? _fotoDoBarbeiro(barbeiro)
+                            : AvatarIniciais(
+                                texto: usuario?.iniciais ?? '?',
+                                tamanho: 92,
+                                large: true,
+                              ),
                       ),
                       const SizedBox(height: 18),
                       Text(
@@ -398,6 +455,51 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 
+  /// A foto do barbeiro (ou as iniciais, sem ela), com o selo da câmera:
+  /// tocar abre as opções da foto. O cliente e o administrador não têm foto.
+  Widget _fotoDoBarbeiro(Barbeiro b) {
+    return Tooltip(
+      message: 'Alterar foto',
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _alterarFoto,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AvatarIniciais(
+                texto: b.iniciais,
+                foto: b.foto,
+                tamanho: 92,
+                large: true,
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.amarelo,
+                    // O contorno da cor do fundo separa o selo do avatar.
+                    border: Border.all(color: AppColors.background, width: 3),
+                  ),
+                  child: const Icon(
+                    Icons.photo_camera_outlined,
+                    size: 15,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _item(
     IconData icone,
     String rotulo,
@@ -430,6 +532,94 @@ class _PerfilScreenState extends State<PerfilScreen> {
             ),
             if (onTap != null)
               const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FOTO DO BARBEIRO
+// ---------------------------------------------------------------------------
+
+enum _OpcaoDaFoto { camera, galeria, remover }
+
+/// Opções da foto do barbeiro: tirar com a câmera, escolher da galeria e,
+/// se ele já tem uma, remover.
+class _FotoSheet extends StatelessWidget {
+  final bool temFoto;
+
+  const _FotoSheet({required this.temFoto});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opcao(
+      IconData icone,
+      String texto,
+      _OpcaoDaFoto valor, {
+      Color? cor,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Cartao(
+          onTap: () => Navigator.of(context).pop(valor),
+          child: Row(
+            children: [
+              IconeCirculo(icone: icone, tamanho: 42, cor: cor),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  texto,
+                  style: AppTheme.texto(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: cor ?? AppColors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Foto de perfil', style: AppTheme.titulo(size: 20)),
+            const SizedBox(height: 6),
+            Text(
+              'Os clientes veem a sua foto na hora de escolher o '
+              'profissional.',
+              style: AppTheme.texto(
+                size: 13,
+                color: AppColors.muted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            opcao(
+              Icons.photo_camera_outlined,
+              'Tirar foto',
+              _OpcaoDaFoto.camera,
+            ),
+            opcao(
+              Icons.photo_library_outlined,
+              'Escolher da galeria',
+              _OpcaoDaFoto.galeria,
+            ),
+            if (temFoto)
+              opcao(
+                Icons.delete_outline_rounded,
+                'Remover foto',
+                _OpcaoDaFoto.remover,
+                cor: AppColors.red,
+              ),
           ],
         ),
       ),

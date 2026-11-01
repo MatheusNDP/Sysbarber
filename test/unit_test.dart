@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sysbarber/models/models.dart';
@@ -115,6 +116,33 @@ void main() {
       expect(reconstruido.preco, original.preco);
       expect(reconstruido.duracaoMinutos, original.duracaoMinutos);
       expect(reconstruido.icone, original.icone);
+    });
+  });
+
+  group('Entidade Barbeiro', () {
+    test('a foto vai e volta pelo banco, e sem a coluna não há foto', () {
+      final foto = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]);
+      final barbeiro = Barbeiro(
+        id: 1,
+        nome: 'Carlos Eduardo',
+        especialidade: 'Cortes clássicos',
+        iniciais: 'CE',
+        foto: foto,
+      );
+
+      final mapa = barbeiro.toMap();
+      expect(mapa['foto'], foto);
+      expect(Barbeiro.fromMap(mapa).foto, foto);
+      // Atualizar o hash da senha no login não leva a foto embora.
+      expect(barbeiro.copyWith(senhaHash: 'novo').foto, foto);
+      // As listagens de agendamentos não trazem a coluna.
+      final daLista = Barbeiro.fromMap({
+        'id': 1,
+        'nome': 'Carlos Eduardo',
+        'especialidade': 'Cortes clássicos',
+        'iniciais': 'CE',
+      });
+      expect(daLista.foto, isNull);
     });
   });
 

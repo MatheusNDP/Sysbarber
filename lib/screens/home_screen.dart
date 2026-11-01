@@ -223,9 +223,23 @@ class _InicioState extends State<_Inicio> {
   /// Agenda de novo o último serviço (regra de negócio 21): direto no
   /// horário, com o mesmo barbeiro, ou pela escolha do profissional, se ele
   /// ficou indisponível.
-  Future<void> _repetir(Agendamento ultimo) {
-    BookingFlow.repetir(ultimo);
-    final barbeiroAtivo = ultimo.barbeiro?.ativo ?? false;
+  Future<void> _repetir(Agendamento ultimo) async {
+    // A lista de agendamentos traz o barbeiro sem a foto; relido do banco,
+    // ele chega com ela à confirmação (regra de negócio 22).
+    final Barbeiro? barbeiro;
+    try {
+      barbeiro = await _db.buscarBarbeiroPorId(ultimo.idBarbeiro);
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(
+        context,
+        mensagemDeErro(e, 'Não foi possível repetir o serviço'),
+      );
+      return;
+    }
+    if (!mounted) return;
+    BookingFlow.repetir(ultimo, barbeiro);
+    final barbeiroAtivo = barbeiro?.ativo ?? false;
     return _irPara(barbeiroAtivo ? '/horario' : '/barbeiro');
   }
 

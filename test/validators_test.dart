@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sysbarber/services/validators.dart';
 
@@ -150,6 +152,44 @@ void main() {
           telefone: '(67) 999',
         ),
         'Telefone inválido',
+      );
+    });
+  });
+
+  group('Validators.validarFoto (regra de negócio 22)', () {
+    /// Arquivo de [tamanho] bytes que começa com [cabecalho].
+    Uint8List arquivo(List<int> cabecalho, [int tamanho = 64]) =>
+        Uint8List(tamanho)..setAll(0, cabecalho);
+
+    const jpeg = [0xFF, 0xD8, 0xFF, 0xE0];
+    const png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    final webp = [...'RIFF'.codeUnits, 0, 0, 0, 0, ...'WEBP'.codeUnits];
+    const naoEFoto = 'Escolha uma foto em JPG, PNG ou WebP';
+
+    test('aceita JPG, PNG e WebP', () {
+      expect(Validators.validarFoto(arquivo(jpeg)), isNull);
+      expect(Validators.validarFoto(arquivo(png)), isNull);
+      expect(Validators.validarFoto(arquivo(webp)), isNull);
+    });
+
+    test('recusa o que não é foto, como um texto, um GIF ou um áudio', () {
+      expect(
+        Validators.validarFoto(Uint8List.fromList('não é foto'.codeUnits)),
+        naoEFoto,
+      );
+      expect(Validators.validarFoto(Uint8List(0)), naoEFoto);
+      expect(Validators.validarFoto(arquivo('GIF89a'.codeUnits)), naoEFoto);
+      // Um WAVE também começa com "RIFF".
+      final wave = [...'RIFF'.codeUnits, 0, 0, 0, 0, ...'WAVE'.codeUnits];
+      expect(Validators.validarFoto(arquivo(wave)), naoEFoto);
+    });
+
+    test('recusa a foto acima de 1 MB', () {
+      const limite = Validators.tamanhoMaximoFoto;
+      expect(Validators.validarFoto(arquivo(jpeg, limite)), isNull);
+      expect(
+        Validators.validarFoto(arquivo(jpeg, limite + 1)),
+        'A foto passa de 1 MB. Escolha outra',
       );
     });
   });

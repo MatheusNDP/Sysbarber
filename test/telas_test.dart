@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -13,6 +16,7 @@ import 'package:sysbarber/screens/agendamentos_screen.dart';
 import 'package:sysbarber/screens/barbeiro_screen.dart';
 import 'package:sysbarber/screens/cadastro_screen.dart';
 import 'package:sysbarber/screens/configuracao_screen.dart';
+import 'package:sysbarber/screens/confirmacao_screen.dart';
 import 'package:sysbarber/screens/convite_barbeiro_screen.dart';
 import 'package:sysbarber/screens/home_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
@@ -28,6 +32,7 @@ import 'package:sysbarber/services/booking_flow.dart';
 import 'package:sysbarber/services/database_service.dart';
 import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/formatters.dart';
+import 'package:sysbarber/services/fotos.dart';
 import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
@@ -39,6 +44,13 @@ import 'package:sysbarber/widgets/common_widgets.dart';
 /// app não tem conta padrão).
 const emailAdmin = 'admin@sysbarber.com';
 const senhaAdmin = 'admin1234';
+
+/// Foto de verdade, que a tela consegue abrir (um PNG de 2 × 2 pixels
+/// amarelos), para os testes da foto do barbeiro.
+final fotoPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4f8keiBggFAA8'
+  'zghBIc+rhgAAAABJRU5ErkJggg==',
+);
 
 /// Testes de tela: o que o usuário vê quando os dados chegam — e quando não
 /// chegam.
@@ -1923,6 +1935,11 @@ void main() {
     await abrir(tester, const TermosScreen());
 
     expect(find.text('Termos de uso e política de privacidade'), findsOneWidget);
+    // A foto do barbeiro (regra de negócio 22) também é um dado guardado.
+    await tester.scrollUntilVisible(
+      find.textContaining('e a foto de perfil, se ele puser uma'),
+      200,
+    );
     for (final titulo in [
       'Quais dados o app guarda',
       'Onde ficam e com quem são compartilhados',
@@ -1931,7 +1948,13 @@ void main() {
       await tester.scrollUntilVisible(find.text(titulo), 200);
       expect(find.text(titulo), findsOneWidget);
     }
-    expect(find.textContaining('Lei Geral de Proteção de Dados'), findsOneWidget);
+    // Logo abaixo do título, e por isso ainda fora da tela.
+    final lgpd = find.textContaining(
+      'Lei Geral de Proteção de Dados',
+      skipOffstage: false,
+    );
+    await tester.ensureVisible(lgpd);
+    expect(lgpd, findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Versão de ${TermosScreen.versao}.'),
       200,
@@ -2425,5 +2448,256 @@ void main() {
     );
     expect(continuar.onPressed, isNull);
     await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P42 — foto do barbeiro
+  // -------------------------------------------------------------------------
+
+  /// A foto dentro de um avatar, no lugar das iniciais.
+  final fotoNoAvatar = find.descendant(
+    of: find.byType(AvatarIniciais),
+    matching: find.byType(Image),
+  );
+
+  testWidgets('"Repetir" leva o barbeiro com a foto, que a lista de '
+      'agendamentos não traz', (tester) async {
+    await abrirInicio(tester, (id) async {
+      await atendimentoPassado(
+        id,
+        dias: 5,
+        status: StatusAgendamento.finalizado,
+      );
+      await service.definirFotoDoBarbeiro(1, fotoPng);
+    });
+
+    await tocarEsperando(tester, find.text('Repetir'));
+    await esperarBanco(tester);
+
+    expect(find.byType(HorarioScreen), findsOneWidget);
+    // Antes ia o barbeiro da lista do cliente, sem a foto.
+    expect(BookingFlow.barbeiroSelecionado?.foto, fotoPng);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('a escolha do profissional mostra a foto de quem pôs uma e as '
+      'iniciais de quem não pôs, e segue com o barbeiro relido do banco', (
+    tester,
+  ) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    addTearDown(BookingFlow.limpar);
+    await tester.runAsync(() => service.definirFotoDoBarbeiro(1, fotoPng));
+    // Num reagendamento, o barbeiro vem da lista de agendamentos, sem foto.
+    BookingFlow.limpar();
+    BookingFlow.barbeiroSelecionado = const Barbeiro(
+      id: 1,
+      nome: 'Carlos Eduardo',
+      especialidade: 'Cortes clássicos',
+      iniciais: 'CE',
+    );
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const BarbeiroScreen(),
+          routes: {'/horario': (_) => const Scaffold()},
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+
+    // Antes, todos tinham só as iniciais.
+    expect(fotoNoAvatar, findsOneWidget);
+    expect(find.text('CE'), findsNothing);
+    expect(find.text('RS'), findsOneWidget);
+    expect(find.text('ML'), findsOneWidget);
+    expect(find.text('Selecionado ✓'), findsOneWidget);
+
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(BookingFlow.barbeiroSelecionado?.foto, fotoPng);
+  });
+
+  testWidgets('no Perfil, o barbeiro põe a foto pela galeria, desiste na '
+      'câmera sem perder a foto e depois a remove', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    final pedidas = <OrigemDaFoto>[];
+    await abrir(
+      tester,
+      PerfilScreen(
+        escolherFoto: (origem) async {
+          pedidas.add(origem);
+          // Na câmera, o barbeiro desiste.
+          return origem == OrigemDaFoto.galeria ? fotoPng : null;
+        },
+      ),
+    );
+    Future<void> abrirOpcoes() async {
+      await tocarEsperando(tester, find.byTooltip('Alterar foto'));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('CE'), findsOneWidget);
+    expect(fotoNoAvatar, findsNothing);
+
+    await abrirOpcoes();
+    expect(find.text('Foto de perfil'), findsOneWidget);
+    expect(find.text('Tirar foto'), findsOneWidget);
+    expect(find.text('Escolher da galeria'), findsOneWidget);
+    // Sem foto, não há o que remover.
+    expect(find.text('Remover foto'), findsNothing);
+
+    await tocarEsperando(tester, find.text('Escolher da galeria'));
+    await esperarBanco(tester);
+    expect(pedidas, [OrigemDaFoto.galeria]);
+    expect(find.text('Foto atualizada'), findsOneWidget);
+    expect(fotoNoAvatar, findsOneWidget);
+    expect(find.text('CE'), findsNothing);
+    final gravada = await tester.runAsync(
+      () => service.buscarBarbeiroPorId(1),
+    );
+    expect(gravada!.foto, fotoPng);
+
+    await abrirOpcoes();
+    await tocarEsperando(tester, find.text('Tirar foto'));
+    await esperarBanco(tester);
+    expect(pedidas, [OrigemDaFoto.galeria, OrigemDaFoto.camera]);
+    expect(AuthService.instance.barbeiroAtual!.foto, fotoPng);
+    expect(fotoNoAvatar, findsOneWidget);
+
+    await abrirOpcoes();
+    await tocarEsperando(tester, find.text('Remover foto'));
+    await esperarBanco(tester);
+    expect(find.text('Foto removida'), findsOneWidget);
+    expect(fotoNoAvatar, findsNothing);
+    expect(find.text('CE'), findsOneWidget);
+    final removida = await tester.runAsync(
+      () => service.buscarBarbeiroPorId(1),
+    );
+    expect(removida!.foto, isNull);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('sem câmera no aparelho, o Perfil avisa e a foto não muda', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(
+      tester,
+      PerfilScreen(
+        escolherFoto: (_) async =>
+            throw PlatformException(code: 'no_available_camera'),
+      ),
+    );
+
+    await tocarEsperando(tester, find.byTooltip('Alterar foto'));
+    await tester.pumpAndSettle();
+    await tocarEsperando(tester, find.text('Tirar foto'));
+    await esperarBanco(tester);
+
+    expect(
+      find.text('Não foi possível abrir a câmera. Tente novamente.'),
+      findsOneWidget,
+    );
+    expect(AuthService.instance.barbeiroAtual!.foto, isNull);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o cliente e o administrador não têm foto no Perfil', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await cadastrarClienteTeste();
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const PerfilScreen());
+    expect(find.text('Alterar senha'), findsOneWidget);
+    expect(find.byTooltip('Alterar foto'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+
+    await tester.runAsync(
+      () => AuthService.instance.login(emailAdmin, senhaAdmin),
+    );
+    await abrir(tester, const PerfilScreen());
+    expect(find.text('Alterar senha'), findsOneWidget);
+    expect(find.byTooltip('Alterar foto'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('Gerenciar Barbeiros mostra a foto de quem pôs uma', (
+    tester,
+  ) async {
+    await adminLogado(tester);
+    await tester.runAsync(() => service.definirFotoDoBarbeiro(2, fotoPng));
+
+    await abrir(tester, const AdminBarbeirosScreen());
+
+    expect(find.text('Rafael Souza'), findsOneWidget);
+    expect(fotoNoAvatar, findsOneWidget);
+    expect(find.text('RS'), findsNothing);
+    expect(find.text('CE'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('a agenda do barbeiro mostra a foto dele no cartão '
+      '"Profissional"', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await service.definirFotoDoBarbeiro(1, fotoPng);
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+
+    await abrir(tester, const AgendamentosScreen());
+
+    expect(find.text('Profissional'), findsOneWidget);
+    expect(fotoNoAvatar, findsOneWidget);
+    expect(find.text('CE'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('a confirmação mostra a foto do barbeiro escolhido e, sem ela, '
+      'o ícone de antes', (tester) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    addTearDown(BookingFlow.limpar);
+    await tester.runAsync(() async {
+      await service.definirFotoDoBarbeiro(1, fotoPng);
+      BookingFlow.iniciar((await service.listarServicos()).first);
+      BookingFlow.barbeiroSelecionado = await service.buscarBarbeiroPorId(1);
+    });
+
+    await abrir(tester, const ConfirmacaoScreen());
+
+    expect(find.text('Carlos Eduardo'), findsOneWidget);
+    expect(fotoNoAvatar, findsOneWidget);
+    expect(find.byIcon(Icons.person_outline_rounded), findsNothing);
+
+    await tester.runAsync(() async {
+      BookingFlow.barbeiroSelecionado = await service.buscarBarbeiroPorId(2);
+    });
+    await abrir(tester, const ConfirmacaoScreen());
+
+    expect(find.text('Rafael Souza'), findsOneWidget);
+    expect(fotoNoAvatar, findsNothing);
+    expect(find.byIcon(Icons.person_outline_rounded), findsOneWidget);
   });
 }

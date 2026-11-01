@@ -424,7 +424,7 @@ class _AdminBarbeirosScreenState extends State<AdminBarbeirosScreen> {
         children: [
           Row(
             children: [
-              AvatarIniciais(texto: b.iniciais, tamanho: 46),
+              AvatarIniciais(texto: b.iniciais, foto: b.foto, tamanho: 46),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

@@ -113,6 +113,15 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
                   barbeiro?.nome ?? '-',
                   detalhe: barbeiro?.especialidade,
                   icone: Icons.person_outline_rounded,
+                  // A foto do barbeiro, quando ele pôs uma (regra de
+                  // negócio 22), no lugar do ícone.
+                  avatar: barbeiro?.foto == null
+                      ? null
+                      : AvatarIniciais(
+                          texto: barbeiro!.iniciais,
+                          foto: barbeiro.foto,
+                          tamanho: 44,
+                        ),
                 ),
                 const SizedBox(height: 12),
                 _linhaResumo(
@@ -176,13 +185,14 @@ class _ConfirmacaoScreenState extends State<ConfirmacaoScreen> {
     String valor, {
     String? detalhe,
     IconData? icone,
+    Widget? avatar,
   }) {
     return Cartao(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (icone != null) ...[
-            IconeCirculo(icone: icone, tamanho: 44),
+          if (avatar != null || icone != null) ...[
+            avatar ?? IconeCirculo(icone: icone!, tamanho: 44),
             const SizedBox(width: 14),
           ],
           Expanded(

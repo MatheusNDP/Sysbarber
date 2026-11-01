@@ -42,13 +42,14 @@ class BookingFlow {
   }
 
   /// Começa um agendamento novo igual ao atendimento [a], o "Repetir" do
-  /// último serviço (regra de negócio 21): o serviço e o barbeiro vêm
-  /// escolhidos. Se o barbeiro ficou indisponível, a escolha do profissional
-  /// não o deixa selecionado.
-  static void repetir(Agendamento a) {
+  /// último serviço (regra de negócio 21): o serviço e o [barbeiro] vêm
+  /// escolhidos. O [barbeiro] é o relido do banco, com a foto (regra 22),
+  /// que a lista de agendamentos não traz. Se ele ficou indisponível, a
+  /// escolha do profissional não o deixa selecionado.
+  static void repetir(Agendamento a, Barbeiro? barbeiro) {
     limpar();
     servicoSelecionado = a.servico;
-    barbeiroSelecionado = a.barbeiro;
+    barbeiroSelecionado = barbeiro;
   }
 
   /// Começa a reagendar [a]: o serviço é o mesmo, e o barbeiro atual vem

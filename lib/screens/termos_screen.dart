@@ -11,7 +11,7 @@ class TermosScreen extends StatelessWidget {
   const TermosScreen({super.key});
 
   /// Data da versão atual, mostrada no fim.
-  static const String versao = '24 de outubro de 2026';
+  static const String versao = '31 de outubro de 2026';
 
   static const List<(String, List<String>)> _secoes = [
     (
@@ -53,7 +53,9 @@ class TermosScreen extends StatelessWidget {
         '•  Do uso: agendamentos, pagamentos (forma, valor e, no cartão, só '
             'os 4 últimos dígitos) e pontos.',
         '•  Do barbeiro: também a especialidade e o salário, informados pela '
-            'barbearia.',
+            'barbearia, e a foto de perfil, se ele puser uma. A foto aparece '
+            'para os clientes na escolha do profissional, e ele pode trocá-la '
+            'ou removê-la no Perfil.',
       ],
     ),
     (
