@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -641,6 +643,27 @@ class AuthService {
       return (
         sucesso: false,
         erro: mensagemDeErro(e, 'Não foi possível salvar seus dados'),
+      );
+    }
+  }
+
+  /// Põe, troca ou, com `null`, remove a foto do barbeiro logado (regra de
+  /// negócio 22): só ele mexe na própria foto.
+  Future<({bool sucesso, String? erro})> atualizarFotoBarbeiro(
+    Uint8List? foto,
+  ) async {
+    final id = _barbeiroAtual?.id;
+    if (id == null) {
+      return (sucesso: false, erro: 'Entre na sua conta para editar o perfil');
+    }
+    try {
+      await _db.definirFotoDoBarbeiro(id, foto);
+      _barbeiroAtual = await _db.buscarBarbeiroPorId(id);
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível salvar a foto'),
       );
     }
   }

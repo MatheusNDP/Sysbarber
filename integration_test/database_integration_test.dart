@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -9,6 +11,7 @@ import 'package:sysbarber/services/email.dart';
 import 'package:sysbarber/services/lembretes.dart';
 import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
+import 'package:sysbarber/services/validators.dart';
 
 /// Administrador criado pela configuração inicial no início de cada teste.
 /// Desde a P22 o app não tem mais conta padrão: a senha é escolhida por quem
@@ -2355,6 +2358,25 @@ void main() {
         where: 'termos_aceitos_em IS NOT NULL',
       );
       expect(aceitos, isEmpty);
+      await db.close();
+    });
+
+    test('a migração v9 dá a coluna da foto ao barbeiro, e quem já existia '
+        'fica sem foto', () async {
+      final db = await bancoV2();
+      await db.insert('barbeiro', {
+        'nome': 'Barbeiro Antigo',
+        'especialidade': 'Cortes',
+        'iniciais': 'BA',
+      });
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final colunas = (await db.rawQuery(
+        'PRAGMA table_info(barbeiro)',
+      )).map((c) => c['name']);
+      expect(colunas, contains('foto'));
+      final antigo = Barbeiro.fromMap((await db.query('barbeiro')).single);
+      expect(antigo.foto, isNull);
       await db.close();
     });
   });
@@ -4869,6 +4891,105 @@ void main() {
       lembretes.agendados = [antigo];
       await auth.login(emailAdmin, senhaAdmin);
       expect(lembretes.agendados, isEmpty);
+    });
+  });
+
+  group('P42 — foto do barbeiro', () {
+    /// Começo de um JPEG, o bastante para o banco reconhecer a imagem.
+    final foto = Uint8List.fromList([
+      0xFF,
+      0xD8,
+      0xFF,
+      0xE0,
+      ...'JFIF'.codeUnits,
+    ]);
+
+    Future<Uint8List?> fotoGravada(int id) async =>
+        (await service.buscarBarbeiroPorId(id))!.foto;
+
+    test('os barbeiros de exemplo começam sem foto', () async {
+      final barbeiros = await service.listarBarbeiros();
+      expect(barbeiros, hasLength(3));
+      expect(barbeiros.map((b) => b.foto), everyElement(isNull));
+    });
+
+    test('a foto gravada volta na busca e na lista dos barbeiros, e `null` a '
+        'remove', () async {
+      await service.definirFotoDoBarbeiro(1, foto);
+
+      expect(await fotoGravada(1), foto);
+      final lista = await service.listarBarbeiros();
+      expect(lista.firstWhere((b) => b.id == 1).foto, foto);
+      expect(lista.firstWhere((b) => b.id == 2).foto, isNull);
+
+      await service.definirFotoDoBarbeiro(1, null);
+      expect(await fotoGravada(1), isNull);
+    });
+
+    test('o banco recusa o que não é foto e a foto acima de 1 MB, e a de '
+        'antes continua', () async {
+      await service.definirFotoDoBarbeiro(1, foto);
+
+      await expectLater(
+        service.definirFotoDoBarbeiro(
+          1,
+          Uint8List.fromList('não é foto'.codeUnits),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Escolha uma foto em JPG, PNG ou WebP',
+          ),
+        ),
+      );
+      final grande = Uint8List(Validators.tamanhoMaximoFoto + 1)
+        ..setAll(0, foto);
+      await expectLater(
+        service.definirFotoDoBarbeiro(1, grande),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await fotoGravada(1), foto);
+    });
+
+    test('barbeiro que não existe não ganha foto', () async {
+      await expectLater(
+        service.definirFotoDoBarbeiro(99, foto),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('a foto sai junto com o barbeiro excluído', () async {
+      await service.definirFotoDoBarbeiro(3, foto);
+      await service.excluirBarbeiro(3);
+
+      final db = await service.database;
+      expect(await db.query('barbeiro', where: 'foto IS NOT NULL'), isEmpty);
+    });
+
+    test('o barbeiro logado troca a própria foto, e a sessão já fica com a '
+        'nova; quem não é barbeiro não tem foto', () async {
+      SharedPreferences.setMockInitialValues({});
+      final auth = AuthService.instance;
+
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      final id = auth.barbeiroAtual!.id!;
+      expect((await auth.atualizarFotoBarbeiro(foto)).sucesso, isTrue);
+      expect(auth.barbeiroAtual!.foto, foto);
+      expect(await fotoGravada(id), foto);
+      // Os outros barbeiros continuam como estavam.
+      expect(await fotoGravada(1), isNull);
+
+      final semFoto = await auth.atualizarFotoBarbeiro(null);
+      expect(semFoto.sucesso, isTrue);
+      expect(auth.barbeiroAtual!.foto, isNull);
+      await auth.logout();
+
+      // O administrador não mexe na foto dos barbeiros.
+      await auth.login(emailAdmin, senhaAdmin);
+      final doAdmin = await auth.atualizarFotoBarbeiro(foto);
+      expect(doAdmin.sucesso, isFalse);
+      await auth.logout();
     });
   });
 }

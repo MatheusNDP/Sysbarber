@@ -4,6 +4,8 @@
 /// entre os objetos Dart e as tabelas do SQLite.
 library;
 
+import 'dart:typed_data';
+
 // ---------------------------------------------------------------------------
 // ENUMS
 // ---------------------------------------------------------------------------
@@ -196,6 +198,11 @@ class Barbeiro {
   /// negócio 18). Os barbeiros de exemplo e os mais antigos não têm.
   final String? termosAceitosEm;
 
+  /// Foto de perfil que o próprio barbeiro pôs (regra de negócio 22), já
+  /// reduzida. Sem ela, as telas mostram as iniciais. As listagens de
+  /// agendamentos não trazem a foto.
+  final Uint8List? foto;
+
   const Barbeiro({
     this.id,
     required this.nome,
@@ -207,6 +214,7 @@ class Barbeiro {
     this.salario = 0,
     this.ativo = true,
     this.termosAceitosEm,
+    this.foto,
   });
 
   Map<String, dynamic> toMap() => {
@@ -220,6 +228,7 @@ class Barbeiro {
     'salario': salario,
     'ativo': ativo ? 1 : 0,
     'termos_aceitos_em': termosAceitosEm,
+    'foto': foto,
   };
 
   factory Barbeiro.fromMap(Map<String, dynamic> map) => Barbeiro(
@@ -234,6 +243,7 @@ class Barbeiro {
     // Bancos anteriores à v4 não têm a coluna: quem não tem marca é ativo.
     ativo: ((map['ativo'] as num?)?.toInt() ?? 1) == 1,
     termosAceitosEm: map['termos_aceitos_em'] as String?,
+    foto: map['foto'] as Uint8List?,
   );
 
   Barbeiro copyWith({
@@ -257,6 +267,7 @@ class Barbeiro {
     salario: salario ?? this.salario,
     ativo: ativo ?? this.ativo,
     termosAceitosEm: termosAceitosEm,
+    foto: foto,
   );
 
   /// Gera as iniciais a partir do nome (usado ao cadastrar pelo admin).

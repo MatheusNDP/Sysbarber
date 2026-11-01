@@ -1043,7 +1043,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       ),
       child: Row(
         children: [
-          AvatarIniciais(texto: b?.iniciais ?? '?', tamanho: 44, large: true),
+          AvatarIniciais(
+            texto: b?.iniciais ?? '?',
+            foto: b?.foto,
+            tamanho: 44,
+            large: true,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

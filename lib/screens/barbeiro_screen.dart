@@ -42,9 +42,11 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
       setState(() {
         _barbeiros = barbeiros;
         // Uma escolha anterior pode ter ficado indisponível nesse meio-tempo.
-        _selecionado = barbeiros.any((b) => b.id == anterior?.id && b.ativo)
-            ? anterior
-            : null;
+        // Fica o barbeiro relido do banco: o do reagendamento vem da lista
+        // de agendamentos, sem a foto.
+        _selecionado = barbeiros
+            .where((b) => b.id == anterior?.id && b.ativo)
+            .firstOrNull;
         _carregando = false;
       });
     } catch (e) {
@@ -159,7 +161,7 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
         child: Cartao(
           child: Row(
             children: [
-              AvatarIniciais(texto: b.iniciais, tamanho: 52),
+              AvatarIniciais(texto: b.iniciais, foto: b.foto, tamanho: 52),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -191,7 +193,12 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
       onTap: () => setState(() => _selecionado = b),
       child: Row(
         children: [
-          AvatarIniciais(texto: b.iniciais, tamanho: 52, large: selecionado),
+          AvatarIniciais(
+            texto: b.iniciais,
+            foto: b.foto,
+            tamanho: 52,
+            large: selecionado,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

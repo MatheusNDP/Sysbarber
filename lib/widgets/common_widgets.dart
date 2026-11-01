@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -274,22 +275,26 @@ class Etiqueta extends StatelessWidget {
   }
 }
 
-/// Avatar circular com as iniciais. Com [large] o fundo fica amarelo.
+/// Avatar circular com as iniciais ou, quando há, a [foto] (a do barbeiro,
+/// regra de negócio 22), centralizada no círculo. Com [large] o fundo fica
+/// amarelo; com a foto, um aro amarelo em volta dela.
 class AvatarIniciais extends StatelessWidget {
   final String texto;
+  final Uint8List? foto;
   final double tamanho;
   final bool large;
 
   const AvatarIniciais({
     super.key,
     required this.texto,
+    this.foto,
     this.tamanho = 48,
     this.large = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final iniciais = Container(
       width: tamanho,
       height: tamanho,
       alignment: Alignment.center,
@@ -303,6 +308,30 @@ class AvatarIniciais extends StatelessWidget {
           size: tamanho * 0.34,
           weight: FontWeight.w600,
           color: large ? Colors.black : AppColors.amarelo,
+        ),
+      ),
+    );
+    final foto = this.foto;
+    if (foto == null) return iniciais;
+
+    return Container(
+      width: tamanho,
+      height: tamanho,
+      padding: large ? EdgeInsets.all(tamanho * 0.035 + 1) : null,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: large ? AppColors.amarelo : AppColors.card2,
+      ),
+      child: ClipOval(
+        child: Image.memory(
+          foto,
+          fit: BoxFit.cover,
+          width: tamanho,
+          height: tamanho,
+          // Sem piscar ao recarregar a tela com a mesma foto.
+          gaplessPlayback: true,
+          // Uma foto que não abre volta a ser as iniciais.
+          errorBuilder: (_, __, ___) => iniciais,
         ),
       ),
     );

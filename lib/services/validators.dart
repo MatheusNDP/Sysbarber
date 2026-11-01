@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Regras de validação do SysBarber.
 ///
 /// Mantidas fora das telas e sem dependência de Flutter para que possam ser
@@ -79,6 +81,37 @@ class Validators {
     if (!emailValido(email)) return 'E-mail inválido';
     if (!telefoneValido(telefone)) return 'Telefone inválido';
     return null;
+  }
+
+  /// Tamanho máximo da foto do barbeiro. O app já reduz a foto a
+  /// 512 × 512 pixels antes de gravar, e ela fica bem abaixo disso.
+  static const int tamanhoMaximoFoto = 1024 * 1024;
+
+  /// Valida a foto de perfil do barbeiro (regra de negócio 22): uma imagem
+  /// JPG, PNG ou WebP de até 1 MB.
+  static String? validarFoto(Uint8List foto) {
+    if (!_ehImagem(foto)) return 'Escolha uma foto em JPG, PNG ou WebP';
+    if (foto.length > tamanhoMaximoFoto) {
+      return 'A foto passa de 1 MB. Escolha outra';
+    }
+    return null;
+  }
+
+  /// Confere o formato pelos primeiros bytes do arquivo, que o identificam.
+  static bool _ehImagem(Uint8List bytes) {
+    bool tem(List<int> assinatura, [int inicio = 0]) {
+      if (bytes.length < inicio + assinatura.length) return false;
+      for (var i = 0; i < assinatura.length; i++) {
+        if (bytes[inicio + i] != assinatura[i]) return false;
+      }
+      return true;
+    }
+
+    const jpeg = [0xFF, 0xD8, 0xFF];
+    const png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    return tem(jpeg) ||
+        tem(png) ||
+        (tem('RIFF'.codeUnits) && tem('WEBP'.codeUnits, 8));
   }
 
   // -------------------------------------------------------------------------

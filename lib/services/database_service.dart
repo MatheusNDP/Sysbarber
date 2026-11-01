@@ -34,7 +34,8 @@ class DatabaseService {
   /// para o barbeiro criar a própria conta.
   /// v8: cliente e barbeiro guardam quando aceitaram os termos de uso, e o
   /// cliente, quando excluiu a própria conta.
-  static const int versaoBanco = 8;
+  /// v9: barbeiro ganhou a foto de perfil.
+  static const int versaoBanco = 9;
 
   /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
   /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
@@ -213,7 +214,8 @@ class DatabaseService {
         senha_hash TEXT NOT NULL DEFAULT '',
         salario REAL NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1,
-        termos_aceitos_em TEXT
+        termos_aceitos_em TEXT,
+        foto BLOB
       )
     ''');
 
@@ -505,6 +507,11 @@ class DatabaseService {
       await db.execute(
         'ALTER TABLE barbeiro ADD COLUMN termos_aceitos_em TEXT',
       );
+    }
+
+    // Quem já existia começa sem foto, como os barbeiros de exemplo.
+    if (versaoAntiga < 9) {
+      await db.execute('ALTER TABLE barbeiro ADD COLUMN foto BLOB');
     }
   }
 
@@ -1578,6 +1585,25 @@ class DatabaseService {
         throw const RegraNegocioException('Barbeiro não encontrado');
       }
     });
+  }
+
+  /// O próprio barbeiro põe ou troca a foto de perfil, no Perfil, e com
+  /// `null` a remove (regra de negócio 22). O administrador não mexe nela.
+  Future<void> definirFotoDoBarbeiro(int id, Uint8List? foto) async {
+    if (foto != null) {
+      final erro = Validators.validarFoto(foto);
+      if (erro != null) throw RegraNegocioException(erro);
+    }
+    final db = await database;
+    final alterados = await db.update(
+      'barbeiro',
+      {'foto': foto},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (alterados == 0) {
+      throw const RegraNegocioException('Barbeiro não encontrado');
+    }
   }
 
   // -------------------------------------------------------------------------
