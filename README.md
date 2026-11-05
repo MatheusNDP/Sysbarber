@@ -150,7 +150,7 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **391 testes** no total:
+São **397 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
@@ -162,7 +162,7 @@ São **391 testes** no total:
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
 | `test/animacoes_test.dart` | 9 | Animações de entrada: a cascata (a ordem dos itens, o item montado depois que ela terminou e o item fora dela), o "Remover animações" do Android, a contagem dos pontos (a partir do 0 e do valor anterior, com o valor final para o leitor de tela), a barra de progresso e o corte da tesoura na abertura (a pausa, a tesoura atravessando a tela, o conteúdo só com as metades se abrindo e, sem animações, a abertura direto) |
 | `test/android_test.dart` | 5 | Identidade no Android: as cores iguais às do app, a tela nativa da abertura só em grafite (também a do Android 12 em diante, sem ícone), o nome "SysBarber", o ícone adaptativo e a tesoura como ícone das notificações, mantida no APK release |
-| `test/telas_test.dart` | 85 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto, com a foto do barbeiro entre os dados guardados, e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) e o último serviço do Início (só o concluído mais recente, sem cancelamentos e faltas, e nada sem um atendimento concluído; o "Repetir" direto no horário com o mesmo serviço e barbeiro ou, com o barbeiro indisponível, na escolha do profissional) e a foto do barbeiro (posta pela galeria, a desistência na câmera, remover, o aviso sem câmera, só no Perfil do barbeiro, e mostrada na escolha do profissional, em Gerenciar Barbeiros, na agenda dele e na confirmação, também pelo "Repetir" e num reagendamento) |
+| `test/telas_test.dart` | 91 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos, acessibilidade, avisos de desistência num resgate, o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android; só a aba atual com o nome, ao lado do ícone, e cada opção com 56 de altura; o pulinho do ícone, também na aba atual; a tesoura fechando e abrindo; tudo direto com "Remover animações"; a margem igual à das telas, menor em celular estreito; e nada estourando em celular pequeno com fonte grande, também no meio da troca), o ícone do serviço escolhido entre os ícones de linha, as abas e o Perfil do administrador e do barbeiro, os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto, com a foto do barbeiro entre os dados guardados, e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) e o último serviço do Início (só o concluído mais recente, sem cancelamentos e faltas, e nada sem um atendimento concluído; o "Repetir" direto no horário com o mesmo serviço e barbeiro ou, com o barbeiro indisponível, na escolha do profissional) e a foto do barbeiro (posta pela galeria, a desistência na câmera, remover, o aviso sem câmera, só no Perfil do barbeiro, e mostrada na escolha do profissional, em Gerenciar Barbeiros, na agenda dele e na confirmação, também pelo "Repetir" e num reagendamento) |
 | `integration_test/database_integration_test.dart` | 208 | Configuração inicial, CRUD, aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador), a disponibilidade do barbeiro na lista do cliente (para o "Repetir" do último serviço), a foto do barbeiro (gravar e remover, a recusa do que não é foto ou passa de 1 MB, só o barbeiro logado, os de exemplo sem foto e a foto que sai com o barbeiro excluído) e migrações |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
@@ -172,7 +172,7 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 391 testes. Para rodar a suíte de
+assim um único `flutter test` roda os 397 testes. Para rodar a suíte de
 integração em um dispositivo:
 
 ```bash
@@ -211,7 +211,7 @@ lib/
 │   └── booking_flow.dart        # Rascunho do agendamento (novo, repetido ou reagendamento) em andamento
 ├── widgets/
 │   ├── common_widgets.dart      # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-│   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso e o corte da abertura
+│   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso, o corte da abertura e a tesoura que abre e fecha
 └── screens/                     # 22 telas (uma por arquivo)
 ```
 
@@ -593,9 +593,13 @@ barra de navegação, com as abas de quem entrou (regra 17):
 | Administrador | Painel, Agenda (a agenda geral), Relatórios e Perfil |
 | Barbeiro | Agenda (Minha agenda) e Perfil |
 
-Tocar na barra troca a aba sem abrir uma tela nova: a barra continua no lugar
-e uma pílula amarela desliza até a aba escolhida, enquanto o conteúdo da aba
-nova entra deslizando pelo mesmo lado. Cada aba relê o banco ao ser aberta.
+Cada aba aparece na barra como um círculo translúcido com o ícone; a aba
+atual vira uma pílula amarela, com o ícone num círculo translúcido e o nome
+ao lado (as outras mostram só o ícone, e o leitor de tela lê o nome de
+todas). Tocar na barra troca a aba sem abrir uma tela nova: a barra continua
+no lugar, a pílula da aba tocada cresce enquanto a da anterior volta a ser
+círculo, e o conteúdo da aba nova entra deslizando pelo mesmo lado. Cada aba
+relê o banco ao ser aberta.
 O cartão do próximo horário, no Início do cliente, e o "Agendamentos" do
 Perfil também trocam de aba, assim como a Agenda geral e os Relatórios no
 Painel. Fora da primeira aba, o voltar do Android volta para ela. O Início não
@@ -623,7 +627,10 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
 - botão redondo translúcido para voltar e para as ações da barra do topo
   (como o "+" de Gerenciar Serviços e o sair do barbeiro);
 - abas e opções em pílula, com a escolhida em amarelo;
-- barra de navegação flutuante e translúcida, na área principal.
+- barra de navegação flutuante e translúcida, na área principal, com a
+  mesma margem das telas (20; num celular com menos de 380 de largura, 12,
+  para o nome mais longo, "Relatórios", caber inteiro): cada aba num círculo
+  de 56, e a atual numa pílula amarela com o nome ao lado.
 
 O **ícone do app** é a tesoura preta num círculo amarelo sobre o grafite, como
 o da abertura: um ícone adaptativo (`android/app/src/main/res/`), com uma
@@ -659,10 +666,21 @@ elemento, com um intervalo curto entre eles. Os componentes ficam em
   do barbeiro e a agenda geral) e os horários de cada dia entram um depois do
   outro.
 
+Na **barra de navegação** (`BarraNavegacao`, em
+`lib/widgets/common_widgets.dart`), além da pílula que cresce na aba tocada,
+o ícone tocado dá um pulinho: encolhe, cresce além do tamanho e volta,
+balançando de leve, em cerca de 0,45 s. Ele pula também ao tocar de novo na
+aba atual e quando a aba muda sem tocar na barra (pelo voltar do Android ou
+por um atalho da tela). A tesoura da aba Serviços é desenhada em duas
+metades (`Tesoura`, em `lib/widgets/animacoes.dart`), cada uma com o anel, a
+haste e a lâmina: no pulinho, ela fecha e abre duas vezes, girando no
+parafuso como uma tesoura de verdade.
+
 A cascata tem um relógio só: um item que aparece depois, ao rolar a lista, já
 vem pronto, sem animar de novo. Com "Remover animações" ligado no Android
-(acessibilidade), tudo aparece sem animar. Já eram animados a troca de abas,
-a barra de navegação e o toque nos botões.
+(acessibilidade), tudo aparece sem animar, e a barra de navegação troca de
+aba direto, sem o pulinho. Já eram animados a troca de abas e o toque nos
+botões.
 
 Os textos prontos do Material, como os do calendário e os menus de copiar e
 colar, ficam em português: o app usa as traduções do Flutter
