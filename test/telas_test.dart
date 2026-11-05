@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1378,10 +1379,10 @@ void main() {
   // -------------------------------------------------------------------------
 
   /// O botão [rotulo] da barra de navegação (e não outro texto de mesmo nome
-  /// na tela).
+  /// na tela). Pelo leitor de tela: só a opção atual mostra o nome.
   Finder botaoDaBarra(String rotulo) => find.descendant(
     of: find.byType(BarraNavegacao),
-    matching: find.text(rotulo),
+    matching: find.bySemanticsLabel(rotulo),
   );
 
   /// Toca em [alvo] e espera a aba nova carregar do banco. A aba faz
@@ -1441,6 +1442,232 @@ void main() {
     expect(abaMarcada(tester), Aba.inicio);
     expect(find.byType(AgendamentosScreen), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
+  });
+
+  /// Monta só a barra de navegação, com as [itens] e a primeira marcada;
+  /// tocar numa opção marca ela. Com [fonte], como a fonte do sistema
+  /// aumentada; com [semAnimacoes], como "Remover animações" ligado.
+  Future<void> abrirBarra(
+    WidgetTester tester,
+    List<(IconData, String)> itens, {
+    TextScaler fonte = TextScaler.noScaling,
+    bool semAnimacoes = false,
+  }) async {
+    var atual = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, tela) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: fonte, disableAnimations: semAnimacoes),
+          child: tela!,
+        ),
+        home: Scaffold(
+          bottomNavigationBar: StatefulBuilder(
+            builder: (_, setState) => BarraNavegacao(
+              atual: atual,
+              onTap: (i) => setState(() => atual = i),
+              itens: itens,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  const abasDoCliente = [
+    (Icons.home_rounded, 'Início'),
+    (Icons.content_cut_rounded, 'Serviços'),
+    (Icons.calendar_month_outlined, 'Agenda'),
+    (Icons.person_outline_rounded, 'Perfil'),
+  ];
+
+  /// A tesoura da aba Serviços, desenhada em duas metades (as outras abas
+  /// usam o ícone de linha).
+  final tesoura = find.descendant(
+    of: find.byType(BarraNavegacao),
+    matching: find.byType(Tesoura),
+  );
+
+  /// Escala do [icone] da barra: 1 parado, diferente de 1 no pulinho.
+  double escalaDoIcone(WidgetTester tester, Finder icone) => tester
+      .widget<Transform>(
+        find.ancestor(of: icone, matching: find.byType(Transform)).first,
+      )
+      .transform
+      .getMaxScaleOnAxis();
+
+  testWidgets('na barra de navegação, só a aba atual mostra o nome, ao lado '
+      'do ícone, e tocar em outra aba mostra o nome dela', (tester) async {
+    await abrirBarra(tester, abasDoCliente);
+
+    // Antes todas as abas mostravam o nome, embaixo do ícone.
+    expect(find.text('Início'), findsOneWidget);
+    for (final rotulo in ['Serviços', 'Agenda', 'Perfil']) {
+      expect(find.text(rotulo), findsNothing, reason: rotulo);
+    }
+    final icone = tester.getCenter(find.byIcon(Icons.home_rounded));
+    final nome = tester.getCenter(find.text('Início'));
+    expect(nome.dx, greaterThan(icone.dx));
+    expect(nome.dy, moreOrLessEquals(icone.dy, epsilon: 1));
+
+    await tester.tap(tesoura);
+    await tester.pumpAndSettle();
+    expect(find.text('Serviços'), findsOneWidget);
+    expect(find.text('Início'), findsNothing);
+    expect(
+      tester.getCenter(find.text('Serviços')).dx,
+      greaterThan(tester.getCenter(tesoura).dx),
+    );
+
+    // O leitor de tela continua lendo o nome de todas as abas. Cada opção é
+    // um círculo (ou a pílula) de 56 de altura: antes a barra era mais fina.
+    for (final (_, rotulo) in abasDoCliente) {
+      expect(find.bySemanticsLabel(rotulo), findsOneWidget, reason: rotulo);
+      expect(
+        tester.getSize(find.bySemanticsLabel(rotulo)).height,
+        56,
+        reason: rotulo,
+      );
+    }
+    expect(
+      tester.getSize(find.bySemanticsLabel('Início')).width,
+      56,
+      reason: 'sem o nome, a opção é um círculo',
+    );
+  });
+
+  testWidgets('o ícone tocado na barra dá um pulinho e volta ao tamanho, '
+      'também na aba atual', (tester) async {
+    await abrirBarra(tester, abasDoCliente);
+    expect(escalaDoIcone(tester, tesoura), 1);
+
+    await tester.tap(tesoura);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      escalaDoIcone(tester, tesoura),
+      greaterThan(1.05),
+    );
+    expect(escalaDoIcone(tester, find.byIcon(Icons.home_rounded)), 1);
+
+    await tester.pumpAndSettle();
+    expect(escalaDoIcone(tester, tesoura), 1);
+
+    // Tocar de novo na aba atual não troca a aba, mas o ícone pula.
+    await tester.tap(tesoura);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      escalaDoIcone(tester, tesoura),
+      greaterThan(1.05),
+    );
+    await tester.pumpAndSettle();
+  });
+
+  /// A menor abertura da tesoura da barra no pulinho: 1 aberta, 0 fechada.
+  Future<double> menorAbertura(WidgetTester tester) async {
+    var menor = 1.0;
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      menor = min(menor, tester.widget<Tesoura>(tesoura).abertura);
+    }
+    return menor;
+  }
+
+  testWidgets('no pulinho, a tesoura da barra fecha e abre como uma tesoura '
+      'de verdade', (tester) async {
+    await abrirBarra(tester, abasDoCliente);
+    // Parada, ela fica aberta; as outras abas têm o ícone de linha.
+    expect(tesoura, findsOneWidget);
+    expect(tester.widget<Tesoura>(tesoura).abertura, 1);
+    expect(find.byIcon(Icons.calendar_month_outlined), findsOneWidget);
+
+    await tester.tap(tesoura);
+    await tester.pump();
+    expect(await menorAbertura(tester), lessThan(0.05));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Tesoura>(tesoura).abertura, 1);
+  });
+
+  testWidgets('com "Remover animações", a barra troca de aba direto, sem o '
+      'pulinho', (tester) async {
+    await abrirBarra(
+      tester,
+      abasDoCliente,
+      semAnimacoes: true,
+    );
+
+    await tester.tap(tesoura);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(escalaDoIcone(tester, tesoura), 1);
+    expect(tester.widget<Tesoura>(tesoura).abertura, 1);
+    expect(find.text('Serviços'), findsOneWidget);
+    expect(find.text('Início'), findsNothing);
+    expect(
+      tester
+          .widget<Opacity>(
+            find
+                .ancestor(
+                  of: find.text('Serviços'),
+                  matching: find.byType(Opacity),
+                )
+                .first,
+          )
+          .opacity,
+      1,
+    );
+  });
+
+  testWidgets('a barra alinha com a margem das telas (20) e, num celular '
+      'estreito, fica com 12 dos lados', (tester) async {
+    /// Distância da barra até as bordas da tela, à esquerda e à direita.
+    (double, double) margens() {
+      final barra = tester.getRect(
+        find.descendant(
+          of: find.byType(BarraNavegacao),
+          matching: find.byType(ClipRRect),
+        ),
+      );
+      return (barra.left, tester.view.physicalSize.width - barra.right);
+    }
+
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.view.physicalSize = const Size(411, 900);
+    await abrirBarra(tester, abasDoCliente);
+    expect(margens(), (20, 20));
+
+    tester.view.physicalSize = const Size(360, 780);
+    await tester.pump();
+    expect(margens(), (12, 12));
+  });
+
+  testWidgets('a barra cabe em celular pequeno com fonte grande, também no '
+      'meio da troca de aba', (tester) async {
+    celularPequeno(tester);
+    await abrirBarra(tester, const [
+      (Icons.space_dashboard_outlined, 'Painel'),
+      (Icons.calendar_month_outlined, 'Agenda'),
+      (Icons.bar_chart_rounded, 'Relatórios'),
+      (Icons.person_outline_rounded, 'Perfil'),
+    ], fonte: const TextScaler.linear(2));
+
+    // Da aba de nome mais longo para outra e de volta, quadro a quadro: a
+    // pílula que cresce e a que encolhe cabem juntas na barra.
+    for (final icone in [
+      Icons.bar_chart_rounded,
+      Icons.person_outline_rounded,
+      Icons.bar_chart_rounded,
+    ]) {
+      await tester.tap(find.byIcon(icone));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+        expect(tester.takeException(), isNull);
+      }
+    }
+    expect(find.text('Relatórios'), findsOneWidget);
   });
 
   // -------------------------------------------------------------------------

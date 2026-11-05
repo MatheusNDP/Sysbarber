@@ -352,6 +352,95 @@ class _Metade extends StatelessWidget {
   }
 }
 
+/// Tesoura desenhada em duas metades que giram no parafuso, para abrir e
+/// fechar como uma tesoura de verdade (o ícone de linha é um desenho só).
+/// Cada metade tem o anel, a haste e a lâmina, do lado oposto ao anel.
+class Tesoura extends StatelessWidget {
+  /// 0 com a tesoura fechada e 1 aberta, como ela fica parada.
+  final double abertura;
+  final double tamanho;
+  final Color cor;
+
+  const Tesoura({
+    super.key,
+    this.abertura = 1,
+    required this.tamanho,
+    required this.cor,
+  });
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size.square(tamanho),
+    painter: _PintorDaTesoura(abertura: abertura, cor: cor),
+  );
+}
+
+class _PintorDaTesoura extends CustomPainter {
+  final double abertura;
+  final Color cor;
+
+  const _PintorDaTesoura({required this.abertura, required this.cor});
+
+  /// O desenho é feito numa grade de 24 por 24, como os ícones de linha.
+  static const _grade = 24.0;
+  static const _parafuso = Offset(11, 12);
+
+  /// Quanto cada metade gira, da tesoura fechada até a aberta (em radianos).
+  static const _anguloAberta = 0.6;
+
+  static const _raioDoAnel = 3.0;
+
+  /// Onde fica o centro do anel com a tesoura fechada, a partir do parafuso.
+  static const _anel = Offset(-7, 4.4);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / _grade, size.height / _grade);
+    // Camada própria para o furo do parafuso deixar ver o fundo.
+    canvas.saveLayer(Offset.zero & const Size.square(_grade), Paint());
+    final angulo = _anguloAberta * abertura;
+    _metade(canvas, lado: -1, angulo: angulo);
+    _metade(canvas, lado: 1, angulo: -angulo);
+    canvas.drawCircle(_parafuso, 0.9, Paint()..blendMode = BlendMode.clear);
+    canvas.restore();
+    canvas.restore();
+  }
+
+  /// Uma metade: com [lado] -1, o anel fica acima do eixo e a lâmina abaixo;
+  /// com 1, o contrário. Fechada, as duas lâminas formam uma só.
+  void _metade(Canvas canvas, {required double lado, required double angulo}) {
+    canvas.save();
+    canvas.translate(_parafuso.dx, _parafuso.dy);
+    canvas.rotate(angulo);
+    final ladoDaLamina = -lado;
+    final lamina = Path()
+      ..moveTo(0, 0)
+      ..lineTo(12, 0)
+      ..quadraticBezierTo(6, 3.4 * ladoDaLamina, 0, 2.6 * ladoDaLamina)
+      ..close();
+    final preenchido = Paint()..color = cor;
+    canvas.drawPath(lamina, preenchido);
+    // A base arredondada em volta do parafuso.
+    canvas.drawCircle(Offset.zero, 2.2, preenchido);
+    final traco = Paint()
+      ..color = cor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final anel = Offset(_anel.dx, _anel.dy * lado);
+    // A haste vai do parafuso até a borda do anel.
+    final paraOParafuso = -anel / anel.distance;
+    canvas.drawLine(Offset.zero, anel + paraOParafuso * _raioDoAnel, traco);
+    canvas.drawCircle(anel, _raioDoAnel, traco);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_PintorDaTesoura antigo) =>
+      antigo.abertura != abertura || antigo.cor != cor;
+}
+
 /// Número que conta até [valor] (de 0, na primeira vez, e do valor anterior
 /// quando ele muda). O leitor de tela lê sempre o valor final.
 class ContagemAnimada extends StatelessWidget {
