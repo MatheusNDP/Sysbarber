@@ -1,3 +1,4 @@
+import 'dart:math' show cos, max, pi, sin;
 import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../services/formatters.dart';
 import '../theme/app_theme.dart';
+import 'animacoes.dart';
 
 /// Botão principal: pílula amarela com texto preto.
 class BotaoPrincipal extends StatelessWidget {
@@ -428,8 +430,11 @@ class BarberAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Barra de navegação inferior flutuante e translúcida. A opção atual fica
-/// numa pílula amarela, que desliza até a opção tocada.
+/// Barra de navegação inferior flutuante e translúcida. Cada opção é um
+/// círculo translúcido com o ícone; a atual vira uma pílula amarela, com o
+/// ícone preto num círculo translúcido e o nome ao lado. Ao trocar, a
+/// pílula da opção tocada cresce enquanto a da anterior encolhe, e o ícone
+/// tocado dá um pulinho (a tesoura também fecha e abre).
 class BarraNavegacao extends StatelessWidget {
   final int atual;
   final ValueChanged<int> onTap;
@@ -438,6 +443,9 @@ class BarraNavegacao extends StatelessWidget {
   /// Duração das animações da barra (e da troca de aba, na área principal).
   static const duracao = Duration(milliseconds: 320);
   static const curva = Curves.easeOutCubic;
+
+  /// Quanto dura o pulinho do ícone tocado.
+  static const duracaoPulo = Duration(milliseconds: 450);
 
   const BarraNavegacao({
     super.key,
@@ -448,51 +456,53 @@ class BarraNavegacao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Posição da pílula de -1 (primeira opção) a 1 (última).
-    final posicao = itens.length < 2
-        ? 0.0
-        : -1 + 2 * atual / (itens.length - 1);
+    // Dos lados, a mesma margem das telas, para a barra alinhar com os
+    // cards e os botões; num celular estreito, menos, para o nome mais
+    // longo ("Relatórios") caber inteiro.
+    final margem = MediaQuery.sizeOf(context).width >= 380 ? 20.0 : 12.0;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        padding: EdgeInsets.fromLTRB(margem, 0, margem, 12),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(40),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.card2.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: BorderRadius.circular(40),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: AnimatedAlign(
-                      alignment: Alignment(posicao, 0),
-                      duration: duracao,
-                      curve: curva,
-                      child: FractionallySizedBox(
-                        widthFactor: 1 / itens.length,
-                        heightFactor: 1,
-                        child: const DecoratedBox(
-                          decoration: ShapeDecoration(
-                            color: AppColors.amarelo,
-                            shape: StadiumBorder(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Row(
+              child: LayoutBuilder(
+                builder: (_, limites) {
+                  // O nome usa só o espaço que sobra depois dos ícones: a
+                  // pílula que cresce e a que encolhe nunca passam da barra,
+                  // mesmo com fonte grande (o nome ganha reticências).
+                  final espacoDoNome = max(
+                    0.0,
+                    limites.maxWidth -
+                        itens.length * _ItemDaBarra.larguraSemNome,
+                  );
+                  return Row(
+                    // As pontas encostam na margem da barra; com só duas
+                    // opções (o barbeiro), elas ficam distribuídas.
+                    mainAxisAlignment: itens.length > 2
+                        ? MainAxisAlignment.spaceBetween
+                        : MainAxisAlignment.spaceEvenly,
                     children: [
                       for (var i = 0; i < itens.length; i++)
-                        Expanded(child: _item(i)),
+                        _ItemDaBarra(
+                          icone: itens[i].$1,
+                          rotulo: itens[i].$2,
+                          selecionado: i == atual,
+                          larguraMaximaDoNome: espacoDoNome,
+                          onTap: () => onTap(i),
+                        ),
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -500,47 +510,208 @@ class BarraNavegacao extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _item(int i) {
-    final selecionado = i == atual;
+/// Uma opção da [BarraNavegacao]: o círculo com o ícone e, quando
+/// selecionada, a pílula amarela com o nome ao lado.
+class _ItemDaBarra extends StatefulWidget {
+  final IconData icone;
+  final String rotulo;
+  final bool selecionado;
+  final double larguraMaximaDoNome;
+  final VoidCallback onTap;
+
+  /// Altura da opção: o círculo de fora e a pílula têm esse diâmetro.
+  static const _diametro = 56.0;
+
+  /// Espaço entre a pílula e o círculo do ícone, dentro dela.
+  static const _margem = 6.0;
+
+  static const _tamanhoDoIcone = 24.0;
+
+  /// Espaço entre o círculo do ícone e o nome, e depois do nome.
+  static const _margemDoNome = EdgeInsets.only(left: 8, right: 10);
+
+  /// Largura da opção sem o nome: o círculo.
+  static const larguraSemNome = _diametro;
+
+  const _ItemDaBarra({
+    required this.icone,
+    required this.rotulo,
+    required this.selecionado,
+    required this.larguraMaximaDoNome,
+    required this.onTap,
+  });
+
+  @override
+  State<_ItemDaBarra> createState() => _ItemDaBarraState();
+}
+
+class _ItemDaBarraState extends State<_ItemDaBarra>
+    with SingleTickerProviderStateMixin {
+  late final _pulo = AnimationController(
+    vsync: this,
+    duration: BarraNavegacao.duracaoPulo,
+  );
+
+  /// No pulinho, o ícone encolhe um pouco, cresce além do tamanho e volta.
+  static final _escala = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.0,
+        end: 0.8,
+      ).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 25,
+    ),
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 0.8,
+        end: 1.2,
+      ).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 35,
+    ),
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.2,
+        end: 1.0,
+      ).chain(CurveTween(curve: Curves.easeInOut)),
+      weight: 40,
+    ),
+  ]);
+
+  /// Com "Remover animações" ligado no aparelho, o ícone não pula.
+  void _pular() {
+    if (!Animacoes.desligadas(context)) _pulo.forward(from: 0);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ItemDaBarra antigo) {
+    super.didUpdateWidget(antigo);
+    // Pula também quando a aba muda sem tocar na barra (pelo voltar do
+    // Android ou por um atalho da tela).
+    if (widget.selecionado && !antigo.selecionado) _pular();
+  }
+
+  @override
+  void dispose() {
+    _pulo.dispose();
+    super.dispose();
+  }
+
+  /// Quantas vezes a tesoura (a aba Serviços) fecha no pulinho.
+  static const _cortes = 2;
+
+  /// O ícone pulando: além da escala, ele balança de leve, cada vez menos.
+  /// A tesoura (desenhada em duas metades) também fecha e abre, girando no
+  /// parafuso como uma tesoura de verdade.
+  Widget _icone(Color cor) => AnimatedBuilder(
+    animation: _pulo,
+    builder: (_, icone) {
+      final v = _pulo.value;
+      return Transform.rotate(
+        angle: sin(v * 2 * pi) * 0.15 * (1 - v),
+        child: Transform.scale(
+          scale: _escala.evaluate(_pulo),
+          child: widget.icone == Icons.content_cut_rounded
+              ? Tesoura(
+                  // 1 com a tesoura aberta, 0 com ela fechada.
+                  abertura: (1 + cos(v * 2 * pi * _cortes)) / 2,
+                  tamanho: _ItemDaBarra._tamanhoDoIcone,
+                  cor: cor,
+                )
+              : icone,
+        ),
+      );
+    },
+    child: Icon(widget.icone, size: _ItemDaBarra._tamanhoDoIcone, color: cor),
+  );
+
+  /// O nome ao lado do ícone, que aparece abrindo espaço da esquerda para a
+  /// direita: com [t] 0 ele não existe, e com 1 está inteiro.
+  Widget _nome(double t, Color cor) => ClipRect(
+    child: Align(
+      alignment: Alignment.centerLeft,
+      widthFactor: t,
+      heightFactor: 1,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: widget.larguraMaximaDoNome),
+        child: Padding(
+          padding: _ItemDaBarra._margemDoNome,
+          child: Opacity(
+            opacity: t,
+            child: Text(
+              widget.rotulo,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.texto(
+                size: 13,
+                weight: FontWeight.w600,
+                color: cor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      selected: selecionado,
-      label: itens[i].$2,
+      selected: widget.selecionado,
+      label: widget.rotulo,
       excludeSemantics: true,
       child: InkWell(
-        onTap: () => onTap(i),
+        onTap: () {
+          // Tocar na opção atual não troca a aba, mas o ícone pula do
+          // mesmo jeito, mostrando que o toque foi recebido.
+          if (widget.selecionado) _pular();
+          widget.onTap();
+        },
         customBorder: const StadiumBorder(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          // A cor acompanha a pílula: preta em cima dela, cinza fora.
-          child: TweenAnimationBuilder<Color?>(
-            tween: ColorTween(
-              end: selecionado ? Colors.black : AppColors.muted,
+        // t vai de 0 (o círculo translúcido com o ícone claro) a 1 (a
+        // pílula amarela, com o ícone preto num círculo translúcido e o nome
+        // ao lado).
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: widget.selecionado ? 1 : 0),
+          duration: Animacoes.desligadas(context)
+              ? Duration.zero
+              : BarraNavegacao.duracao,
+          curve: BarraNavegacao.curva,
+          builder: (_, t, __) => DecoratedBox(
+            decoration: ShapeDecoration(
+              color: Color.lerp(AppColors.vidro, AppColors.amarelo, t),
+              shape: const StadiumBorder(),
             ),
-            duration: duracao,
-            curve: curva,
-            builder: (_, cor, __) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedScale(
-                  scale: selecionado ? 1.12 : 1,
-                  duration: duracao,
-                  curve: curva,
-                  child: Icon(itens[i].$1, size: 22, color: cor),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  itens[i].$2,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTheme.texto(
-                    size: 11,
-                    weight: selecionado ? FontWeight.w600 : FontWeight.w500,
-                    color: cor ?? AppColors.muted,
+            child: Padding(
+              padding: const EdgeInsets.all(_ItemDaBarra._margem),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: Colors.black.withValues(alpha: 0.12 * t),
+                      shape: const CircleBorder(),
+                    ),
+                    child: SizedBox.square(
+                      dimension:
+                          _ItemDaBarra._diametro - 2 * _ItemDaBarra._margem,
+                      child: Center(
+                        child: _icone(
+                          Color.lerp(
+                            AppColors.text.withValues(alpha: 0.75),
+                            Colors.black,
+                            t,
+                          )!,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  if (t > 0) _nome(t, Colors.black),
+                ],
+              ),
             ),
           ),
         ),
