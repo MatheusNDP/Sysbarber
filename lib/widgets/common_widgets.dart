@@ -1190,6 +1190,10 @@ String formatarReal(double valor) {
   return centavos < 0 ? '-$texto' : texto;
 }
 
+/// Percentual com uma casa e vírgula decimal, ex.: `28,6%`.
+String formatarPercentual(double valor) =>
+    '${valor.toStringAsFixed(1).replaceAll('.', ',')}%';
+
 /// Esconde o meio do telefone, ex.: `(67) 98888-1234` → `(67) •••••-1234`.
 /// Um número fora do padrão (menos de 10 dígitos) volta como veio.
 String mascararTelefone(String telefone) {
@@ -1212,11 +1216,14 @@ String mascararEmail(String email) {
 
 String _doisDigitos(int n) => n.toString().padLeft(2, '0');
 
-/// Data por extenso em pt_BR, ex.: "Segunda, 11 de agosto".
-/// Se os dados de locale não estiverem carregados, cai no formato numérico.
-String formatarDataExtenso(DateTime d) {
+/// Data por extenso em pt_BR, ex.: "Segunda-feira, 11 de agosto". Com
+/// [inicioDeFrase] `false` (no meio de uma frase, como "Movimento de…"), o
+/// dia da semana fica em minúscula. Se os dados de locale não estiverem
+/// carregados, cai no formato numérico.
+String formatarDataExtenso(DateTime d, {bool inicioDeFrase = true}) {
   try {
     final texto = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(d);
+    if (!inicioDeFrase) return texto;
     return texto[0].toUpperCase() + texto.substring(1);
   } catch (_) {
     return formatarDataCurta(d);

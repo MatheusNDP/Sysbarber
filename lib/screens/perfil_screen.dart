@@ -160,7 +160,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text('Sair da conta?', style: AppTheme.titulo(size: 18)),
         content: Text(
-          'Você precisará entrar novamente para acessar seus agendamentos.',
+          'Você precisará entrar novamente para usar o app.',
           style: AppTheme.texto(size: 13, color: AppColors.muted),
         ),
         actions: [

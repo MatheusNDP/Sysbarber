@@ -1177,6 +1177,13 @@ void main() {
 
     // O dono precisa saber como os barbeiros de exemplo entram no app.
     expect(find.textContaining('barbeiro123'), findsWidgets);
+    // E que eles são só de exemplo: o administrador não troca a senha de
+    // barbeiro (desde a P33), então o aviso manda excluí-los.
+    expect(
+      find.textContaining('exclua-os em Gerenciar Barbeiros'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('troque as senhas'), findsNothing);
     // A navegação depois do diálogo continua o código iniciado no relógio
     // real (o toque em "CONFIGURAR E ENTRAR"), então também roda nele.
     await tester.runAsync(() async {
@@ -2599,6 +2606,30 @@ void main() {
       tester.element(find.text('ABERTURA')),
     ).removeCurrentSnackBar();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('o aviso de sair da conta não fala de agendamentos, que o '
+      'administrador não tem', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const PerfilScreen());
+    await tester.scrollUntilVisible(
+      find.text('Sair'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    await tester.tap(find.text('Sair'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sair da conta?'), findsOneWidget);
+    expect(
+      find.text('Você precisará entrar novamente para usar o app.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('agendamentos'), findsNothing);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(AuthService.instance.logout);
   });
 
   testWidgets('o administrador e o barbeiro não têm "Excluir minha conta", '

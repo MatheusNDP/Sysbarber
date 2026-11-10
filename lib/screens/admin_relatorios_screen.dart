@@ -175,7 +175,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                           _indicador(
                             'Cancelados',
                             '${r.cancelados}',
-                            '${r.taxaCancelamento.toStringAsFixed(1)}% do total',
+                            '${formatarPercentual(r.taxaCancelamento)} do total',
                             cor: AppColors.red,
                           ),
                           _indicador(
