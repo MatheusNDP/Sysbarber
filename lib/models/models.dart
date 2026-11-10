@@ -668,7 +668,8 @@ class ResultadoCancelamento {
   /// cobrança de multa.
   final bool comMulta;
 
-  /// Valor retido pela barbearia a título de multa.
+  /// Valor da multa. Sai do que o cliente já tinha pago (retida) ou, se ele
+  /// ia pagar na barbearia, fica toda em [multaAPagar].
   final double multa;
 
   /// Valor devolvido ao cliente, quando o serviço já havia sido pago.

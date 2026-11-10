@@ -176,9 +176,9 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             Text(
               ehMulta
                   ? 'Multa de ${formatarReal(pagamento.valor)} de '
-                        '${a.cliente?.nome ?? 'este cliente'} por '
-                        'cancelamento fora do prazo. Multa não gera pontos '
-                        'de fidelidade.'
+                        '${a.cliente?.nome ?? 'este cliente'} '
+                        '${_motivoDaMulta(a)}. Multa não gera pontos de '
+                        'fidelidade.'
                   : '${formatarReal(pagamento.valor)} de '
                         '${a.cliente?.nome ?? 'este cliente'}. '
                         'Ao confirmar, o cliente recebe '
@@ -288,6 +288,14 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// desistência fora do prazo a penalidade é a perda dos pontos, não multa.
   static bool _pagoComPontos(Agendamento a) =>
       a.pagamento?.natureza == NaturezaPagamento.resgate;
+
+  /// Por que a multa foi cobrada: a falta e o cancelamento fora do prazo
+  /// têm a mesma penalidade (regra de negócio 8), mas são desfechos
+  /// diferentes.
+  static String _motivoDaMulta(Agendamento a) =>
+      a.status == StatusAgendamento.faltou
+      ? 'por não comparecer ao horário'
+      : 'por cancelamento fora do prazo';
 
   /// Leva o cliente à escolha do profissional e do horário, com o serviço
   /// do agendamento. Na volta, reagendado ou não, a lista é relida.
@@ -417,9 +425,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       return;
     }
 
+    // A multa sai do que o cliente já pagou (retida) ou fica para o balcão
+    // (a pagar); quem ia pagar na barbearia não tem nada retido.
+    final multaRetida = r.multa - r.multaAPagar;
     final linhas = <String>[
       if (r.estorno > 0) 'Estorno de ${formatarReal(r.estorno)}',
-      if (r.multa > 0) 'Multa retida: ${formatarReal(r.multa)}',
+      if (multaRetida > 0) 'Multa retida: ${formatarReal(multaRetida)}',
       if (r.multaAPagar > 0)
         'Multa de ${formatarReal(r.multaAPagar)} a pagar na barbearia',
       if (r.pontosAjustados > 0) '${r.pontosAjustados} pontos devolvidos',
@@ -1213,8 +1224,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                       'ao receber',
                 (true, false) => 'Pagamento pendente — confirme ao receber',
                 (false, true) =>
-                  'Multa de ${formatarReal(p.valor)} por cancelamento fora '
-                      'do prazo. Pague no balcão.',
+                  'Multa de ${formatarReal(p.valor)} ${_motivoDaMulta(a)}. '
+                      'Pague no balcão.',
                 (false, false) =>
                   'Pague no balcão no dia do atendimento. Os '
                       '${p.valor.round()} pontos entram após a confirmação.',

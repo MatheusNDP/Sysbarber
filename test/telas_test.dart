@@ -707,6 +707,130 @@ void main() {
     await tester.runAsync(AuthService.instance.logout);
   });
 
+  // -------------------------------------------------------------------------
+  // P45 — textos da multa
+  // -------------------------------------------------------------------------
+
+  /// O cliente `c@teste.com` cancela o próprio Corte de Cabelo (R$ 35), que
+  /// começa em 30 minutos, e o app mostra o acerto. Com [pago], o serviço já
+  /// tinha sido pago no Pix; sem, ia ser pago na barbearia.
+  Future<void> clienteCancelaEmCimaDaHora(
+    WidgetTester tester, {
+    required bool pago,
+  }) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await marcarCorte(
+        await cadastrarClienteTeste(),
+        DateTime.now().add(const Duration(minutes: 30)),
+      );
+      if (pago) {
+        await service.criarPagamento(
+          Pagamento(
+            idAgendamento: id,
+            valor: 35,
+            metodo: 'Pix',
+            status: Pagamento.statusConfirmado,
+            criadoEm: DateTime.now().toIso8601String(),
+            tipo: TipoPagamento.antecipado.dbValue,
+          ),
+        );
+      } else {
+        await pagamentoPendente(id);
+      }
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    // O diálogo abre com o relógio real, para o cancelamento que vem depois
+    // dele também correr no relógio real (ele grava no banco).
+    await tester.runAsync(
+      () => tester.tap(find.text('Cancelar agendamento')),
+    );
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Cancelar agendamento').last);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelado com multa'), findsOneWidget);
+  }
+
+  testWidgets('quem ia pagar na barbearia e cancela em cima da hora vê só a '
+      'multa a pagar, e não uma "multa retida"', (tester) async {
+    await clienteCancelaEmCimaDaHora(tester, pago: false);
+
+    expect(find.text('Multa de R\$ 17,50 a pagar na barbearia'), findsOneWidget);
+    // Nada foi retido: o cliente não tinha pago.
+    expect(find.textContaining('Multa retida'), findsNothing);
+    expect(find.textContaining('Estorno'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('quem já tinha pago e cancela em cima da hora vê a multa retida '
+      'e o estorno do resto', (tester) async {
+    await clienteCancelaEmCimaDaHora(tester, pago: true);
+
+    expect(find.text('Multa retida: R\$ 17,50'), findsOneWidget);
+    expect(find.text('Estorno de R\$ 17,50'), findsOneWidget);
+    expect(find.textContaining('a pagar na barbearia'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('a multa de uma falta aparece como falta, e não como '
+      'cancelamento, para o cliente e no "Receber" da barbearia',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await marcarCorte(
+        await cadastrarClienteTeste(),
+        DateTime.now().subtract(const Duration(hours: 2)),
+      );
+      await pagamentoPendente(id);
+      await service.registrarFalta(id);
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+
+    // O cliente, no histórico.
+    await abrir(tester, const AgendamentosScreen());
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Multa de R\$ 17,50 por não comparecer ao horário. Pague no balcão.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('cancelamento'), findsNothing);
+
+    // A barbearia, ao receber a multa. A tela do cliente sai antes, para a
+    // agenda do barbeiro carregar do zero.
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() async {
+      await AuthService.instance.logout();
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Receber'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Multa de R\$ 17,50 de Cliente por não comparecer ao horário. Multa '
+        'não gera pontos de fidelidade.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('cancelamento'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
   testWidgets('o barbeiro não abre a agenda geral', (tester) async {
     SharedPreferences.setMockInitialValues({});
     service.injetarBancoParaTeste(await bancoComSeed(tester));
