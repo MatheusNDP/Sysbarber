@@ -305,60 +305,72 @@ class _HorarioScreenState extends State<HorarioScreen> {
     );
   }
 
+  /// A régua cresce com a fonte do sistema: a altura vem do conteúdo (no
+  /// mínimo 84), e não é fixa, para os números não serem cortados com a
+  /// fonte grande. Todos os dias ficam da mesma altura.
   Widget _reguaDias() {
-    return SizedBox(
-      height: 84,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _dias.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final dia = _dias[i];
-          final selecionado =
-              dia.day == _dataSelecionada.day &&
-              dia.month == _dataSelecionada.month;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, dia) in _dias.indexed) ...[
+              if (i > 0) const SizedBox(width: 10),
+              _diaDaRegua(dia),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
-          // Leitor de tela anuncia a data completa ("Terça, 30 de setembro")
-          // como botão, e não "TER 30" solto.
-          return Semantics(
-            button: true,
-            selected: selecionado,
-            label: formatarDataExtenso(dia),
-            excludeSemantics: true,
-            child: GestureDetector(
-              onTap: () => _selecionarData(dia),
-              child: Container(
-                width: 60,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selecionado ? AppColors.amarelo : AppColors.card,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      abreviacaoDiaSemana(dia),
-                      style: AppTheme.texto(
-                        size: 11,
-                        weight: FontWeight.w600,
-                        color: selecionado ? Colors.black : AppColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${dia.day}',
-                      style: AppTheme.titulo(
-                        size: 20,
-                        color: selecionado ? Colors.black : AppColors.text,
-                      ),
-                    ),
-                  ],
+  Widget _diaDaRegua(DateTime dia) {
+    final selecionado =
+        dia.day == _dataSelecionada.day &&
+        dia.month == _dataSelecionada.month;
+
+    // Leitor de tela anuncia a data completa ("Terça, 30 de setembro")
+    // como botão, e não "TER 30" solto.
+    return Semantics(
+      button: true,
+      selected: selecionado,
+      label: formatarDataExtenso(dia),
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => _selecionarData(dia),
+        child: Container(
+          width: 60,
+          constraints: const BoxConstraints(minHeight: 84),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selecionado ? AppColors.amarelo : AppColors.card,
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                abreviacaoDiaSemana(dia),
+                style: AppTheme.texto(
+                  size: 11,
+                  weight: FontWeight.w600,
+                  color: selecionado ? Colors.black : AppColors.muted,
                 ),
               ),
-            ),
-          );
-        },
+              const SizedBox(height: 6),
+              Text(
+                '${dia.day}',
+                style: AppTheme.titulo(
+                  size: 20,
+                  color: selecionado ? Colors.black : AppColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
