@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -313,6 +314,92 @@ void main() {
     );
     return id;
   }
+
+  /// Celular comum (411 × 891, como o emulador dos testes) com a fonte do
+  /// sistema em [escala].
+  void celularComFonte(WidgetTester tester, double escala) {
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 2.625;
+    tester.platformDispatcher.textScaleFactorTestValue = escala;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
+
+  /// Carrega a Montserrat do app (assets/fonts), para o texto ter a largura
+  /// de verdade: a fonte padrão dos testes tem letras quadradas, mais largas.
+  var montserratCarregada = false;
+  Future<void> carregarMontserrat(WidgetTester tester) async {
+    if (montserratCarregada) return;
+    await tester.runAsync(() async {
+      final fonte = FontLoader('Montserrat');
+      for (final peso in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
+        fonte.addFont(rootBundle.load('assets/fonts/Montserrat-$peso.ttf'));
+      }
+      await fonte.load();
+    });
+    montserratCarregada = true;
+  }
+
+  for (final escala in [1.3, 2.0]) {
+    testWidgets('com a fonte em ${(escala * 100).round()}%, o nome do serviço '
+        'no card do agendamento fica inteiro e a etiqueta desce', (
+      tester,
+    ) async {
+      celularComFonte(tester, escala);
+      await carregarMontserrat(tester);
+      SharedPreferences.setMockInitialValues({});
+      service.injetarBancoParaTeste(await bancoComSeed(tester));
+      await tester.runAsync(() async {
+        // Hidratação de 2 horas atrás: "Aguardando conclusão", a etiqueta
+        // mais longa.
+        await service.criarAgendamento(
+          Agendamento(
+            idCliente: await cadastrarClienteTeste(),
+            idBarbeiro: 1,
+            idServico: 4,
+            dataHora: DateTime.now()
+                .subtract(const Duration(hours: 2))
+                .toIso8601String(),
+          ),
+        );
+        await AuthService.instance.login(
+          'carlos.eduardo@sysbarber.com',
+          'barbeiro123',
+        );
+      });
+
+      await abrir(tester, const AgendamentosScreen());
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Aguardando conclusão'), findsOneWidget);
+      // Antes, "Hidrata / ção" (130%) e uma letra por linha (200%).
+      final nome = tester.renderObject<RenderParagraph>(
+        find.text('Hidratação'),
+      );
+      final linhas = nome
+          .getBoxesForSelection(
+            const TextSelection(baseOffset: 0, extentOffset: 10),
+          )
+          .map((caixa) => caixa.top)
+          .toSet();
+      expect(linhas, hasLength(1));
+      await tester.runAsync(AuthService.instance.logout);
+    });
+  }
+
+  testWidgets('com a fonte no máximo, a régua de dias cresce e não corta os '
+      'números', (tester) async {
+    celularComFonte(tester, 2);
+    await carregarMontserrat(tester);
+    BookingFlow.limpar(); // sem barbeiro: a tela não consulta o banco
+
+    await abrir(tester, const HorarioScreen());
+
+    // Antes, a régua tinha altura fixa e estourava 2 pixels embaixo.
+    expect(tester.takeException(), isNull);
+    final hoje = DatabaseService.diasDisponiveis().first;
+    expect(find.text('${hoje.day}'), findsOneWidget);
+  });
 
   testWidgets('cancelar um resgate em cima da hora avisa a perda dos pontos, '
       'e não multa em dinheiro', (tester) async {

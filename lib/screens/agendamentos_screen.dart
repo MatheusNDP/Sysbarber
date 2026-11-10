@@ -859,15 +859,31 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 tamanho: 44,
               ),
               const SizedBox(width: 12),
+              // O nome e a etiqueta ficam lado a lado quando cabem; com a
+              // fonte grande, a etiqueta desce para a linha de baixo, em vez
+              // de espremer o nome até quebrá-lo no meio da palavra.
               Expanded(
-                child: Text(
-                  a.servico?.nome ?? 'Serviço',
-                  style: AppTheme.titulo(size: 16, weight: FontWeight.w600),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    Text(
+                      a.servico?.nome ?? 'Serviço',
+                      style: AppTheme.titulo(
+                        size: 16,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    Etiqueta(
+                      texto: aguardando
+                          ? 'Aguardando conclusão'
+                          : a.status.label,
+                      cor: corStatus,
+                    ),
+                  ],
                 ),
-              ),
-              Etiqueta(
-                texto: aguardando ? 'Aguardando conclusão' : a.status.label,
-                cor: corStatus,
               ),
             ],
           ),
