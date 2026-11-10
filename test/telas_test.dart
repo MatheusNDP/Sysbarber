@@ -1515,6 +1515,29 @@ void main() {
   // P23 — sem nota dos barbeiros
   // -------------------------------------------------------------------------
 
+  testWidgets('sem nenhum barbeiro, a escolha do profissional avisa que não '
+      'há com quem agendar, em vez de ficar em branco', (tester) async {
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      for (final b in await service.listarBarbeiros()) {
+        await service.excluirBarbeiro(b.id!);
+      }
+    });
+    BookingFlow.limpar();
+
+    await abrir(tester, const BarbeiroScreen());
+
+    expect(find.byType(EstadoVazio), findsOneWidget);
+    expect(find.text('Nenhum profissional disponível'), findsOneWidget);
+    expect(
+      find.text(
+        'A barbearia ainda não tem barbeiros para agendar. Tente de novo mais '
+        'tarde.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a escolha do profissional não mostra nota dos barbeiros', (
     tester,
   ) async {
