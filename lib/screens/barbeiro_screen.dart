@@ -79,6 +79,17 @@ class _BarbeiroScreenState extends State<BarbeiroScreen> {
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
+                // Sem barbeiro cadastrado (numa barbearia que começou vazia,
+                // com o convite ainda pendente), a tela explica, em vez de
+                // ficar em branco.
+                : _barbeiros.isEmpty
+                ? const EstadoVazio(
+                    icone: Icons.person_off_outlined,
+                    titulo: 'Nenhum profissional disponível',
+                    descricao:
+                        'A barbearia ainda não tem barbeiros para agendar. '
+                        'Tente de novo mais tarde.',
+                  )
                 : Cascata(
                     child: ListView.separated(
                       padding: const EdgeInsets.symmetric(
