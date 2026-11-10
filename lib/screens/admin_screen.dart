@@ -71,6 +71,8 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   Widget build(BuildContext context) {
     final resumo = _resumo;
+    // No meio da frase: "Movimento de segunda-feira, 9 de novembro".
+    final hoje = formatarDataExtenso(DateTime.now(), inicioDeFrase: false);
 
     return Scaffold(
       appBar: const BarberAppBar(titulo: 'Administração'),
@@ -119,7 +121,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Movimento de ${formatarDataExtenso(DateTime.now())}',
+                          'Movimento de $hoje',
                           style: AppTheme.texto(
                             size: 12,
                             color: AppColors.muted,

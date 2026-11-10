@@ -115,8 +115,8 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
               ),
             const SizedBox(height: 10),
             Text(
-              'Marcos Lima começa indisponível. Ao cadastrar a sua equipe, '
-              'troque as senhas ou exclua esses barbeiros em Administração.',
+              'Marcos Lima começa indisponível. Eles são só de exemplo: ao '
+              'montar a sua equipe, exclua-os em Gerenciar Barbeiros.',
               style: AppTheme.texto(
                 size: 12,
                 color: AppColors.muted,

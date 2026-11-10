@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:sysbarber/services/formatters.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
 
@@ -99,6 +100,34 @@ void main() {
 
     test('valor negativo leva o sinal antes do símbolo', () {
       expect(formatarReal(-27.5), '-R\$ 27,50');
+    });
+  });
+
+  group('formatarPercentual', () {
+    test('usa vírgula decimal, com uma casa', () {
+      // Antes, nos Relatórios: "28.6% do total".
+      expect(formatarPercentual(200 / 7), '28,6%');
+      expect(formatarPercentual(0), '0,0%');
+      expect(formatarPercentual(100), '100,0%');
+    });
+  });
+
+  group('formatarDataExtenso', () {
+    setUpAll(() => initializeDateFormatting('pt_BR'));
+
+    test('no começo da frase, o dia da semana vem com maiúscula', () {
+      expect(
+        formatarDataExtenso(DateTime(2026, 11, 9)),
+        'Segunda-feira, 9 de novembro',
+      );
+    });
+
+    test('no meio da frase, em minúscula', () {
+      // Antes, no Painel: "Movimento de Segunda-feira, 9 de novembro".
+      expect(
+        formatarDataExtenso(DateTime(2026, 11, 9), inicioDeFrase: false),
+        'segunda-feira, 9 de novembro',
+      );
     });
   });
 
