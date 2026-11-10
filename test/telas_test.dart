@@ -2128,6 +2128,94 @@ void main() {
     await tester.runAsync(AuthService.instance.logout);
   });
 
+  /// O texto [texto] dentro do sheet do convite (e não atrás dele, na tela
+  /// de Barbeiros, onde o administrador não o vê).
+  Finder noSheet(String texto) => find.descendant(
+    of: find.byType(BottomSheet),
+    matching: find.text(texto),
+  );
+
+  /// Abre o sheet do convite e preenche nome, especialidade e salário.
+  Future<void> preencherConvite(WidgetTester tester, {String nome = ''}) async {
+    await tocarEsperando(tester, find.byTooltip('Convidar barbeiro'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Nome completo'), nome);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Especialidade'),
+      'Degradê',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Salário (R\$)'),
+      '240000',
+    );
+  }
+
+  testWidgets('o erro ao gerar o convite aparece no próprio sheet, e não '
+      'escondido atrás dele', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminBarbeirosScreen());
+    await preencherConvite(tester, nome: 'Pe');
+
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+
+    expect(noSheet('Nome deve ter pelo menos 3 caracteres'), findsOneWidget);
+    expect(find.text('Gerar convite'), findsOneWidget);
+
+    // Corrigido o nome, o código sai e o aviso some.
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome completo'),
+      'Pedro Alves',
+    );
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+    expect(codigoNaTela, findsOneWidget);
+    expect(find.text('Nome deve ter pelo menos 3 caracteres'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('copiar o código confirma no próprio sheet, por alguns '
+      'segundos', (tester) async {
+    String? copiado;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (chamada) async {
+        if (chamada.method == 'Clipboard.setData') {
+          copiado = (chamada.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await adminLogado(tester);
+    await abrir(tester, const AdminBarbeirosScreen());
+    await preencherConvite(tester, nome: 'Pedro Alves');
+    await tocarEsperando(tester, find.text('Gerar convite'));
+    await tester.pumpAndSettle();
+    final codigo = tester.widget<Text>(codigoNaTela).data!;
+
+    await tocarEsperando(tester, find.text('Copiar código'));
+    await tester.pump();
+
+    expect(copiado, codigo);
+    expect(noSheet('Código copiado'), findsOneWidget);
+
+    // Passados alguns segundos, o botão volta a ser "Copiar código". O toque
+    // correu no relógio real, e o prazo também.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 2500)),
+    );
+    await tester.pumpAndSettle();
+    expect(noSheet('Copiar código'), findsOneWidget);
+    expect(find.text('Código copiado'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
   testWidgets('fechar o sheet pelo voltar, sem "Concluir", também mostra o '
       'convite pendente', (tester) async {
     await adminLogado(tester);

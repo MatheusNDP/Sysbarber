@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -525,6 +527,15 @@ class _ConviteSheetState extends State<_ConviteSheet> {
   ({ConviteBarbeiro convite, String codigo})? _gerado;
   bool _gerando = false;
 
+  /// O que impediu de gerar o convite. Fica no próprio sheet: a SnackBar
+  /// sairia na tela de Barbeiros, escondida atrás dele.
+  String? _erro;
+
+  /// "Copiar código" acabou de copiar: o botão confirma por alguns
+  /// segundos, pelo mesmo motivo do [_erro].
+  bool _copiado = false;
+  Timer? _fimDoCopiado;
+
   @override
   void initState() {
     super.initState();
@@ -533,14 +544,28 @@ class _ConviteSheetState extends State<_ConviteSheet> {
 
   @override
   void dispose() {
+    _fimDoCopiado?.cancel();
     _nome.dispose();
     _especialidade.dispose();
     _salario.dispose();
     super.dispose();
   }
 
+  Future<void> _copiar(String codigo) async {
+    await Clipboard.setData(ClipboardData(text: codigo));
+    if (!mounted) return;
+    setState(() => _copiado = true);
+    _fimDoCopiado?.cancel();
+    _fimDoCopiado = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copiado = false);
+    });
+  }
+
   Future<void> _gerar() async {
-    setState(() => _gerando = true);
+    setState(() {
+      _gerando = true;
+      _erro = null;
+    });
     try {
       final gerado = await DatabaseService.instance.criarConviteBarbeiro(
         nome: _nome.text,
@@ -554,9 +579,39 @@ class _ConviteSheetState extends State<_ConviteSheet> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _gerando = false);
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao gerar o convite'));
+      setState(() {
+        _gerando = false;
+        _erro = mensagemDeErro(e, 'Erro ao gerar o convite');
+      });
     }
+  }
+
+  /// O erro ao gerar, em vermelho, logo acima do botão. O leitor de tela o
+  /// anuncia quando aparece.
+  Widget _aviso(String mensagem) {
+    return Semantics(
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, size: 18, color: AppColors.red),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                mensagem,
+                style: AppTheme.texto(
+                  size: 13,
+                  color: AppColors.red,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _validade(ConviteBarbeiro c) {
@@ -609,6 +664,7 @@ class _ConviteSheetState extends State<_ConviteSheet> {
           teclado: TextInputType.number,
           formatters: [MoedaInputFormatter()],
         ),
+        if (_erro != null) _aviso(_erro!),
         const SizedBox(height: 8),
         BotaoPrincipal(
           texto: _gerando ? 'Gerando...' : 'Gerar convite',
@@ -671,13 +727,9 @@ class _ConviteSheetState extends State<_ConviteSheet> {
         ),
         const SizedBox(height: 12),
         BotaoSecundario(
-          texto: 'Copiar código',
-          icone: Icons.copy_rounded,
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: codigo));
-            if (!mounted) return;
-            mostrarInfo(context, 'Código copiado');
-          },
+          texto: _copiado ? 'Código copiado' : 'Copiar código',
+          icone: _copiado ? Icons.check_rounded : Icons.copy_rounded,
+          onPressed: () => _copiar(codigo),
         ),
         const SizedBox(height: 4),
         TextButton(
