@@ -3464,6 +3464,80 @@ void main() {
       expect(await service.autenticar('novo@teste.com', 'senha123'), isNotNull);
     });
 
+    test('o código cancelado pelas 5 tentativas continua segurando o '
+        'intervalo de 1 minuto, nos dois canais', () async {
+      await criarClienteTeste(senha: 'senha123');
+      final gerado = await service.gerarCodigoPorSms(
+        email: 'novo@teste.com',
+        telefone: '(67) 98888-1234',
+        agora: t0,
+      );
+      final errado = gerado.codigo == '000000' ? '111111' : '000000';
+
+      Future<String> tentar(String codigo, DateTime agora) async {
+        try {
+          await service.redefinirSenhaComCodigo(
+            email: 'novo@teste.com',
+            codigo: codigo,
+            novaSenha: 'senhaNova1',
+            agora: agora,
+          );
+          return 'trocou';
+        } on RegraNegocioException catch (e) {
+          return e.mensagem;
+        }
+      }
+
+      final dezSegundos = t0.add(const Duration(seconds: 10));
+      for (var i = 1; i < DatabaseService.tentativasCodigo; i++) {
+        await tentar(errado, dezSegundos);
+      }
+      expect(await tentar(errado, dezSegundos), contains('foi cancelado'));
+      expect(
+        await tentar(gerado.codigo, dezSegundos),
+        'Código inválido. Peça um novo',
+      );
+
+      // Cancelar o código não libera um novo antes de 1 minuto do envio, nem
+      // pelo SMS nem pelo e-mail.
+      for (final pedir in [
+        () => service.gerarCodigoPorSms(
+          email: 'novo@teste.com',
+          telefone: '(67) 98888-1234',
+          agora: t0.add(const Duration(seconds: 30)),
+        ),
+        () => service.gerarCodigoPorEmail(
+          email: 'novo@teste.com',
+          agora: t0.add(const Duration(seconds: 59)),
+        ),
+      ]) {
+        await expectLater(
+          pedir(),
+          throwsA(
+            isA<RegraNegocioException>().having(
+              (e) => e.mensagem,
+              'mensagem',
+              'Aguarde 1 minuto para pedir outro código',
+            ),
+          ),
+        );
+      }
+
+      // Passado 1 minuto, sai um código novo, que vale normalmente.
+      final novo = await service.gerarCodigoPorEmail(
+        email: 'novo@teste.com',
+        agora: t0.add(const Duration(minutes: 1)),
+      );
+      expect(
+        await tentar(novo.codigo, t0.add(const Duration(minutes: 2))),
+        'trocou',
+      );
+      expect(
+        await service.autenticar('novo@teste.com', 'senhaNova1'),
+        isNotNull,
+      );
+    });
+
     test('um novo SMS só sai depois de 1 minuto, e invalida o anterior',
         () async {
       await criarClienteTeste();

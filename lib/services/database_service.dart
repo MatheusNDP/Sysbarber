@@ -1301,8 +1301,11 @@ class DatabaseService {
   /// Confere o [codigo] da conta do [email]. Com [origem], só aceita um
   /// código dessa origem.
   ///
-  /// Código errado gasta uma tentativa, e a última apaga o código. Código
-  /// vencido também é apagado. Devolve a conta e o código conferido.
+  /// Código errado gasta uma tentativa, e a última cancela o código: ele não
+  /// vale mais, mas o registro fica, porque é por ele que [_gerarCodigoEnviado]
+  /// conta o [intervaloEntreEnvios] desde o último envio (regra de negócio
+  /// 16). Código vencido é apagado: dez minutos já passam do intervalo.
+  /// Devolve a conta e o código conferido.
   Future<(_Conta, CodigoSenha)> _conferirCodigo(
     String email,
     String codigo,
@@ -1324,6 +1327,10 @@ class DatabaseService {
       await apagar();
       throw const RegraNegocioException('Este código venceu. Peça um novo');
     }
+    // Cancelado pelas tentativas erradas: nem o código certo vale mais.
+    if (registro.tentativas >= tentativasCodigo) {
+      throw const RegraNegocioException(_codigoInvalido);
+    }
     if (await Senhas.conferirEmSegundoPlano(
       codigo.trim(),
       registro.codigoHash,
@@ -1337,7 +1344,6 @@ class DatabaseService {
     );
     final restantes = tentativasCodigo - registro.tentativas - 1;
     if (restantes <= 0) {
-      await apagar();
       throw const RegraNegocioException(
         'Código incorreto. Depois de $tentativasCodigo tentativas ele foi '
         'cancelado: peça um novo',
