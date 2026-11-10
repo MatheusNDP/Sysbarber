@@ -1374,6 +1374,39 @@ void main() {
     await tester.runAsync(AuthService.instance.logout);
   });
 
+  testWidgets('o administrador não salva um serviço com mais de 180 minutos: '
+      'a tela avisa e o serviço fica como estava', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const AdminServicosScreen());
+
+    await tester.tap(find.text('Corte de Cabelo'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Duração (minutos)'),
+      '181',
+    );
+    await tocarEsperando(tester, find.text('Salvar'));
+
+    expect(
+      find.text(
+        'Duração deve ser de no máximo 180 minutos, o tamanho do turno da '
+        'manhã',
+      ),
+      findsOneWidget,
+    );
+    // O formulário continua aberto, para o administrador corrigir.
+    expect(find.text('Editar serviço'), findsOneWidget);
+    late List<Servico> servicos;
+    await tester.runAsync(
+      () async => servicos = await service.listarServicos(),
+    );
+    expect(
+      servicos.firstWhere((s) => s.nome == 'Corte de Cabelo').duracaoMinutos,
+      30,
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
   // -------------------------------------------------------------------------
   // Navegação principal com abas
   // -------------------------------------------------------------------------

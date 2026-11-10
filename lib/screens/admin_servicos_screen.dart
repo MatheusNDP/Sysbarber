@@ -275,8 +275,10 @@ class _FormularioServicoState extends State<_FormularioServico> {
       mostrarErro(context, 'Preço deve ser maior que zero');
       return;
     }
-    if (duracao <= 0) {
-      mostrarErro(context, 'Duração deve ser maior que zero');
+    // De 1 a 180 minutos, para caber num turno (regra de negócio 10).
+    final duracaoInvalida = DatabaseService.impedimentoDaDuracao(duracao);
+    if (duracaoInvalida != null) {
+      mostrarErro(context, duracaoInvalida);
       return;
     }
 

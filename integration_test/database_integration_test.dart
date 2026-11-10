@@ -1211,6 +1211,65 @@ void main() {
       expect(excluidas, 1);
       expect((await service.listarServicos()).length, 5);
     });
+
+    test('o serviço dura de 1 a 180 minutos: o banco recusa um mais longo ou '
+        'sem duração, no cadastro e na edição', () async {
+      Servico pigmentacao(int minutos, {int? id}) => Servico(
+        id: id,
+        nome: 'Pigmentação',
+        descricao: 'Barba e cabelo',
+        preco: 90,
+        duracaoMinutos: minutos,
+        icone: '🎨',
+      );
+      Matcher recusa(String mensagem) => throwsA(
+        isA<RegraNegocioException>().having(
+          (e) => e.mensagem,
+          'mensagem',
+          mensagem,
+        ),
+      );
+      const longo =
+          'Duração deve ser de no máximo 180 minutos, o tamanho do turno da '
+          'manhã';
+      const zerado = 'Duração deve ser maior que zero';
+
+      for (final (minutos, mensagem) in [
+        (181, longo),
+        (400, longo),
+        (0, zerado),
+      ]) {
+        await expectLater(
+          service.cadastrarServico(pigmentacao(minutos)),
+          recusa(mensagem),
+        );
+      }
+      expect((await service.listarServicos()).length, 5);
+
+      // 180 minutos ainda cabem: no turno da manhã, das 09:00 às 12:00.
+      final id = await service.cadastrarServico(pigmentacao(180));
+      expect(
+        await service.horariosDisponiveis(
+          1,
+          proximoDiaDeAtendimento(),
+          duracaoMinutos: 180,
+        ),
+        containsAll(['09:00', '13:00']),
+      );
+
+      await expectLater(
+        service.atualizarServico(pigmentacao(181, id: id)),
+        recusa(longo),
+      );
+      await expectLater(
+        service.atualizarServico(pigmentacao(-30, id: id)),
+        recusa(zerado),
+      );
+      final gravado = (await service.listarServicos()).firstWhere(
+        (s) => s.id == id,
+      );
+      expect(gravado.duracaoMinutos, 180);
+    });
   });
 
   // =========================================================================

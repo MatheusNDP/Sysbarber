@@ -118,6 +118,23 @@ class DatabaseService {
   /// até 13 dias depois.
   static const int diasDeAgenda = 14;
 
+  /// Duração máxima de um serviço, em minutos: o tamanho do turno da manhã
+  /// (09:00–12:00), para o serviço caber em qualquer turno. Mais longo, ele
+  /// nunca teria horário (regra de negócio 10).
+  static const int duracaoMaximaServico = 180;
+
+  /// O que impede um serviço de durar [minutos], ou `null` se a duração vale
+  /// (de 1 a [duracaoMaximaServico], sem precisar ser múltipla de nada). A
+  /// tela usa isto para avisar antes; o banco confere de novo ao gravar.
+  static String? impedimentoDaDuracao(int minutos) {
+    if (minutos <= 0) return 'Duração deve ser maior que zero';
+    if (minutos > duracaoMaximaServico) {
+      return 'Duração deve ser de no máximo $duracaoMaximaServico minutos, o '
+          'tamanho do turno da manhã';
+    }
+    return null;
+  }
+
   /// A barbearia atende de segunda a sábado; domingo não abre.
   static bool atendeNoDia(DateTime dia) => dia.weekday != DateTime.sunday;
 
@@ -1851,13 +1868,22 @@ class DatabaseService {
   }
 
   Future<int> cadastrarServico(Servico s) async {
+    _conferirDuracao(s);
     final db = await database;
     return db.insert('servico', s.toMap()..remove('id'));
   }
 
   Future<int> atualizarServico(Servico s) async {
+    _conferirDuracao(s);
     final db = await database;
     return db.update('servico', s.toMap(), where: 'id = ?', whereArgs: [s.id]);
+  }
+
+  /// O serviço precisa caber num turno (regra de negócio 10): um mais longo
+  /// aparecia no catálogo, mas nunca tinha horário.
+  static void _conferirDuracao(Servico s) {
+    final impedimento = impedimentoDaDuracao(s.duracaoMinutos);
+    if (impedimento != null) throw RegraNegocioException(impedimento);
   }
 
   Future<int> excluirServico(int id) async {
