@@ -95,6 +95,16 @@ void main() {
       expect(reconstruido.senhaHash, cliente.senhaHash);
       expect(reconstruido.criadoEm, cliente.criadoEm);
     });
+
+    test('a foto de perfil vai e volta pelo banco, e o copyWith a mantém', () {
+      final foto = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]);
+      final comFoto = Cliente.fromMap({...cliente.toMap(), 'foto': foto});
+      expect(comFoto.foto, foto);
+      expect(comFoto.toMap()['foto'], foto);
+      expect(comFoto.copyWith(nome: 'João').foto, foto);
+      // Sem a coluna (banco anterior à v10), o cliente fica sem foto.
+      expect(Cliente.fromMap(cliente.toMap()..remove('foto')).foto, isNull);
+    });
   });
 
   group('Entidade Servico', () {
@@ -390,6 +400,49 @@ void main() {
         expect(a.podeCancelar(depois), isFalse, reason: status.name);
         expect(a.podeFinalizar(depois), isFalse, reason: status.name);
         expect(a.podeRegistrarFalta(depois), isFalse, reason: status.name);
+      }
+    });
+
+    test('aguardando pagamento: só o serviço de pagar no balcão ainda não '
+        'pago, depois do horário ou já concluído', () {
+      Pagamento pagamento(String status, [NaturezaPagamento? natureza]) =>
+          Pagamento(
+            idAgendamento: 1,
+            valor: 35,
+            metodo: 'A combinar',
+            status: status,
+            criadoEm: '2026-08-10T10:00:00.000',
+            natureza: natureza ?? NaturezaPagamento.servico,
+          );
+      Agendamento com(Pagamento? p, [StatusAgendamento? status]) =>
+          em(marcado, status).copyWith(pagamento: p);
+
+      final antes = DateTime(2026, 8, 20, 9, 30);
+      final depois = DateTime(2026, 8, 20, 11, 0);
+      final noBalcao = pagamento(Pagamento.statusPendente);
+      final pago = pagamento(Pagamento.statusConfirmado);
+
+      // De pagar no balcão: só depois do horário.
+      expect(com(noBalcao).aguardandoPagamento(antes), isFalse);
+      expect(com(noBalcao).aguardandoPagamento(depois), isTrue);
+      // Concluído sem pagar continua aguardando; pago, não.
+      const concluido = StatusAgendamento.finalizado;
+      expect(com(noBalcao, concluido).aguardandoPagamento(antes), isTrue);
+      expect(com(pago, concluido).aguardandoPagamento(depois), isFalse);
+      // Já pago (Pix, cartão ou pontos): aguarda a conclusão, não o pagamento.
+      expect(com(pago).aguardandoPagamento(depois), isFalse);
+      expect(com(null).aguardandoPagamento(depois), isFalse);
+      // Multa pendente tem o aviso próprio; cancelado e falta não entram.
+      final multa = pagamento(
+        Pagamento.statusPendente,
+        NaturezaPagamento.multa,
+      );
+      for (final status in [
+        StatusAgendamento.cancelado,
+        StatusAgendamento.faltou,
+      ]) {
+        expect(com(multa, status).aguardandoPagamento(depois), isFalse);
+        expect(com(noBalcao, status).aguardandoPagamento(depois), isFalse);
       }
     });
 

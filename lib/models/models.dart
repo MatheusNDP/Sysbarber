@@ -19,6 +19,23 @@ enum StatusAgendamento {
   faltou,
 }
 
+/// Filtro de status do histórico, na Minha agenda do barbeiro e na agenda
+/// geral. "Devendo" é o atendimento encerrado com um valor pendente com a
+/// barbearia, como a multa de um cancelamento em cima da hora ou de uma
+/// falta.
+enum FiltroDeStatus {
+  todos('Todos os status'),
+  devendo('Devendo'),
+  concluidos('Concluídos'),
+  cancelados('Cancelados'),
+  faltas('Não compareceu');
+
+  const FiltroDeStatus(this.label);
+
+  /// Como a opção aparece no select.
+  final String label;
+}
+
 extension StatusAgendamentoX on StatusAgendamento {
   /// Rótulo exibido na interface (português).
   String get label {
@@ -106,6 +123,11 @@ class Cliente {
   /// passados continuarem nos relatórios.
   final String? excluidoEm;
 
+  /// Foto de perfil que o próprio cliente pôs (regra de negócio 23), já
+  /// reduzida. Aparece só para ele, no Perfil e no Início; sem ela, as
+  /// telas mostram as iniciais. O administrador não tem foto.
+  final Uint8List? foto;
+
   const Cliente({
     this.id,
     required this.nome,
@@ -116,6 +138,7 @@ class Cliente {
     this.admin = false,
     this.termosAceitosEm,
     this.excluidoEm,
+    this.foto,
   });
 
   bool get excluido => excluidoEm != null;
@@ -130,6 +153,7 @@ class Cliente {
     'admin': admin ? 1 : 0,
     'termos_aceitos_em': termosAceitosEm,
     'excluido_em': excluidoEm,
+    'foto': foto,
   };
 
   factory Cliente.fromMap(Map<String, dynamic> map) => Cliente(
@@ -142,6 +166,7 @@ class Cliente {
     admin: ((map['admin'] as num?)?.toInt() ?? 0) == 1,
     termosAceitosEm: map['termos_aceitos_em'] as String?,
     excluidoEm: map['excluido_em'] as String?,
+    foto: map['foto'] as Uint8List?,
   );
 
   Cliente copyWith({
@@ -163,6 +188,7 @@ class Cliente {
     admin: admin ?? this.admin,
     termosAceitosEm: termosAceitosEm ?? this.termosAceitosEm,
     excluidoEm: excluidoEm,
+    foto: foto,
   );
 
   /// Iniciais do nome, usadas no avatar do perfil.
@@ -195,7 +221,8 @@ class Barbeiro {
   final bool ativo;
 
   /// Quando o barbeiro aceitou os termos, ao usar o convite (regra de
-  /// negócio 18). Os barbeiros de exemplo e os mais antigos não têm.
+  /// negócio 18). Quem não entrou pelo convite (os antigos barbeiros de
+  /// exemplo e os de antes dos termos) não tem.
   final String? termosAceitosEm;
 
   /// Foto de perfil que o próprio barbeiro pôs (regra de negócio 22), já
@@ -474,6 +501,21 @@ class Agendamento {
 
   /// Horário já passou e o profissional ainda não deu o desfecho.
   bool aguardandoConclusao(DateTime agora) => emAberto && jaComecou(agora);
+
+  /// Serviço de pagar no balcão que ainda não foi pago, depois do horário ou
+  /// já concluído. Cancelado e falta não entram: a cobrança some ou vira
+  /// multa, que tem o aviso próprio.
+  bool aguardandoPagamento(DateTime agora) {
+    final p = pagamento;
+    if (p == null || !p.pendente || p.natureza != NaturezaPagamento.servico) {
+      return false;
+    }
+    return switch (status) {
+      StatusAgendamento.confirmado => jaComecou(agora),
+      StatusAgendamento.finalizado => true,
+      StatusAgendamento.cancelado || StatusAgendamento.faltou => false,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -735,6 +777,16 @@ class ItemRelatorio {
   });
 }
 
+/// Uma barra do gráfico do faturamento no tempo: o faturamento líquido do
+/// dia (ou do mês, em [RelatorioGeral.faturamentoPorMes]) que começa em
+/// [data].
+class FaturamentoNoTempo {
+  final DateTime data;
+  final double valor;
+
+  const FaturamentoNoTempo(this.data, this.valor);
+}
+
 /// Indicadores consolidados apresentados na área administrativa.
 class RelatorioGeral {
   /// Período coberto (fim exclusivo). `null` nos dois = desde o início.
@@ -756,8 +808,17 @@ class RelatorioGeral {
   final int totalClientes;
   final int pontosEmCirculacao;
   final List<ItemRelatorio> porMetodo;
+
+  /// Os 5 serviços e os 5 barbeiros com mais atendimentos no período (fora
+  /// os cancelados), com o faturamento de cada um no período.
   final List<ItemRelatorio> porServico;
   final List<ItemRelatorio> porBarbeiro;
+
+  /// O faturamento líquido de cada dia do período (até hoje) ou, sem
+  /// período, de cada mês desde o primeiro pagamento: as barras somam o
+  /// [faturamento].
+  final List<FaturamentoNoTempo> faturamentoNoTempo;
+  final bool faturamentoPorMes;
 
   const RelatorioGeral({
     this.inicio,
@@ -776,6 +837,8 @@ class RelatorioGeral {
     required this.porMetodo,
     required this.porServico,
     required this.porBarbeiro,
+    this.faturamentoNoTempo = const [],
+    this.faturamentoPorMes = false,
   });
 
   /// Percentual de agendamentos cancelados — indicador de qualidade.

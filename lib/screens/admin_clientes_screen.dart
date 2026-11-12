@@ -6,6 +6,7 @@ import '../services/database_service.dart';
 import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/paginacao.dart';
 
 /// Listagem de clientes com busca (`/admin` → Gerenciar Clientes).
 class AdminClientesScreen extends StatefulWidget {
@@ -19,7 +20,23 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
   final _db = DatabaseService.instance;
   final _buscaCtrl = TextEditingController();
 
-  List<Cliente> _clientes = [];
+  /// Os clientes, de 10 em 10, já com a busca feita no banco: ao chegar ao
+  /// fim da lista, vem a próxima página.
+  late final _clientes = Paginacao<Cliente>(
+    buscar: (deslocamento, limite) => _db.listarClientes(
+      busca: _busca,
+      limite: limite,
+      deslocamento: deslocamento,
+    ),
+    chave: (c) => c.id,
+  );
+
+  /// Quantos clientes a busca encontra, contados no banco.
+  int _total = 0;
+
+  /// Muda a cada busca: a resposta de uma busca anterior é descartada.
+  int _consulta = 0;
+
   String _busca = '';
   bool _carregando = true;
   String? _erro;
@@ -43,14 +60,17 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
         _carregando = true;
       });
     }
+    final consulta = ++_consulta;
     try {
-      final lista = await _db.listarClientes();
-      if (!mounted) return;
+      final total = await _db.contarClientes(busca: _busca);
+      await _clientes.reiniciar();
+      if (!mounted || consulta != _consulta) return;
       setState(() {
-        _clientes = lista;
+        _total = total;
         _carregando = false;
       });
     } catch (e) {
+      if (consulta != _consulta) return;
       if (!mounted) return;
       setState(() {
         _carregando = false;
@@ -59,17 +79,21 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
     }
   }
 
-  List<Cliente> get _filtrados {
-    if (_busca.trim().isEmpty) return _clientes;
-    final termo = _busca.toLowerCase();
-    return _clientes
-        .where(
-          (c) =>
-              c.nome.toLowerCase().contains(termo) ||
-              c.email.toLowerCase().contains(termo) ||
-              c.telefone.contains(termo),
-        )
-        .toList();
+  /// A busca mudou: a lista recomeça, com o banco procurando o termo no
+  /// nome, no e-mail ou no telefone.
+  void _buscar(String termo) {
+    setState(() => _busca = termo);
+    _carregar();
+  }
+
+  /// A rolagem chegou perto do fim da lista: vem a próxima página.
+  Future<void> _carregarMais() async {
+    try {
+      if (await _clientes.carregarMais() && mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar os clientes'));
+    }
   }
 
   Future<void> _abrirDetalhe(Cliente c) async {
@@ -188,7 +212,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lista = _filtrados;
+    final lista = _clientes.itens;
 
     return Scaffold(
       appBar: const BarberAppBar(titulo: 'Clientes'),
@@ -198,7 +222,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: TextField(
               controller: _buscaCtrl,
-              onChanged: (v) => setState(() => _busca = v),
+              onChanged: _buscar,
               style: AppTheme.texto(size: 14),
               decoration: InputDecoration(
                 hintText: 'Buscar por nome, e-mail ou telefone',
@@ -213,7 +237,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                         ),
                         onPressed: () {
                           _buscaCtrl.clear();
-                          setState(() => _busca = '');
+                          _buscar('');
                         },
                       ),
               ),
@@ -223,7 +247,7 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: RotuloCampo('${lista.length} cliente(s)'),
+              child: RotuloCampo('$_total cliente(s)'),
             ),
           ),
           Expanded(
@@ -243,52 +267,59 @@ class _AdminClientesScreenState extends State<AdminClientesScreen> {
                         ? 'Os clientes cadastrados no app aparecem aqui.'
                         : 'Tente outro termo de busca.',
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                    itemCount: lista.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final c = lista[i];
-                      return Cartao(
-                        onTap: () => _abrirDetalhe(c),
-                        child: Row(
-                          children: [
-                            AvatarIniciais(texto: c.iniciais, tamanho: 44),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    c.nome,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTheme.texto(
-                                      size: 14,
-                                      weight: FontWeight.w600,
+                : CarregarAoChegarNoFim(
+                    aoChegarNoFim: _carregarMais,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      // O indicador da próxima página vem por último.
+                      itemCount: lista.length + (_clientes.temMais ? 1 : 0),
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        if (i == lista.length) {
+                          return FimDaPaginacao(temMais: _clientes.temMais);
+                        }
+                        final c = lista[i];
+                        return Cartao(
+                          onTap: () => _abrirDetalhe(c),
+                          child: Row(
+                            children: [
+                              AvatarIniciais(texto: c.iniciais, tamanho: 44),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      c.nome,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTheme.texto(
+                                        size: 14,
+                                        weight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    c.email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTheme.texto(
-                                      size: 12,
-                                      color: AppColors.muted,
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      c.email,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTheme.texto(
+                                        size: 12,
+                                        color: AppColors.muted,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              color: AppColors.muted,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.muted,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

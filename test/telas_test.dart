@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' show min;
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -21,6 +23,7 @@ import 'package:sysbarber/screens/configuracao_screen.dart';
 import 'package:sysbarber/screens/confirmacao_screen.dart';
 import 'package:sysbarber/screens/convite_barbeiro_screen.dart';
 import 'package:sysbarber/screens/home_screen.dart';
+import 'package:sysbarber/screens/fidelidade_screen.dart';
 import 'package:sysbarber/screens/horario_screen.dart';
 import 'package:sysbarber/screens/login_screen.dart';
 import 'package:sysbarber/screens/pagamento_screen.dart';
@@ -41,6 +44,9 @@ import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/services/suporte.dart';
 import 'package:sysbarber/widgets/animacoes.dart';
 import 'package:sysbarber/widgets/common_widgets.dart';
+import 'package:sysbarber/widgets/paginacao.dart';
+
+import '../integration_test/dados_de_teste.dart';
 
 /// Administrador criado pela configuração inicial nos testes (desde a P22 o
 /// app não tem conta padrão).
@@ -70,7 +76,7 @@ void main() {
   tearDown(() async => service.resetarParaTeste());
 
   /// Abre um banco em memória já configurado, com o administrador e os
-  /// dados de exemplo (fora do relógio falso do teste).
+  /// barbeiros e serviços de teste (fora do relógio falso do teste).
   Future<Database> bancoComSeed(WidgetTester tester) async {
     late Database db;
     await tester.runAsync(() async {
@@ -90,8 +96,8 @@ void main() {
         telefone: '(67) 99999-0000',
         senha: senhaAdmin,
         aceitouTermos: true,
-        dadosDeExemplo: true,
       );
+      await criarBarbeirosEServicosDeTeste(service);
     });
     return db;
   }
@@ -745,7 +751,9 @@ void main() {
     expect(find.text('Agenda geral'), findsOneWidget);
     expect(find.text('com Carlos Eduardo'), findsOneWidget);
     expect(find.text('com Rafael Souza'), findsOneWidget);
-    expect(find.text('Receber'), findsOneWidget);
+    // O serviço de pagar no balcão é recebido no Concluir (P58).
+    expect(find.text('Pagamento no balcão — registre ao concluir'), findsOneWidget);
+    expect(find.text('Receber'), findsNothing);
     expect(find.text('Concluir'), findsOneWidget);
     expect(find.text('Não compareceu'), findsOneWidget);
     expect(find.text('Cancelar'), findsOneWidget);
@@ -915,6 +923,90 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('cancelamento'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P52 — "Aguardando pagamento" para o cliente
+  // -------------------------------------------------------------------------
+
+  testWidgets('o cliente vê "Aguardando pagamento" no que vai pagar no '
+      'balcão, sem o aviso "Pague no balcão", e a barbearia continua vendo '
+      '"Aguardando conclusão"', (tester) async {
+    // Tela alta: os três cards cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      final agora = DateTime.now();
+      // De pagar no balcão, com o horário já passado.
+      await pagamentoPendente(
+        await marcarCorte(idCliente, agora.subtract(const Duration(hours: 2))),
+      );
+      // Pago no Pix, com o horário já passado.
+      await service.criarPagamento(
+        Pagamento(
+          idAgendamento: await marcarCorte(
+            idCliente,
+            agora.subtract(const Duration(hours: 4)),
+          ),
+          valor: 35,
+          metodo: 'Pix',
+          status: Pagamento.statusConfirmado,
+          criadoEm: agora.toIso8601String(),
+          tipo: TipoPagamento.antecipado.dbValue,
+        ),
+      );
+      // De pagar no balcão, concluído sem o recebimento. Desde a P58 o banco
+      // não conclui sem receber: o caso só existe num banco de antes, e é
+      // gravado direto aqui.
+      final concluido = await marcarCorte(
+        idCliente,
+        agora.subtract(const Duration(hours: 6)),
+      );
+      await pagamentoPendente(concluido);
+      await (await service.database).update(
+        'agendamento',
+        {'status': StatusAgendamento.finalizado.dbValue},
+        where: 'id = ?',
+        whereArgs: [concluido],
+      );
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+
+    await abrir(tester, const AgendamentosScreen());
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aguardando pagamento'), findsNWidgets(2));
+    expect(find.text('Aguardando conclusão'), findsOneWidget);
+    expect(find.text('Concluído'), findsNothing);
+    // Antes, "Pague no balcão no dia do atendimento. Os 35 pontos entram após
+    // a confirmação." nos dois de pagar no balcão.
+    expect(find.textContaining('Pague no balcão'), findsNothing);
+
+    // O barbeiro, na agenda dele: a etiqueta não muda, e o pagamento do
+    // atendimento em aberto é registrado no Concluir (P58).
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() async {
+      await AuthService.instance.logout();
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    expect(find.text('Aguardando conclusão'), findsNWidgets(2));
+    expect(find.text('Aguardando pagamento'), findsNothing);
+    expect(
+      find.text('Pagamento no balcão — registre ao concluir'),
+      findsOneWidget,
+    );
+    expect(find.text('Receber'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -1143,8 +1235,8 @@ void main() {
     await tester.runAsync(AuthService.instance.logout);
   });
 
-  testWidgets('a configuração cria o administrador e mostra como os '
-      'barbeiros de exemplo entram', (tester) async {
+  testWidgets('a configuração cria só o administrador, sem a opção de dados '
+      'de exemplo, e a barbearia começa vazia', (tester) async {
     await bancoNovo(tester);
     await tester.runAsync(
       () => tester.pumpWidget(
@@ -1155,15 +1247,17 @@ void main() {
       ),
     );
 
+    // Antes havia "Começar com dados de exemplo", com 3 barbeiros (senha
+    // barbeiro123) e 5 serviços.
+    expect(find.textContaining('dados de exemplo'), findsNothing);
+    expect(find.textContaining('barbeiro123'), findsNothing);
+
     final campos = find.byType(TextField);
     await tester.enterText(campos.at(0), 'Dono da Barbearia');
     await tester.enterText(campos.at(1), 'dono@barbearia.com');
     await tester.enterText(campos.at(2), '67987654321');
     await tester.enterText(campos.at(3), 'senhaDoDono1');
     await tester.enterText(campos.at(4), 'senhaDoDono1');
-    await tester.ensureVisible(find.text('Começar com dados de exemplo'));
-    await tester.tap(find.text('Começar com dados de exemplo'));
-    await tester.pump();
     await tester.ensureVisible(find.byType(AceiteTermos));
     await tester.tap(find.textContaining('Li e aceito'));
     await tester.pump();
@@ -1173,28 +1267,13 @@ void main() {
       await tester.tap(find.text('Configurar e entrar'));
       await Future<void>.delayed(const Duration(seconds: 1));
     });
-    await tester.pump();
-
-    // O dono precisa saber como os barbeiros de exemplo entram no app.
-    expect(find.textContaining('barbeiro123'), findsWidgets);
-    // E que eles são só de exemplo: o administrador não troca a senha de
-    // barbeiro (desde a P33), então o aviso manda excluí-los.
-    expect(
-      find.textContaining('exclua-os em Gerenciar Barbeiros'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('troque as senhas'), findsNothing);
-    // A navegação depois do diálogo continua o código iniciado no relógio
-    // real (o toque em "CONFIGURAR E ENTRAR"), então também roda nele.
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Entendi'));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
     await tester.pumpAndSettle();
 
     expect(find.text('INÍCIO'), findsOneWidget);
     expect(AuthService.instance.podeAdministrar, isTrue);
-    expect(await tester.runAsync(service.listarBarbeiros), hasLength(3));
+    expect(await tester.runAsync(service.listarBarbeiros), isEmpty);
+    expect(await tester.runAsync(service.listarServicos), isEmpty);
+    await tester.runAsync(AuthService.instance.logout);
   });
 
   testWidgets('o login não mostra mais as credenciais do administrador', (
@@ -1702,8 +1781,7 @@ void main() {
     expect(find.byType(BarraNavegacao), findsOneWidget);
     expect(abaMarcada(tester), Aba.perfil);
 
-    // O atalho do Perfil para os agendamentos troca para a aba Agenda.
-    await trocarDeAba(tester, find.bySemanticsLabel(RegExp('^Agendamentos')));
+    await trocarDeAba(tester, botaoDaBarra('Agenda'));
     expect(find.byType(AgendamentosScreen), findsOneWidget);
     expect(abaMarcada(tester), Aba.agenda);
 
@@ -1991,8 +2069,9 @@ void main() {
     expect(find.text('Carlos Eduardo'), findsOneWidget);
     expect(find.text('Especialidade'), findsOneWidget);
     expect(find.text('Alterar senha'), findsOneWidget);
-    // Nome e especialidade são do administrador; e-mail e telefone, dele.
-    expect(find.text('E-mail e telefone'), findsOneWidget);
+    // Nome e especialidade são do administrador; e-mail e telefone, dele,
+    // no Editar dados.
+    expect(find.text('Editar dados'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Sair'),
       200,
@@ -2419,7 +2498,7 @@ void main() {
     expect(find.text('com Rafael Souza'), findsOneWidget);
 
     // Antes não havia filtro: era preciso achar o nome em cada card.
-    await tester.tap(find.byType(DropdownButton<int?>));
+    await tester.tap(find.byType(PopupMenuButton<int?>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Carlos Eduardo').last);
     await tester.pumpAndSettle();
@@ -2446,15 +2525,14 @@ void main() {
       ),
     );
 
-    await tester.tap(find.bySemanticsLabel('Escolher período'));
-    await tester.pump();
+    // O filtro também busca o histórico no banco.
+    await tocarEsperando(tester, find.bySemanticsLabel('Escolher período'));
     expect(recebido, isNull);
     expect(find.text('com Carlos Eduardo'), findsOneWidget);
     expect(find.text('com Rafael Souza'), findsOneWidget);
     expect(find.text(formatarDataCurta(amanha)), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Limpar período'));
-    await tester.pump();
+    await tocarEsperando(tester, find.byTooltip('Limpar período'));
     expect(find.text('com Carlos Eduardo'), findsNWidgets(2));
     expect(find.text(formatarDataCurta(depois)), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
@@ -2524,11 +2602,20 @@ void main() {
     await abrir(tester, const TermosScreen());
 
     expect(find.text('Termos de uso e política de privacidade'), findsOneWidget);
-    // A foto do barbeiro (regra de negócio 22) também é um dado guardado.
+    // As fotos do cliente e do barbeiro (regras de negócio 22 e 23) também
+    // são dados guardados; a do cliente vem logo antes da do barbeiro.
     await tester.scrollUntilVisible(
       find.textContaining('e a foto de perfil, se ele puser uma'),
       200,
     );
+    expect(
+      find.textContaining(
+        'Do cliente: também a foto de perfil',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(TermosScreen.versao, '12 de novembro de 2026');
     for (final titulo in [
       'Quais dados o app guarda',
       'Onde ficam e com quem são compartilhados',
@@ -2536,6 +2623,16 @@ void main() {
     ]) {
       await tester.scrollUntilVisible(find.text(titulo), 200);
       expect(find.text(titulo), findsOneWidget);
+      if (titulo == 'Onde ficam e com quem são compartilhados') {
+        // O PDF dos relatórios também sai do aparelho, pelo compartilhar.
+        expect(
+          find.textContaining(
+            'o PDF dos relatórios abrem',
+            skipOffstage: false,
+          ),
+          findsOneWidget,
+        );
+      }
     }
     // Logo abaixo do título, e por isso ainda fora da tela.
     final lgpd = find.textContaining(
@@ -2544,6 +2641,14 @@ void main() {
     );
     await tester.ensureVisible(lgpd);
     expect(lgpd, findsOneWidget);
+    // A foto do cliente sai com a conta excluída.
+    expect(
+      find.textContaining(
+        'o telefone, a foto e a senha são apagados',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.text('Versão de ${TermosScreen.versao}.'),
       200,
@@ -2577,7 +2682,12 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('Termos e privacidade'), findsOneWidget);
+    expect(
+      find.text('Termos de uso e política de privacidade'),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.text('Excluir minha conta'));
+    await tester.pumpAndSettle();
     await tocarEsperando(tester, find.text('Excluir minha conta'));
     await tester.pumpAndSettle();
     expect(find.text('Excluir a sua conta?'), findsOneWidget);
@@ -2641,7 +2751,10 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('Termos e privacidade'), findsOneWidget);
+    expect(
+      find.text('Termos de uso e política de privacidade'),
+      findsOneWidget,
+    );
     expect(find.text('Excluir minha conta'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
 
@@ -2657,7 +2770,10 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('Termos e privacidade'), findsOneWidget);
+    expect(
+      find.text('Termos de uso e política de privacidade'),
+      findsOneWidget,
+    );
     expect(find.text('Excluir minha conta'), findsNothing);
     await tester.runAsync(AuthService.instance.logout);
   });
@@ -2886,6 +3002,21 @@ void main() {
     }
     expect(find.text('120 pts'), findsOneWidget);
     expect(opacidadeDe(tester, find.text('Pontos de fidelidade')), 1);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o Início cumprimenta com bom dia, boa tarde ou boa noite, '
+      'conforme a hora', (tester) async {
+    await clienteLogado(tester);
+    await abrir(tester, const HomeScreen());
+    await tester.pump(const Duration(seconds: 2));
+
+    // Antes era sempre "Olá, bem-vindo".
+    expect(find.text('Olá, bem-vindo'), findsNothing);
+    expect(
+      find.textContaining(RegExp(r'^Olá, (bom dia|boa tarde|boa noite)$')),
+      findsOneWidget,
+    );
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -3230,26 +3361,134 @@ void main() {
     await tester.runAsync(AuthService.instance.logout);
   });
 
-  testWidgets('o cliente e o administrador não têm foto no Perfil', (
-    tester,
-  ) async {
+  testWidgets('o administrador não tem foto no Perfil', (tester) async {
+    await adminLogado(tester);
+    await abrir(tester, const PerfilScreen());
+    expect(find.text('Alterar senha'), findsOneWidget);
+    expect(find.byTooltip('Alterar foto'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P54 — foto do cliente
+  // -------------------------------------------------------------------------
+
+  testWidgets('no Perfil, o cliente põe a foto pela galeria, ela aparece no '
+      'Início, e depois a remove', (tester) async {
     SharedPreferences.setMockInitialValues({});
     service.injetarBancoParaTeste(await bancoComSeed(tester));
     await tester.runAsync(() async {
       await cadastrarClienteTeste();
       await AuthService.instance.login('c@teste.com', 'senha123');
     });
+    final id = AuthService.instance.usuarioAtual!.id!;
+    final perfil = PerfilScreen(escolherFoto: (_) async => fotoPng);
+    Future<void> abrirOpcoes() async {
+      await tocarEsperando(tester, find.byTooltip('Alterar foto'));
+      await tester.pumpAndSettle();
+    }
+
+    // Antes, o cliente não tinha o selo da câmera nem a foto.
+    await abrir(tester, perfil);
+    expect(fotoNoAvatar, findsNothing);
+    await abrirOpcoes();
+    expect(
+      find.text('A sua foto aparece aqui no Perfil e no Início.'),
+      findsOneWidget,
+    );
+    expect(find.text('Remover foto'), findsNothing);
+    await tocarEsperando(tester, find.text('Escolher da galeria'));
+    await esperarBanco(tester);
+    expect(find.text('Foto atualizada'), findsOneWidget);
+    expect(fotoNoAvatar, findsOneWidget);
+    final gravada = await tester.runAsync(() => service.buscarClientePorId(id));
+    expect(gravada!.foto, fotoPng);
+
+    // No Início, no lugar das iniciais.
+    await abrir(tester, const HomeScreen());
+    await tester.pump(const Duration(seconds: 2));
+    expect(fotoNoAvatar, findsOneWidget);
+
+    await abrir(tester, perfil);
+    await abrirOpcoes();
+    await tocarEsperando(tester, find.text('Remover foto'));
+    await esperarBanco(tester);
+    expect(find.text('Foto removida'), findsOneWidget);
+    expect(fotoNoAvatar, findsNothing);
+    final removida = await tester.runAsync(
+      () => service.buscarClientePorId(id),
+    );
+    expect(removida!.foto, isNull);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P53 — cards do Perfil
+  // -------------------------------------------------------------------------
+
+  testWidgets('o Perfil tem os cards com um texto só, sem o Telefone, e o '
+      'cliente vê só os Pontos', (tester) async {
+    // Tela alta: todos os cards cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      await cadastrarClienteTeste();
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+
+    const cards = [
+      'Editar dados',
+      'Alterar senha',
+      'Termos de uso e política de privacidade',
+    ];
+    void conferirCards() {
+      for (final texto in cards) {
+        expect(find.text(texto), findsOneWidget, reason: texto);
+      }
+      final alturas = [
+        for (final texto in cards) tester.getTopLeft(find.text(texto)).dy,
+      ];
+      expect(alturas, orderedEquals([...alturas]..sort()));
+      // Antes, cada card tinha uma segunda linha, e o Telefone vinha antes.
+      for (final antigo in [
+        'Nome e telefone',
+        'E-mail e telefone',
+        'Exige a senha atual',
+        'Termos e privacidade',
+        'Telefone',
+      ]) {
+        expect(find.text(antigo), findsNothing, reason: antigo);
+      }
+    }
+
     await abrir(tester, const PerfilScreen());
-    expect(find.text('Alterar senha'), findsOneWidget);
-    expect(find.byTooltip('Alterar foto'), findsNothing);
+    await esperarBanco(tester);
+    conferirCards();
+    expect(find.text('(67) 99999-0000'), findsNothing);
+    expect(find.text('Pontos'), findsOneWidget);
+    expect(find.text('Agendamentos'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+
+    // O barbeiro continua vendo a especialidade.
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const PerfilScreen());
+    conferirCards();
+    expect(find.text('Especialidade'), findsOneWidget);
     await tester.runAsync(AuthService.instance.logout);
 
     await tester.runAsync(
       () => AuthService.instance.login(emailAdmin, senhaAdmin),
     );
     await abrir(tester, const PerfilScreen());
-    expect(find.text('Alterar senha'), findsOneWidget);
-    expect(find.byTooltip('Alterar foto'), findsNothing);
+    conferirCards();
     await tester.runAsync(AuthService.instance.logout);
   });
 
@@ -3312,5 +3551,630 @@ void main() {
     expect(find.text('Rafael Souza'), findsOneWidget);
     expect(fotoNoAvatar, findsNothing);
     expect(find.byIcon(Icons.person_outline_rounded), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // P56 — Fidelidade sem a linha da meta
+  // -------------------------------------------------------------------------
+
+  testWidgets('a Fidelidade não repete a meta no cartão dos pontos: ela fica '
+      'em "Como funciona"', (tester) async {
+    // Tela alta: o cartão e o "Como funciona" cabem sem rolar.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final id = await cadastrarClienteTeste();
+      await service.adicionarPontos(id, 120, 'Pontos de teste');
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const FidelidadeScreen());
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('120'), findsOneWidget);
+    expect(find.text('Faltam 380 pts para prêmio'), findsOneWidget);
+    // Antes, "Meta: 500 pontos = 1 serviço grátis" embaixo do "Faltam".
+    expect(find.textContaining('Meta:'), findsNothing);
+    expect(find.text('Como funciona'), findsOneWidget);
+    expect(
+      find.text('Ao atingir 500 pontos você ganha um prêmio.'),
+      findsOneWidget,
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P57 — Minha agenda sem o botão de sair
+  // -------------------------------------------------------------------------
+
+  testWidgets('o barbeiro sai só pelo Perfil: a Minha agenda não tem mais o '
+      'ícone de saída', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const HomeScreen());
+
+    expect(find.text('Minha agenda'), findsOneWidget);
+    // Antes, um BotaoVidro com o ícone de saída no canto do topo.
+    expect(find.byTooltip('Sair'), findsNothing);
+    expect(find.byIcon(Icons.logout_rounded), findsNothing);
+
+    await trocarDeAba(tester, botaoDaBarra('Perfil'));
+    await tester.scrollUntilVisible(
+      find.text('Sair'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Sair'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P58 — pagar no balcão: o Concluir já recebe
+  // -------------------------------------------------------------------------
+
+  testWidgets('o Concluir de um atendimento de pagar no balcão pergunta como o '
+      'cliente pagou, e recebe e conclui juntos', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    late int id;
+    late int idCliente;
+    await tester.runAsync(() async {
+      idCliente = await cadastrarClienteTeste();
+      id = await marcarCorte(
+        idCliente,
+        DateTime.now().subtract(const Duration(hours: 2)),
+      );
+      await pagamentoPendente(id);
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+    Future<Agendamento> gravado() async => (await tester.runAsync(
+      () async => [
+        ...await service.listarAgendaEmAberto(),
+        ...await service.listarHistoricoAgenda(),
+      ],
+    ))!.firstWhere((a) => a.id == id);
+
+    // Antes havia o Receber ao lado, e dava para concluir sem receber.
+    expect(find.text('Receber'), findsNothing);
+
+    // Desistindo, nada muda.
+    await tocarEsperando(tester, find.text('Concluir'));
+    await tester.pumpAndSettle();
+    expect(find.text('Como o cliente pagou?'), findsOneWidget);
+    await tester.tap(find.text('Agora não'));
+    await tester.pumpAndSettle();
+    expect((await gravado()).status, StatusAgendamento.confirmado);
+
+    await tocarEsperando(tester, find.text('Concluir'));
+    await tester.pumpAndSettle();
+    await tocarEsperando(tester, find.text('Dinheiro'));
+    await esperarBanco(tester);
+
+    expect(
+      find.text('Atendimento concluído · +35 pontos para Cliente'),
+      findsOneWidget,
+    );
+    final concluido = await gravado();
+    expect(concluido.status, StatusAgendamento.finalizado);
+    expect(concluido.pagamento!.confirmado, isTrue);
+    expect(concluido.pagamento!.metodo, 'Dinheiro');
+    expect(
+      await tester.runAsync(() => service.obterPontos(idCliente)),
+      35,
+    );
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P59 — Registrar falta sem "como num cancelamento fora do prazo"
+  // -------------------------------------------------------------------------
+
+  testWidgets('o aviso de falta diz a penalidade sem comparar com o '
+      'cancelamento', (tester) async {
+    // Tela alta: os dois cards cabem embaixo dos filtros, sem rolar.
+    telaAlta(tester);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    final quando = DateTime.now().subtract(const Duration(hours: 2));
+    await tester.runAsync(() async {
+      // Um trocado por pontos (resgate) e um de pagar no balcão (multa).
+      await resgateMarcado(quando.subtract(const Duration(hours: 1)));
+      final cliente = await service.buscarClientePorEmail('c@teste.com');
+      await pagamentoPendente(await marcarCorte(cliente!.id!, quando));
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    Future<String> aviso(int qual) async {
+      await tester.ensureVisible(find.text('Não compareceu').at(qual));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Não compareceu').at(qual));
+      await tester.pumpAndSettle();
+      final texto = tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.textContaining('não compareceu'),
+            ),
+          )
+          .data!;
+      await tester.tap(find.text('Voltar'));
+      await tester.pumpAndSettle();
+      return texto;
+    }
+
+    final textos = [await aviso(0), await aviso(1)];
+    expect(
+      textos,
+      containsAll([
+        'Cliente não compareceu ao horário das ${formatarHora(quando)}. '
+            'Será aplicada a multa de R\$ 17,50 (50% do serviço).',
+        'Cliente não compareceu ao horário das '
+            '${formatarHora(quando.subtract(const Duration(hours: 1)))}. Os '
+            '500 pontos usados no resgate não serão devolvidos.',
+      ]),
+    );
+    // Antes, os dois terminavam com ", como num cancelamento fora do prazo".
+    expect(textos.where((t) => t.contains('cancelamento')), isEmpty);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('num atendimento de outro dia, ainda sem o Concluir, a faixa '
+      'diz que o pagamento é no dia', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final amanha = DateTime.now().add(const Duration(days: 1));
+      final id = await marcarCorte(
+        await cadastrarClienteTeste(),
+        DateTime(amanha.year, amanha.month, amanha.day, 10),
+      );
+      await pagamentoPendente(id);
+      await AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      );
+    });
+    await abrir(tester, const AgendamentosScreen());
+
+    expect(find.text('Concluir'), findsNothing);
+    expect(find.text('Cancelar'), findsOneWidget);
+    // Antes, "registre ao concluir" num card ainda sem o Concluir.
+    expect(
+      find.text('Pagamento no balcão, no dia do atendimento'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('registre ao concluir'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P60 — barra do barbeiro do tamanho das duas opções
+  // -------------------------------------------------------------------------
+
+  testWidgets('com duas opções (o barbeiro), a barra fica do tamanho delas e '
+      'no centro, com o nome inteiro, também com a fonte grande', (
+    tester,
+  ) async {
+    const abasDoBarbeiro = [
+      (Icons.calendar_month_outlined, 'Agenda'),
+      (Icons.person_outline_rounded, 'Perfil'),
+    ];
+    Rect barra() => tester.getRect(
+      find.descendant(
+        of: find.byType(BarraNavegacao),
+        matching: find.byType(ClipRRect),
+      ),
+    );
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(411, 900);
+    addTearDown(tester.view.reset);
+
+    // Com quatro opções, continua de margem a margem.
+    await abrirBarra(tester, abasDoCliente);
+    final cheia = barra();
+    expect(cheia.width, 411 - 2 * 20);
+
+    for (final fonte in [TextScaler.noScaling, const TextScaler.linear(2)]) {
+      await abrirBarra(tester, abasDoBarbeiro, fonte: fonte);
+      await tester.pumpAndSettle();
+      final compacta = barra();
+      // Antes, as duas opções esticavam a barra até as margens, como as
+      // quatro do cliente.
+      expect(compacta.width, lessThan(cheia.width), reason: '$fonte');
+      expect(compacta.center.dx, closeTo(411 / 2, 0.5), reason: '$fonte');
+      expect(tester.takeException(), isNull);
+      final nome = tester.renderObject<RenderParagraph>(find.text('Agenda'));
+      expect(nome.didExceedMaxLines, isFalse, reason: '$fonte');
+
+      // Trocando de aba, a barra não muda de tamanho.
+      await tester.tap(find.bySemanticsLabel('Perfil'));
+      await tester.pumpAndSettle();
+      expect(barra(), compacta, reason: '$fonte');
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // P61 — paginação
+  // -------------------------------------------------------------------------
+
+  /// A rodinha do fim da lista, enquanto a próxima página não chega.
+  final carregandoMais = find.descendant(
+    of: find.byType(FimDaPaginacao),
+    matching: find.byType(CircularProgressIndicator),
+  );
+
+  /// Rola a [lista] até o fim. Com [esperar], o banco responde a cada passo
+  /// (a próxima página vem quando a rolagem chega perto do fim); sem ele, a
+  /// página pedida fica a caminho, e a rodinha aparece.
+  Future<void> rolarAteOFim(
+    WidgetTester tester,
+    Finder lista, {
+    bool esperar = true,
+  }) async {
+    for (var i = 0; i < 20; i++) {
+      await tester.drag(lista, const Offset(0, -2000));
+      if (esperar) {
+        await esperarBanco(tester);
+      } else {
+        await tester.pump();
+      }
+    }
+  }
+
+  testWidgets('o histórico da agenda vem de 10 em 10: rolando até o fim, vem '
+      'o resto', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    final datas = <DateTime>[];
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      for (var dias = 1; dias <= 15; dias++) {
+        final d = DateTime.now().subtract(Duration(days: dias));
+        final data = DateTime(d.year, d.month, d.day, 10);
+        datas.add(data);
+        await service.criarAgendamento(
+          Agendamento(
+            idCliente: idCliente,
+            idBarbeiro: 1,
+            idServico: 1,
+            dataHora: data.toIso8601String(),
+            status: StatusAgendamento.finalizado,
+          ),
+        );
+      }
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const AgendamentosScreen());
+    await tester.tap(find.text('Histórico'));
+    await esperarBanco(tester);
+    final historico = find.byType(ListView).last;
+    String card(int i) => formatarDataHora(datas[i]);
+
+    // Só a primeira página: no fim dela, a rodinha e o pedido da próxima.
+    // Antes vinha tudo de uma vez.
+    await rolarAteOFim(tester, historico, esperar: false);
+    expect(carregandoMais, findsOneWidget);
+    expect(find.text(card(9)), findsOneWidget);
+    expect(find.text(card(10), skipOffstage: false), findsNothing);
+
+    // O banco responde: vêm os outros 5, e não há mais o que buscar.
+    await esperarBanco(tester);
+    await rolarAteOFim(tester, historico);
+    expect(find.text(card(14)), findsOneWidget);
+    expect(carregandoMais, findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('o histórico de pontos vem de 10 em 10: rolando até o fim, vem '
+      'o resto', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      for (var i = 1; i <= 15; i++) {
+        await service.adicionarPontos(idCliente, 1, 'Lançamento $i');
+      }
+      await AuthService.instance.login('c@teste.com', 'senha123');
+    });
+    await abrir(tester, const FidelidadeScreen());
+    await esperarBanco(tester);
+    final extrato = find.byType(ListView);
+
+    // Só a primeira página (do 15 ao 6): no fim dela, a rodinha.
+    await rolarAteOFim(tester, extrato, esperar: false);
+    expect(carregandoMais, findsOneWidget);
+    expect(find.text('Lançamento 6'), findsOneWidget);
+    expect(find.text('Lançamento 5', skipOffstage: false), findsNothing);
+
+    await esperarBanco(tester);
+    await rolarAteOFim(tester, extrato);
+    expect(find.text('Lançamento 1'), findsOneWidget);
+    expect(carregandoMais, findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('Gerenciar Clientes vem de 10 em 10, e a contagem e a busca '
+      'são do banco', (tester) async {
+    await adminLogado(tester);
+    await tester.runAsync(() async {
+      for (var i = 1; i <= 13; i++) {
+        final n = i.toString().padLeft(2, '0');
+        await service.cadastrarCliente(
+          Cliente(
+            nome: 'Cliente $n',
+            email: 'cliente$n@teste.com',
+            telefone: '(67) 99999-00$n',
+            senhaHash: '',
+            criadoEm: DateTime.now().toIso8601String(),
+          ),
+        );
+      }
+    });
+    await abrir(tester, const AdminClientesScreen());
+    await esperarBanco(tester);
+
+    // A contagem é de todos, mesmo com só uma página na tela.
+    expect(find.text('13 cliente(s)'), findsOneWidget);
+    await rolarAteOFim(tester, find.byType(ListView));
+    expect(find.text('Cliente 13'), findsOneWidget);
+    expect(carregandoMais, findsNothing);
+
+    await tester.runAsync(() async {
+      await tester.enterText(find.byType(TextField), 'CLIENTE 07');
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('1 cliente(s)'), findsOneWidget);
+    expect(find.text('Cliente 07'), findsOneWidget);
+    expect(find.text('Cliente 01'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P62 — filtro de status no histórico
+  // -------------------------------------------------------------------------
+
+  /// Três atendimentos encerrados do cliente com o Carlos, um de cada
+  /// serviço: uma falta com a multa pendente (Barba), um concluído (Corte
+  /// de Cabelo) e um cancelado (Hidratação).
+  Future<void> historicoComUmDevendo(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      for (final (dias, servico, status) in [
+        (1, 2, StatusAgendamento.faltou),
+        (2, 1, StatusAgendamento.finalizado),
+        (3, 4, StatusAgendamento.cancelado),
+      ]) {
+        final d = DateTime.now().subtract(Duration(days: dias));
+        final id = await service.criarAgendamento(
+          Agendamento(
+            idCliente: idCliente,
+            idBarbeiro: 1,
+            idServico: servico,
+            dataHora: DateTime(d.year, d.month, d.day, 10).toIso8601String(),
+            status: status,
+          ),
+        );
+        if (status == StatusAgendamento.faltou) {
+          await service.criarPagamento(
+            Pagamento(
+              idAgendamento: id,
+              valor: 12.5,
+              metodo: 'A combinar',
+              status: Pagamento.statusPendente,
+              criadoEm: d.toIso8601String(),
+              natureza: NaturezaPagamento.multa,
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  /// Escolhe a [opcao] no select de status e espera o histórico recarregar.
+  Future<void> filtrarStatus(WidgetTester tester, String opcao) async {
+    await tester.tap(find.byType(PopupMenuButton<FiltroDeStatus>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(opcao).last);
+    // O select avisa a escolha quando o menu fecha, e o histórico vai ao
+    // banco mais de uma vez: cada ida e volta precisa do relógio real.
+    for (var i = 0; i < 3; i++) {
+      await esperarBanco(tester);
+    }
+  }
+
+  testWidgets('na Minha agenda, o barbeiro filtra o histórico por status e '
+      'acha quem está devendo', (tester) async {
+    telaAlta(tester);
+    SharedPreferences.setMockInitialValues({});
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await historicoComUmDevendo(tester);
+    await tester.runAsync(
+      () => AuthService.instance.login(
+        'carlos.eduardo@sysbarber.com',
+        'barbeiro123',
+      ),
+    );
+    await abrir(tester, const AgendamentosScreen());
+
+    // Antes o barbeiro não tinha filtro nenhum. Em aberto, só o período.
+    expect(find.bySemanticsLabel('Escolher período'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<FiltroDeStatus>), findsNothing);
+
+    await tester.tap(find.text('Histórico'));
+    await esperarBanco(tester);
+    expect(find.text('Todos os status'), findsOneWidget);
+    for (final servico in ['Barba', 'Corte de Cabelo', 'Hidratação']) {
+      expect(find.text(servico), findsOneWidget, reason: servico);
+    }
+
+    await filtrarStatus(tester, 'Devendo');
+    expect(find.text('Barba'), findsOneWidget);
+    expect(find.text('Corte de Cabelo'), findsNothing);
+    expect(find.text('Hidratação'), findsNothing);
+
+    await filtrarStatus(tester, 'Concluídos');
+    expect(find.text('Corte de Cabelo'), findsOneWidget);
+    expect(find.text('Barba'), findsNothing);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  testWidgets('na agenda geral, o status entra no histórico, embaixo do '
+      'barbeiro, e sem nada no filtro aparece o aviso', (tester) async {
+    telaAlta(tester);
+    await adminLogado(tester);
+    await tester.runAsync(() async {
+      final d = DateTime.now().subtract(const Duration(days: 1));
+      await service.criarAgendamento(
+        Agendamento(
+          idCliente: await cadastrarClienteTeste(),
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: DateTime(d.year, d.month, d.day, 10).toIso8601String(),
+          status: StatusAgendamento.finalizado,
+        ),
+      );
+    });
+    await abrir(tester, const AgendamentosScreen(agendaGeral: true));
+    expect(find.byType(PopupMenuButton<FiltroDeStatus>), findsNothing);
+
+    await tester.tap(find.text('Histórico'));
+    await esperarBanco(tester);
+    final barbeiro = tester.getRect(find.byType(PopupMenuButton<int?>));
+    final status = tester.getRect(
+      find.byType(PopupMenuButton<FiltroDeStatus>),
+    );
+    expect(status.top, greaterThan(barbeiro.bottom));
+
+    // O efeito do toque fica dentro do campo, com os cantos dele. Antes era
+    // um retângulo de cantos retos, que aparecia pelos cantos.
+    final toque = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byType(PopupMenuButton<FiltroDeStatus>),
+        matching: find.byType(InkWell),
+      ),
+    );
+    expect(toque.borderRadius, BorderRadius.circular(16));
+
+    // O menu abre embaixo do campo, da mesma largura. Antes abria por cima
+    // dele, com a opção escolhida no lugar do campo.
+    await tester.tap(find.byType(PopupMenuButton<FiltroDeStatus>));
+    await tester.pumpAndSettle();
+    final primeira = tester.getRect(find.text('Todos os status').last);
+    expect(primeira.top, greaterThan(status.bottom));
+    expect(
+      tester.getRect(find.byType(PopupMenuItem<FiltroDeStatus>).first).width,
+      status.width,
+    );
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await filtrarStatus(tester, 'Cancelados');
+    expect(find.text('Nada com esses filtros'), findsOneWidget);
+    await tester.runAsync(AuthService.instance.logout);
+  });
+
+  // -------------------------------------------------------------------------
+  // P63 — Relatórios com gráficos e PDF
+  // -------------------------------------------------------------------------
+
+  testWidgets('os Relatórios mostram os gráficos no lugar das listas, com a '
+      'quantidade e o valor, e exportam o PDF', (tester) async {
+    telaAlta(tester);
+    service.injetarBancoParaTeste(await bancoComSeed(tester));
+    await tester.runAsync(() async {
+      final idCliente = await cadastrarClienteTeste();
+      final hoje = DateTime.now();
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: DateTime(
+            hoje.year,
+            hoje.month,
+            hoje.day,
+            9,
+          ).toIso8601String(),
+          status: StatusAgendamento.finalizado,
+        ),
+      );
+      await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: 35,
+          metodo: 'Pix',
+          status: Pagamento.statusConfirmado,
+          criadoEm: hoje.toIso8601String(),
+        ),
+      );
+    });
+    final enviado = Completer<(Uint8List, String)>();
+    await abrir(
+      tester,
+      AdminRelatoriosScreen(
+        compartilharPdf: (bytes, nome) async => enviado.complete((bytes, nome)),
+      ),
+    );
+    await esperarBanco(tester);
+
+    // O faturamento no tempo e as barras de serviços e de barbeiros; a rosca
+    // das formas de pagamento. Antes eram três listas com barrinhas.
+    expect(find.byType(BarChart), findsNWidgets(3));
+    expect(find.byType(PieChart), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('Faturamento no tempo'), findsOneWidget);
+    expect(find.text('Por dia'), findsOneWidget);
+    // A legenda de cada gráfico: forma de pagamento, serviço e barbeiro.
+    expect(find.text('1× · R\$ 35,00'), findsNWidgets(3));
+    expect(find.text('Pix'), findsOneWidget);
+    expect(find.text('Corte de Cabelo'), findsOneWidget);
+    expect(find.text('Carlos Eduardo'), findsOneWidget);
+
+    // O botão tem o ícone de exportar, com a seta (antes, o de um PDF).
+    expect(
+      find.descendant(
+        of: find.byTooltip('Exportar PDF'),
+        matching: find.byIcon(Icons.ios_share_rounded),
+      ),
+      findsOneWidget,
+    );
+
+    // Gerar o PDF lê as fontes e desenha os gráficos: o relógio real corre
+    // até o compartilhar receber o arquivo.
+    await tocarEsperando(tester, find.byTooltip('Exportar PDF'));
+    for (var i = 0; i < 40 && !enviado.isCompleted; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 250)),
+      );
+      await tester.pump();
+    }
+    expect(enviado.isCompleted, isTrue);
+    final (bytes, nome) = await enviado.future;
+    expect(latin1.decode(bytes.sublist(0, 5)), '%PDF-');
+    final hoje = DateTime.now();
+    expect(
+      nome,
+      'relatorio-sysbarber-${hoje.year}-'
+      '${hoje.month.toString().padLeft(2, '0')}.pdf',
+    );
+    await tester.pump();
   });
 }

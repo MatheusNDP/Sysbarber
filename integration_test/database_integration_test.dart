@@ -13,6 +13,8 @@ import 'package:sysbarber/services/senhas.dart';
 import 'package:sysbarber/services/sms.dart';
 import 'package:sysbarber/services/validators.dart';
 
+import 'dados_de_teste.dart';
+
 /// Administrador criado pela configuração inicial no início de cada teste.
 /// Desde a P22 o app não tem mais conta padrão: a senha é escolhida por quem
 /// configura a barbearia.
@@ -48,15 +50,15 @@ void main() {
     );
     service.injetarBancoParaTeste(db);
     // Mesmo ponto de partida em todos os testes: barbearia configurada, com
-    // os dados de exemplo (3 barbeiros e 5 serviços).
+    // os 3 barbeiros e os 5 serviços de teste.
     await service.configurarBarbearia(
       nome: 'Administrador',
       email: emailAdmin,
       telefone: '(67) 99999-0000',
       senha: senhaAdmin,
       aceitouTermos: true,
-      dadosDeExemplo: true,
     );
+    await criarBarbeirosEServicosDeTeste(service);
   });
 
   tearDown(() async => await service.resetarParaTeste());
@@ -67,6 +69,17 @@ void main() {
     final db = await service.database;
     return (await db.query('cliente')).map(Cliente.fromMap).toList();
   }
+
+  /// A agenda inteira — a primeira aba e todo o histórico — de um barbeiro
+  /// ([idBarbeiro]) ou da barbearia toda (sem ele), como a tela junta as
+  /// duas abas.
+  Future<List<Agendamento>> agendaInteira([int? idBarbeiro]) async => [
+    ...await service.listarAgendaEmAberto(idBarbeiro: idBarbeiro),
+    ...await service.listarHistoricoAgenda(
+      idBarbeiro: idBarbeiro,
+      limite: 1000,
+    ),
+  ];
 
   /// Cadastra um cliente auxiliar e devolve o id gerado.
   Future<int> criarClienteTeste({
@@ -513,17 +526,13 @@ void main() {
         ),
       );
 
-      final agenda = await service.listarAgendamentosBarbeiro(
-        barbeiros.first.id!,
-      );
+      final agenda = await agendaInteira(barbeiros.first.id!);
       expect(agenda.length, 1);
       expect(agenda.first.cliente, isNotNull);
       expect(agenda.first.cliente!.nome, 'Novo Cliente');
       expect(agenda.first.servico!.nome, servicos.first.nome);
 
-      final outra = await service.listarAgendamentosBarbeiro(
-        barbeiros[1].id!,
-      );
+      final outra = await agendaInteira(barbeiros[1].id!);
       expect(outra.length, 1);
       expect(outra.first.servico!.nome, servicos[1].nome);
     });
@@ -531,7 +540,7 @@ void main() {
     test('barbeiro sem atendimentos recebe agenda vazia', () async {
       final barbeiros = await service.listarBarbeiros();
       expect(
-        await service.listarAgendamentosBarbeiro(barbeiros.last.id!),
+        await agendaInteira(barbeiros.last.id!),
         isEmpty,
       );
     });
@@ -581,7 +590,7 @@ void main() {
       await service.definirBarbeiroAtivo(b.id!, false);
 
       // O atendimento marcado continua valendo para os dois lados.
-      expect((await service.listarAgendamentosBarbeiro(b.id!)).length, 1);
+      expect((await agendaInteira(b.id!)).length, 1);
       expect((await service.listarAgendamentosCliente(idCliente)).length, 1);
     });
 
@@ -1961,7 +1970,7 @@ void main() {
       final lista = await service.listarAgendamentosCliente(idCliente);
       expect(lista.first.preco, 35);
       expect(lista.first.valor, 35);
-      final agenda = await service.listarAgendamentosBarbeiro(1);
+      final agenda = await agendaInteira(1);
       expect(agenda.first.valor, 35);
     });
   });
@@ -2118,7 +2127,7 @@ void main() {
       expect(semPagamento.pagamento, isNull);
       expect(semPagamento.valorEstornado, 0);
 
-      final agenda = await service.listarAgendamentosBarbeiro(1);
+      final agenda = await agendaInteira(1);
       expect(agenda.where((a) => a.pagamento != null).length, 1);
     });
 
@@ -2161,7 +2170,7 @@ void main() {
       final idCliente = await criarClienteTeste();
       await agendarNoProximoDia(idCliente);
 
-      final agenda = await service.listarAgendamentosBarbeiro(1);
+      final agenda = await agendaInteira(1);
       expect(agenda.first.cliente!.nome, 'Novo Cliente');
       expect(agenda.first.cliente!.senhaHash, isEmpty);
     });
@@ -2435,6 +2444,27 @@ void main() {
       )).map((c) => c['name']);
       expect(colunas, contains('foto'));
       final antigo = Barbeiro.fromMap((await db.query('barbeiro')).single);
+      expect(antigo.foto, isNull);
+      await db.close();
+    });
+
+    test('a migração v10 dá a coluna da foto ao cliente, e quem já tinha '
+        'conta fica sem foto', () async {
+      final db = await bancoV2();
+      await db.insert('cliente', {
+        'nome': 'Cliente Antigo',
+        'email': 'antigo@teste.com',
+        'telefone': '(67) 99999-0000',
+        'senha_hash': 'hash',
+        'criado_em': '2026-08-10T10:00:00.000',
+      });
+      await service.migrar(db, 2, DatabaseService.versaoBanco);
+
+      final colunas = (await db.rawQuery(
+        'PRAGMA table_info(cliente)',
+      )).map((c) => c['name']);
+      expect(colunas, contains('foto'));
+      final antigo = Cliente.fromMap((await db.query('cliente')).single);
       expect(antigo.foto, isNull);
       await db.close();
     });
@@ -3107,11 +3137,12 @@ void main() {
         modo: ModoReserva.pagarNaBarbearia,
       );
 
-      final todos = await service.listarTodosAgendamentos();
+      final todos = await agendaInteira();
 
       expect(todos.length, 2);
-      // Mais recente primeiro, como nas outras listagens.
-      expect(todos.first.data.hour, 14);
+      // Os dois estão em aberto: na primeira aba, do mais cedo para o mais
+      // tarde.
+      expect(todos.first.data.hour, 9);
       expect(
         todos.map((a) => a.barbeiro!.nome),
         containsAll(['Carlos Eduardo', 'Rafael Souza']),
@@ -3150,14 +3181,12 @@ void main() {
     Future<Cliente> configurar({
       String email = 'dono@barbearia.com',
       String senha = 'senhaDoDono1',
-      bool dadosDeExemplo = false,
     }) => service.configurarBarbearia(
       nome: 'Dono da Barbearia',
       email: email,
       telefone: '(67) 98765-4321',
       senha: senha,
       aceitouTermos: true,
-      dadosDeExemplo: dadosDeExemplo,
     );
 
     setUp(() async {
@@ -3190,26 +3219,10 @@ void main() {
         isTrue,
       );
       expect(await service.obterPontos(admin.id!), 0);
-      // Sem os dados de exemplo, a barbearia começa vazia.
+      // A barbearia sempre começa vazia: a opção de dados de exemplo, com 3
+      // barbeiros e 5 serviços, saiu do app.
       expect(await service.listarBarbeiros(), isEmpty);
       expect(await service.listarServicos(), isEmpty);
-    });
-
-    test('com dados de exemplo cria os 3 barbeiros e os 5 serviços',
-        () async {
-      await configurar(dadosDeExemplo: true);
-
-      final barbeiros = await service.listarBarbeiros();
-      expect(barbeiros.length, 3);
-      expect(barbeiros.where((b) => !b.ativo).single.nome, 'Marcos Lima');
-      expect((await service.listarServicos()).length, 5);
-      expect(
-        await service.autenticarBarbeiro(
-          'carlos.eduardo@sysbarber.com',
-          DatabaseService.senhaBarbeirosDeExemplo,
-        ),
-        isNotNull,
-      );
     });
 
     test('a barbearia é configurada uma vez só', () async {
@@ -3229,37 +3242,30 @@ void main() {
         configurar(senha: '123'),
         throwsA(isA<RegraNegocioException>()),
       );
-      // O e-mail de um barbeiro dos dados de exemplo não pode ser também o
-      // do administrador: e-mail é único no sistema.
-      await expectLater(
-        configurar(
-          email: 'carlos.eduardo@sysbarber.com',
-          dadosDeExemplo: true,
-        ),
-        throwsA(isA<RegraNegocioException>()),
-      );
-
-      expect(await service.barbeariaConfigurada(), isFalse);
-      expect(await todasAsContas(), isEmpty);
-      expect(await service.listarBarbeiros(), isEmpty);
-    });
-
-    test('dados de exemplo só entram numa barbearia vazia', () async {
+      // O e-mail de um barbeiro não pode ser também o do administrador:
+      // e-mail é único no sistema.
       await service.cadastrarBarbeiro(
         const Barbeiro(
           nome: 'Pedro Alves',
           especialidade: 'Degradê',
           iniciais: 'PA',
+          email: 'pedro@barbearia.com',
           salario: 2000,
         ),
       );
-
       await expectLater(
-        configurar(dadosDeExemplo: true),
-        throwsA(isA<RegraNegocioException>()),
+        configurar(email: 'pedro@barbearia.com'),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Este e-mail já está cadastrado',
+          ),
+        ),
       );
+
       expect(await service.barbeariaConfigurada(), isFalse);
-      expect((await service.listarBarbeiros()).length, 1);
+      expect(await todasAsContas(), isEmpty);
     });
 
     test('antes da configuração só a abertura e a configuração abrem',
@@ -3284,7 +3290,6 @@ void main() {
         telefone: '(67) 98765-4321',
         senha: 'senhaDoDono1',
         aceitouTermos: true,
-        dadosDeExemplo: false,
       );
 
       expect(r.sucesso, isTrue);
@@ -3913,7 +3918,7 @@ void main() {
     test('o administrador não agenda: o banco recusa a reserva e nada é '
         'gravado', () async {
       final admin = await administrador();
-      final antes = await service.listarTodosAgendamentos();
+      final antes = await agendaInteira();
 
       await expectLater(
         service.reservar(
@@ -3931,7 +3936,7 @@ void main() {
           ),
         ),
       );
-      expect(await service.listarTodosAgendamentos(), hasLength(antes.length));
+      expect(await agendaInteira(), hasLength(antes.length));
       // A revisão do agendamento também avisa, antes do pagamento.
       expect(
         await service.verificarReserva(
@@ -4475,7 +4480,7 @@ void main() {
       expect(await db.query('codigo_senha'), isEmpty);
 
       // O atendimento continua nos relatórios, sem o nome.
-      final todos = await service.listarTodosAgendamentos();
+      final todos = await agendaInteira();
       final atendimento = todos.firstWhere((a) => a.id == r.idAgendamento);
       expect(atendimento.cliente!.nome, DatabaseService.nomeClienteExcluido);
       expect((await service.gerarRelatorio()).finalizados, 1);
@@ -4577,7 +4582,8 @@ void main() {
       );
 
       // A barbearia recebe a multa, mas fica um serviço concluído sem
-      // pagamento.
+      // pagamento. Desde a P58 o banco não conclui sem receber; o caso só
+      // existe num banco de antes, e é gravado direto aqui.
       final multa = (await db.query(
         'pagamento',
         where: 'status = ?',
@@ -4591,9 +4597,11 @@ void main() {
         dataHora: proximoDiaAs(10),
         modo: ModoReserva.pagarNaBarbearia,
       );
-      await service.finalizarAgendamento(
-        concluido.idAgendamento,
-        agora: proximoDiaAs(10, 30),
+      await db.update(
+        'agendamento',
+        {'status': StatusAgendamento.finalizado.dbValue},
+        where: 'id = ?',
+        whereArgs: [concluido.idAgendamento],
       );
       await expectLater(
         () => service.excluirContaCliente(c.id!, senha: 'senha123'),
@@ -5122,6 +5130,705 @@ void main() {
       await auth.login(emailAdmin, senhaAdmin);
       final doAdmin = await auth.atualizarFotoBarbeiro(foto);
       expect(doAdmin.sucesso, isFalse);
+      await auth.logout();
+    });
+  });
+
+  group('P58 — atendimento de pagar no balcão só é concluído com o pagamento',
+      () {
+    Future<({int idCliente, int idAgendamento})> noBalcao() async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1, // Corte de Cabelo, R$ 35
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarNaBarbearia,
+      );
+      return (idCliente: idCliente, idAgendamento: r.idAgendamento);
+    }
+
+    Future<Agendamento> agendamento(int id) async =>
+        (await agendaInteira()).firstWhere(
+          (a) => a.id == id,
+        );
+
+    test('sem dizer como o cliente pagou, o banco não conclui, e nada muda',
+        () async {
+      final r = await noBalcao();
+
+      await expectLater(
+        service.finalizarAgendamento(
+          r.idAgendamento,
+          agora: proximoDiaAs(9, 30),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Registre como o cliente pagou para concluir o atendimento',
+          ),
+        ),
+      );
+      final a = await agendamento(r.idAgendamento);
+      expect(a.status, StatusAgendamento.confirmado);
+      expect(a.pagamento!.pendente, isTrue);
+      expect(await service.obterPontos(r.idCliente), 0);
+    });
+
+    test('com o método, recebe e conclui juntos, e o cliente ganha os pontos',
+        () async {
+      final r = await noBalcao();
+
+      await service.finalizarAgendamento(
+        r.idAgendamento,
+        agora: proximoDiaAs(9, 30),
+        metodo: 'Dinheiro',
+      );
+
+      final a = await agendamento(r.idAgendamento);
+      expect(a.status, StatusAgendamento.finalizado);
+      expect(a.pagamento!.confirmado, isTrue);
+      expect(a.pagamento!.metodo, 'Dinheiro');
+      expect(await service.obterPontos(r.idCliente), 35);
+    });
+
+    test('se a conclusão é recusada, o pagamento também não é registrado',
+        () async {
+      final r = await noBalcao();
+
+      // No dia anterior ainda não dá para concluir.
+      await expectLater(
+        service.finalizarAgendamento(
+          r.idAgendamento,
+          agora: proximoDiaAs(9).subtract(const Duration(days: 1)),
+          metodo: 'Pix',
+        ),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      final a = await agendamento(r.idAgendamento);
+      expect(a.status, StatusAgendamento.confirmado);
+      expect(a.pagamento!.pendente, isTrue);
+      expect(await service.obterPontos(r.idCliente), 0);
+    });
+
+    test('o que já foi pago no app conclui sem perguntar como pagou',
+        () async {
+      final idCliente = await criarClienteTeste();
+      final r = await service.reservar(
+        idCliente: idCliente,
+        idBarbeiro: 1,
+        idServico: 1,
+        dataHora: proximoDiaAs(9),
+        modo: ModoReserva.pagarAgora,
+        metodo: 'Pix',
+      );
+
+      await service.finalizarAgendamento(
+        r.idAgendamento,
+        agora: proximoDiaAs(9, 30),
+      );
+
+      final a = await agendamento(r.idAgendamento);
+      expect(a.status, StatusAgendamento.finalizado);
+      expect(a.pagamento!.metodo, 'Pix');
+      expect(await service.obterPontos(idCliente), 35);
+    });
+  });
+
+  group('P61 — paginação', () {
+    const tamanho = DatabaseService.tamanhoDaPagina;
+
+    /// Atendimento do cliente com o barbeiro, [dias] antes (ou depois, se
+    /// negativo) de agora, às 10:00, com o [status] dado.
+    Future<int> atendimento(
+      int idCliente,
+      int dias, {
+      int idBarbeiro = 1,
+      StatusAgendamento status = StatusAgendamento.finalizado,
+    }) {
+      final d = DateTime.now().subtract(Duration(days: dias));
+      return service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: idBarbeiro,
+          idServico: 1,
+          dataHora: DateTime(d.year, d.month, d.day, 10).toIso8601String(),
+          status: status,
+        ),
+      );
+    }
+
+    test('o histórico vem de 10 em 10, do mais recente para o mais antigo, '
+        'sem repetir nem pular nenhum', () async {
+      final idCliente = await criarClienteTeste();
+      for (var dias = 1; dias <= 23; dias++) {
+        await atendimento(idCliente, dias);
+      }
+
+      final paginas = [
+        for (final deslocamento in [0, 10, 20])
+          await service.listarHistoricoAgenda(
+            idCliente: idCliente,
+            deslocamento: deslocamento,
+          ),
+      ];
+
+      expect(paginas.map((p) => p.length), [tamanho, tamanho, 3]);
+      final todos = paginas.expand((p) => p).toList();
+      expect(todos.map((a) => a.id).toSet(), hasLength(23));
+      for (var i = 1; i < todos.length; i++) {
+        expect(todos[i].data.isBefore(todos[i - 1].data), isTrue);
+      }
+      // A agenda do barbeiro e a geral também vêm de 10 em 10.
+      expect(await service.listarHistoricoAgenda(idBarbeiro: 1), hasLength(10));
+      expect(await service.listarHistoricoAgenda(), hasLength(10));
+    });
+
+    test('as abas: o horário que já passou é histórico para o cliente, mas '
+        'continua em aberto para a barbearia', () async {
+      final idCliente = await criarClienteTeste();
+      final passado = await atendimento(
+        idCliente,
+        1,
+        status: StatusAgendamento.confirmado,
+      );
+      final futuro = await atendimento(
+        idCliente,
+        -1,
+        status: StatusAgendamento.confirmado,
+      );
+      final concluido = await atendimento(idCliente, 2);
+
+      Future<List<int?>> ids(Future<List<Agendamento>> lista) async =>
+          (await lista).map((a) => a.id).toList();
+
+      expect(await ids(service.listarAgendaEmAberto(idCliente: idCliente)), [
+        futuro,
+      ]);
+      expect(
+        await ids(service.listarHistoricoAgenda(idCliente: idCliente)),
+        [passado, concluido],
+      );
+      expect(await ids(service.listarAgendaEmAberto(idBarbeiro: 1)), [
+        passado,
+        futuro,
+      ]);
+      expect(await ids(service.listarHistoricoAgenda(idBarbeiro: 1)), [
+        concluido,
+      ]);
+    });
+
+    test('na agenda geral, o histórico filtra o barbeiro e o período, com os '
+        'dois dias', () async {
+      final idCliente = await criarClienteTeste();
+      final carlos3 = await atendimento(idCliente, 3);
+      final carlos5 = await atendimento(idCliente, 5);
+      final rafael4 = await atendimento(idCliente, 4, idBarbeiro: 2);
+      await atendimento(idCliente, 8);
+
+      Future<List<int?>> ids({int? idBarbeiro, int? de, int? ate}) async {
+        DateTime? dia(int? dias) =>
+            dias == null ? null : DateTime.now().subtract(Duration(days: dias));
+        return (await service.listarHistoricoAgenda(
+          idBarbeiro: idBarbeiro,
+          de: dia(de),
+          ate: dia(ate),
+        )).map((a) => a.id).toList();
+      }
+
+      expect(await ids(de: 5, ate: 3), [carlos3, rafael4, carlos5]);
+      expect(await ids(idBarbeiro: 1, de: 5, ate: 3), [carlos3, carlos5]);
+      expect(await ids(idBarbeiro: 2), [rafael4]);
+    });
+
+    test('o número de hoje do barbeiro não conta os cancelados', () async {
+      final idCliente = await criarClienteTeste();
+      final hoje = DateTime.now();
+      for (final (hora, status) in [
+        (9, StatusAgendamento.confirmado),
+        (10, StatusAgendamento.finalizado),
+        (11, StatusAgendamento.cancelado),
+      ]) {
+        await service.criarAgendamento(
+          Agendamento(
+            idCliente: idCliente,
+            idBarbeiro: 1,
+            idServico: 1,
+            dataHora: DateTime(
+              hoje.year,
+              hoje.month,
+              hoje.day,
+              hora,
+            ).toIso8601String(),
+            status: status,
+          ),
+        );
+      }
+      await atendimento(idCliente, 1);
+
+      expect(await service.contarAtendimentosDoDia(1, hoje), 2);
+      expect(await service.contarAtendimentosDoDia(2, hoje), 0);
+    });
+
+    test('o histórico de pontos vem de 10 em 10, do mais novo para o mais '
+        'antigo', () async {
+      final idCliente = await criarClienteTeste();
+      for (var i = 1; i <= 15; i++) {
+        await service.adicionarPontos(idCliente, i, 'Lançamento $i');
+      }
+
+      final primeira = await service.listarHistoricoPontos(
+        idCliente,
+        limite: tamanho,
+      );
+      final segunda = await service.listarHistoricoPontos(
+        idCliente,
+        limite: tamanho,
+        deslocamento: tamanho,
+      );
+
+      expect(primeira, hasLength(10));
+      expect(primeira.first.descricao, 'Lançamento 15');
+      expect(segunda.map((h) => h.descricao), [
+        for (var i = 5; i >= 1; i--) 'Lançamento $i',
+      ]);
+      // Sem limite, o extrato inteiro (a exclusão da conta e os testes).
+      expect(await service.listarHistoricoPontos(idCliente), hasLength(15));
+    });
+
+    test('Gerenciar Clientes vem de 10 em 10, com a busca e a contagem feitas '
+        'no banco', () async {
+      for (var i = 1; i <= 12; i++) {
+        final n = i.toString().padLeft(2, '0');
+        await criarClienteTeste(email: 'cliente$n@teste.com');
+      }
+      await criarClienteTeste(email: 'joana_lima@teste.com');
+
+      final primeira = await service.listarClientes(limite: tamanho);
+      final resto = await service.listarClientes(
+        limite: tamanho,
+        deslocamento: tamanho,
+      );
+      expect(primeira, hasLength(10));
+      expect(resto, hasLength(3));
+      expect(
+        {...primeira, ...resto}.map((c) => c.id).toSet(),
+        hasLength(13),
+      );
+      expect(await service.contarClientes(), 13);
+
+      // Maiúsculas não importam, e "_" e "%" valem como eles mesmos.
+      expect(await service.contarClientes(busca: 'JOANA'), 1);
+      expect(await service.contarClientes(busca: 'a_l'), 1);
+      expect(await service.contarClientes(busca: '%'), 0);
+      expect(
+        (await service.listarClientes(busca: 'cliente1', limite: tamanho))
+            .map((c) => c.email),
+        everyElement(startsWith('cliente1')),
+      );
+      // O administrador não entra na lista nem na contagem.
+      expect(await service.contarClientes(busca: emailAdmin), 0);
+    });
+  });
+
+  group('P62 — filtro de status no histórico', () {
+    /// Atendimento encerrado do cliente com o [idBarbeiro], [dias] antes de
+    /// hoje, às 10:00, com o [status] e, se houver, o pagamento dele.
+    Future<int> encerrado(
+      int idCliente,
+      int dias,
+      StatusAgendamento status, {
+      int idBarbeiro = 1,
+      NaturezaPagamento? natureza,
+      String statusDoPagamento = Pagamento.statusPendente,
+    }) async {
+      final d = DateTime.now().subtract(Duration(days: dias));
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: idBarbeiro,
+          idServico: 1,
+          dataHora: DateTime(d.year, d.month, d.day, 10).toIso8601String(),
+          status: status,
+        ),
+      );
+      if (natureza != null) {
+        await service.criarPagamento(
+          Pagamento(
+            idAgendamento: id,
+            valor: 17.5,
+            metodo: 'A combinar',
+            status: statusDoPagamento,
+            criadoEm: d.toIso8601String(),
+            natureza: natureza,
+          ),
+        );
+      }
+      return id;
+    }
+
+    test('cada opção traz só o seu status, e "Devendo" só o que tem valor '
+        'pendente', () async {
+      final idCliente = await criarClienteTeste();
+      final concluido = await encerrado(
+        idCliente,
+        1,
+        StatusAgendamento.finalizado,
+        natureza: NaturezaPagamento.servico,
+        statusDoPagamento: Pagamento.statusConfirmado,
+      );
+      final faltaDevendo = await encerrado(
+        idCliente,
+        2,
+        StatusAgendamento.faltou,
+        natureza: NaturezaPagamento.multa,
+      );
+      final canceladoMultaPaga = await encerrado(
+        idCliente,
+        3,
+        StatusAgendamento.cancelado,
+        natureza: NaturezaPagamento.multa,
+        statusDoPagamento: Pagamento.statusConfirmado,
+      );
+      final canceladoSemMulta = await encerrado(
+        idCliente,
+        4,
+        StatusAgendamento.cancelado,
+      );
+
+      Future<List<int?>> ids(FiltroDeStatus status) async =>
+          (await service.listarHistoricoAgenda(
+            idBarbeiro: 1,
+            status: status,
+          )).map((a) => a.id).toList();
+
+      expect(await ids(FiltroDeStatus.todos), [
+        concluido,
+        faltaDevendo,
+        canceladoMultaPaga,
+        canceladoSemMulta,
+      ]);
+      expect(await ids(FiltroDeStatus.devendo), [faltaDevendo]);
+      expect(await ids(FiltroDeStatus.concluidos), [concluido]);
+      expect(await ids(FiltroDeStatus.cancelados), [
+        canceladoMultaPaga,
+        canceladoSemMulta,
+      ]);
+      expect(await ids(FiltroDeStatus.faltas), [faltaDevendo]);
+    });
+
+    test('o barbeiro filtra o próprio histórico por status e período, sem '
+        'ver o dos outros', () async {
+      final idCliente = await criarClienteTeste();
+      final recente = await encerrado(
+        idCliente,
+        2,
+        StatusAgendamento.faltou,
+        natureza: NaturezaPagamento.multa,
+      );
+      await encerrado(
+        idCliente,
+        9,
+        StatusAgendamento.faltou,
+        natureza: NaturezaPagamento.multa,
+      );
+      // Do Rafael: não entra na agenda do Carlos.
+      await encerrado(
+        idCliente,
+        2,
+        StatusAgendamento.faltou,
+        idBarbeiro: 2,
+        natureza: NaturezaPagamento.multa,
+      );
+
+      final semana = DateTime.now().subtract(const Duration(days: 7));
+      final lista = await service.listarHistoricoAgenda(
+        idBarbeiro: 1,
+        de: semana,
+        ate: DateTime.now(),
+        status: FiltroDeStatus.devendo,
+      );
+      expect(lista.map((a) => a.id), [recente]);
+    });
+  });
+
+  group('P63 — relatórios com gráficos', () {
+    /// Atendimento do cliente com o [idBarbeiro] e o [idServico] em [quando],
+    /// com um pagamento de [valor] lançado em [pagoEm] (confirmado).
+    Future<int> atendimentoPago(
+      int idCliente,
+      DateTime quando,
+      double valor,
+      DateTime pagoEm, {
+      int idBarbeiro = 1,
+      int idServico = 1,
+      NaturezaPagamento natureza = NaturezaPagamento.servico,
+      StatusAgendamento status = StatusAgendamento.finalizado,
+    }) async {
+      final id = await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: idBarbeiro,
+          idServico: idServico,
+          dataHora: quando.toIso8601String(),
+          status: status,
+        ),
+      );
+      await service.criarPagamento(
+        Pagamento(
+          idAgendamento: id,
+          valor: valor,
+          metodo: 'Pix',
+          status: Pagamento.statusConfirmado,
+          criadoEm: pagoEm.toIso8601String(),
+          natureza: natureza,
+        ),
+      );
+      return id;
+    }
+
+    test('com período, uma barra por dia até hoje, que somam o faturamento',
+        () async {
+      final idCliente = await criarClienteTeste();
+      await atendimentoPago(
+        idCliente,
+        DateTime(2030, 3, 2, 10),
+        35,
+        DateTime(2030, 3, 2, 10, 30),
+      );
+      await atendimentoPago(
+        idCliente,
+        DateTime(2030, 3, 4, 10),
+        55,
+        DateTime(2030, 3, 4, 10, 50),
+      );
+      // Um estorno no mesmo dia entra negativo, como no faturamento.
+      await atendimentoPago(
+        idCliente,
+        DateTime(2030, 3, 4, 14),
+        -20,
+        DateTime(2030, 3, 4, 15),
+        natureza: NaturezaPagamento.estorno,
+        status: StatusAgendamento.cancelado,
+      );
+
+      final r = await service.gerarRelatorio(
+        inicio: DateTime(2030, 3),
+        fim: DateTime(2030, 4),
+        agora: DateTime(2030, 3, 5, 9),
+      );
+
+      expect(r.faturamentoPorMes, isFalse);
+      expect(r.faturamentoNoTempo.map((f) => f.data.day), [1, 2, 3, 4, 5]);
+      expect(r.faturamentoNoTempo.map((f) => f.valor), [0, 35, 0, 35, 0]);
+      expect(
+        r.faturamentoNoTempo.fold<double>(0, (t, f) => t + f.valor),
+        r.faturamento,
+      );
+
+      // Um mês que já passou vai até o último dia dele.
+      final passado = await service.gerarRelatorio(
+        inicio: DateTime(2030, 2),
+        fim: DateTime(2030, 3),
+        agora: DateTime(2030, 3, 5, 9),
+      );
+      expect(passado.faturamentoNoTempo, hasLength(28));
+    });
+
+    test('sem período, uma barra por mês, do primeiro pagamento até o mês '
+        'atual', () async {
+      final idCliente = await criarClienteTeste();
+      await atendimentoPago(
+        idCliente,
+        DateTime(2030, 1, 10, 10),
+        35,
+        DateTime(2030, 1, 10, 10, 30),
+      );
+      await atendimentoPago(
+        idCliente,
+        DateTime(2030, 3, 10, 10),
+        25,
+        DateTime(2030, 3, 10, 10, 30),
+      );
+
+      final r = await service.gerarRelatorio(agora: DateTime(2030, 4, 2));
+
+      expect(r.faturamentoPorMes, isTrue);
+      expect(
+        r.faturamentoNoTempo.map((f) => (f.data.month, f.valor)),
+        [(1, 35.0), (2, 0.0), (3, 25.0), (4, 0.0)],
+      );
+    });
+
+    test('serviços e barbeiros trazem a quantidade de atendimentos e o '
+        'faturamento de cada um', () async {
+      final idCliente = await criarClienteTeste();
+      final quando = DateTime(2030, 3, 2, 10);
+      final pagoEm = DateTime(2030, 3, 2, 11);
+      // Corte com o Carlos: 35 pagos.
+      await atendimentoPago(idCliente, quando, 35, pagoEm);
+      // Barba com o Rafael: falta com a multa de 12,50 paga.
+      await atendimentoPago(
+        idCliente,
+        quando.add(const Duration(hours: 1)),
+        12.5,
+        pagoEm,
+        idBarbeiro: 2,
+        idServico: 2,
+        natureza: NaturezaPagamento.multa,
+        status: StatusAgendamento.faltou,
+      );
+      // Outro corte com o Carlos, ainda sem pagar.
+      await service.criarAgendamento(
+        Agendamento(
+          idCliente: idCliente,
+          idBarbeiro: 1,
+          idServico: 1,
+          dataHora: quando.add(const Duration(hours: 3)).toIso8601String(),
+        ),
+      );
+
+      final r = await service.gerarRelatorio(
+        inicio: DateTime(2030, 3),
+        fim: DateTime(2030, 4),
+      );
+
+      expect(
+        r.porServico.map((i) => (i.rotulo, i.quantidade, i.valor)),
+        [('Corte de Cabelo', 2, 35.0), ('Barba', 1, 12.5)],
+      );
+      expect(
+        r.porBarbeiro.map((i) => (i.rotulo, i.quantidade, i.valor)),
+        [('Carlos Eduardo', 2, 35.0), ('Rafael Souza', 1, 12.5)],
+      );
+      // Somados, batem com o faturamento.
+      expect(
+        r.porServico.fold<double>(0, (t, i) => t + i.valor),
+        r.faturamento,
+      );
+    });
+  });
+
+  group('P54 — foto do cliente', () {
+    /// Começo de um JPEG, o bastante para o banco reconhecer a imagem.
+    final foto = Uint8List.fromList([
+      0xFF,
+      0xD8,
+      0xFF,
+      0xE0,
+      ...'JFIF'.codeUnits,
+    ]);
+
+    Future<Cliente> criarConta() => service.criarContaCliente(
+      nome: 'Joana Lima',
+      email: 'joana@teste.com',
+      telefone: '(67) 98888-1234',
+      senha: 'senha123',
+      aceitouTermos: true,
+    );
+
+    Future<Uint8List?> fotoGravada(int id) async =>
+        (await service.buscarClientePorId(id))!.foto;
+
+    test('o cliente começa sem foto; a foto gravada volta na busca, e `null` '
+        'a remove', () async {
+      final c = await criarConta();
+      expect(c.foto, isNull);
+
+      await service.definirFotoDoCliente(c.id!, foto);
+      expect(await fotoGravada(c.id!), foto);
+
+      await service.definirFotoDoCliente(c.id!, null);
+      expect(await fotoGravada(c.id!), isNull);
+    });
+
+    test('o banco recusa o que não é foto e a foto acima de 1 MB, e a de '
+        'antes continua', () async {
+      final c = await criarConta();
+      await service.definirFotoDoCliente(c.id!, foto);
+
+      await expectLater(
+        service.definirFotoDoCliente(
+          c.id!,
+          Uint8List.fromList('não é foto'.codeUnits),
+        ),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'Escolha uma foto em JPG, PNG ou WebP',
+          ),
+        ),
+      );
+      final grande = Uint8List(Validators.tamanhoMaximoFoto + 1)
+        ..setAll(0, foto);
+      await expectLater(
+        service.definirFotoDoCliente(c.id!, grande),
+        throwsA(isA<RegraNegocioException>()),
+      );
+      expect(await fotoGravada(c.id!), foto);
+    });
+
+    test('o administrador não tem foto, e cliente que não existe não ganha '
+        'uma', () async {
+      final admin = await service.buscarClientePorEmail(emailAdmin);
+      await expectLater(
+        service.definirFotoDoCliente(admin!.id!, foto),
+        throwsA(
+          isA<RegraNegocioException>().having(
+            (e) => e.mensagem,
+            'mensagem',
+            'O administrador não tem foto de perfil',
+          ),
+        ),
+      );
+      expect(await fotoGravada(admin.id!), isNull);
+
+      await expectLater(
+        service.definirFotoDoCliente(99, foto),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('a foto sai junto com a conta excluída, que não ganha outra',
+        () async {
+      final c = await criarConta();
+      await service.definirFotoDoCliente(c.id!, foto);
+
+      await service.excluirContaCliente(c.id!, senha: 'senha123');
+
+      expect(await fotoGravada(c.id!), isNull);
+      await expectLater(
+        service.definirFotoDoCliente(c.id!, foto),
+        throwsA(isA<RegraNegocioException>()),
+      );
+    });
+
+    test('o cliente logado troca a própria foto, e a sessão já fica com a '
+        'nova; o barbeiro e o administrador não usam a do cliente', () async {
+      SharedPreferences.setMockInitialValues({});
+      final auth = AuthService.instance;
+      final c = await criarConta();
+
+      await auth.login('joana@teste.com', 'senha123');
+      expect((await auth.atualizarFotoCliente(foto)).sucesso, isTrue);
+      expect(auth.usuarioAtual!.foto, foto);
+      expect(await fotoGravada(c.id!), foto);
+
+      final semFoto = await auth.atualizarFotoCliente(null);
+      expect(semFoto.sucesso, isTrue);
+      expect(auth.usuarioAtual!.foto, isNull);
+      await auth.logout();
+
+      await auth.login('rafael.souza@sysbarber.com', 'barbeiro123');
+      expect((await auth.atualizarFotoCliente(foto)).sucesso, isFalse);
+      await auth.logout();
+
+      await auth.login(emailAdmin, senhaAdmin);
+      final doAdmin = await auth.atualizarFotoCliente(foto);
+      expect(doAdmin.sucesso, isFalse);
+      expect(doAdmin.erro, 'O administrador não tem foto de perfil');
       await auth.logout();
     });
   });

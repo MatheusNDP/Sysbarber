@@ -327,6 +327,8 @@ class _InicioState extends State<_Inicio> {
             onTap: () => _irParaAba(Aba.perfil, '/perfil'),
             child: AvatarIniciais(
               texto: usuario?.iniciais ?? '?',
+              // A foto que o cliente pôs no Perfil (regra de negócio 23).
+              foto: usuario?.foto,
               tamanho: 52,
               large: true,
             ),
@@ -338,7 +340,7 @@ class _InicioState extends State<_Inicio> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Olá, bem-vindo',
+                'Olá, ${saudacaoDoHorario(DateTime.now())}',
                 style: AppTheme.texto(size: 13, color: AppColors.muted),
               ),
               const SizedBox(height: 2),

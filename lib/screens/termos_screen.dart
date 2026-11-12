@@ -11,7 +11,7 @@ class TermosScreen extends StatelessWidget {
   const TermosScreen({super.key});
 
   /// Data da versão atual, mostrada no fim.
-  static const String versao = '31 de outubro de 2026';
+  static const String versao = '12 de novembro de 2026';
 
   static const List<(String, List<String>)> _secoes = [
     (
@@ -52,6 +52,9 @@ class TermosScreen extends StatelessWidget {
             'forma protegida, nunca como foi digitada.',
         '•  Do uso: agendamentos, pagamentos (forma, valor e, no cartão, só '
             'os 4 últimos dígitos) e pontos.',
+        '•  Do cliente: também a foto de perfil, se ele puser uma. A foto '
+            'aparece só para ele, no Perfil e no Início, e ele pode trocá-la '
+            'ou removê-la no Perfil.',
         '•  Do barbeiro: também a especialidade e o salário, informados pela '
             'barbearia, e a foto de perfil, se ele puser uma. A foto aparece '
             'para os clientes na escolha do profissional, e ele pode trocá-la '
@@ -74,8 +77,9 @@ class TermosScreen extends StatelessWidget {
         '•  o código de "Esqueci minha senha" por e-mail é enviado pelo '
             'EmailJS, que recebe o seu nome, o seu e-mail e o código. O SMS '
             'desta versão é simulado e não sai do aparelho;',
-        '•  o Suporte e o convite do barbeiro abrem o WhatsApp, o e-mail ou '
-            'outro app que você escolher, e você decide o que enviar.',
+        '•  o Suporte, o convite do barbeiro e o PDF dos relatórios abrem o '
+            'WhatsApp, o e-mail ou outro app que você escolher, e você decide '
+            'o que enviar.',
       ],
     ),
     (
@@ -83,12 +87,12 @@ class TermosScreen extends StatelessWidget {
       [
         'Pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018), você pode:',
         '•  ver e corrigir os seus dados, no Perfil;',
-        '•  excluir a sua conta, no Perfil. O nome, o e-mail, o telefone e a '
-            'senha são apagados e os pontos são perdidos; os atendimentos '
-            'que já aconteceram ficam só nos relatórios da barbearia, sem '
-            'identificar você. Com agendamento em aberto ou valor pendente '
-            'com a barbearia, é preciso resolver isso antes. A conta do '
-            'barbeiro é excluída pelo administrador;',
+        '•  excluir a sua conta, no Perfil. O nome, o e-mail, o telefone, a '
+            'foto e a senha são apagados e os pontos são perdidos; os '
+            'atendimentos que já aconteceram ficam só nos relatórios da '
+            'barbearia, sem identificar você. Com agendamento em aberto ou '
+            'valor pendente com a barbearia, é preciso resolver isso antes. A '
+            'conta do barbeiro é excluída pelo administrador;',
         '•  tirar dúvidas com o suporte, pelo Perfil. O barbeiro fala com o '
             'administrador da barbearia.',
       ],

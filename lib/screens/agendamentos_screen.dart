@@ -8,6 +8,7 @@ import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/paginacao.dart';
 import 'acesso_negado_screen.dart';
 
 /// Agendamentos, separados em duas abas: em aberto (ou próximos) e histórico.
@@ -62,23 +63,53 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _abas;
 
-  /// Cada agendamento já vem com o seu pagamento (uma consulta só).
-  List<Agendamento> _agendamentos = [];
+  /// A primeira aba, inteira. Para o cliente ("Próximos"), o que ainda vai
+  /// acontecer. Para a barbearia ("Em aberto"), tudo o que ainda não teve
+  /// desfecho — inclusive o que já passou do horário e precisa ser concluído
+  /// ou marcado como falta. Cada agendamento já vem com o seu pagamento (uma
+  /// consulta só).
+  List<Agendamento> _emAberto = [];
+
+  /// O histórico, de 10 em 10: ao chegar ao fim da lista, vem a próxima
+  /// página. Na agenda geral, já com os filtros.
+  late final _historico = Paginacao<Agendamento>(
+    buscar: _buscarHistorico,
+    chave: (a) => a.id,
+  );
+
+  /// Na agenda geral, com o histórico filtrado vazio: há histórico sem os
+  /// filtros? Separa "Nada com esses filtros" de "Histórico vazio".
+  bool _temHistoricoSemFiltro = false;
+
+  /// Atendimentos de hoje do barbeiro (o número na faixa do topo), contados
+  /// no banco: o histórico não vem inteiro.
+  int _doDia = 0;
+
   bool _carregando = true;
   String? _erro;
 
   /// Barbeiros da barbearia, para o filtro da agenda geral.
   List<Barbeiro> _barbeiros = [];
 
-  /// Filtros da agenda geral, nas duas abas: o barbeiro e o período (de um
-  /// dia até outro). `null` mostra todos.
+  /// Filtros da agenda do barbeiro e da agenda geral. O barbeiro (só na
+  /// agenda geral) e o período (de um dia até outro) valem nas duas abas;
+  /// `null` mostra todos. O status vale só no histórico.
   int? _filtroBarbeiro;
   DateTimeRange? _periodo;
+  FiltroDeStatus _filtroStatus = FiltroDeStatus.todos;
 
   @override
   void initState() {
     super.initState();
     _abas = TabController(length: 2, vsync: this);
+    // O select de status só aparece na aba do histórico: a tela muda quando
+    // a aba muda, e não a cada passo do deslizar entre elas.
+    var aba = _abas.index;
+    _abas.addListener(() {
+      if (_abas.index == aba || !mounted) return;
+      aba = _abas.index;
+      setState(() {});
+    });
     _carregar();
   }
 
@@ -98,6 +129,11 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// agenda geral: recebe pagamentos, conclui, registra falta e cancela sem
   /// multa.
   bool get _pelaBarbearia => _modoBarbeiro || _agendaGeral;
+
+  /// A barbearia filtra a agenda; o cliente, não.
+  bool get _temFiltros => _pelaBarbearia;
+
+  bool get _noHistorico => _abas.index == 1;
 
   Future<void> _carregar() async {
     final auth = AuthService.instance;
@@ -122,19 +158,23 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
     try {
       final db = DatabaseService.instance;
-      final lista = _agendaGeral
-          ? await db.listarTodosAgendamentos()
-          : _modoBarbeiro
-          ? await db.listarAgendamentosBarbeiro(idBarbeiro!)
-          : await db.listarAgendamentosCliente(usuario!.id!);
+      final emAberto = await db.listarAgendaEmAberto(
+        idCliente: _pelaBarbearia ? null : usuario!.id!,
+        idBarbeiro: _modoBarbeiro ? idBarbeiro : null,
+      );
       final barbeiros = _agendaGeral
           ? await db.listarBarbeiros()
           : const <Barbeiro>[];
+      final doDia = _modoBarbeiro
+          ? await db.contarAtendimentosDoDia(idBarbeiro!, DateTime.now())
+          : 0;
+      await _carregarHistorico();
 
       if (!mounted) return;
       setState(() {
-        _agendamentos = lista;
+        _emAberto = emAberto;
         _barbeiros = barbeiros;
+        _doDia = doDia;
         _carregando = false;
       });
     } catch (e) {
@@ -145,6 +185,64 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         _carregando = false;
         _erro = mensagemDeErro(e, 'Não foi possível carregar os agendamentos');
       });
+    }
+  }
+
+  /// Uma página do histórico de quem usa a tela; na agenda do barbeiro e na
+  /// geral, com os filtros.
+  Future<List<Agendamento>> _buscarHistorico(int deslocamento, int limite) {
+    final auth = AuthService.instance;
+    final periodo = _temFiltros ? _periodo : null;
+    return DatabaseService.instance.listarHistoricoAgenda(
+      idCliente: _pelaBarbearia ? null : auth.usuarioAtual?.id,
+      idBarbeiro: _agendaGeral ? _filtroBarbeiro : auth.barbeiroAtual?.id,
+      de: periodo?.start,
+      ate: periodo?.end,
+      status: _temFiltros ? _filtroStatus : FiltroDeStatus.todos,
+      deslocamento: deslocamento,
+      limite: limite,
+    );
+  }
+
+  /// Volta o histórico à primeira página (ao abrir, depois de uma ação e ao
+  /// trocar os filtros).
+  Future<void> _carregarHistorico() async {
+    await _historico.reiniciar();
+    final filtrado =
+        _temFiltros &&
+        (_filtroBarbeiro != null ||
+            _periodo != null ||
+            _filtroStatus != FiltroDeStatus.todos);
+    _temHistoricoSemFiltro =
+        filtrado &&
+        _historico.itens.isEmpty &&
+        (await DatabaseService.instance.listarHistoricoAgenda(
+          idBarbeiro: _modoBarbeiro
+              ? AuthService.instance.barbeiroAtual?.id
+              : null,
+          limite: 1,
+        )).isNotEmpty;
+  }
+
+  /// Os filtros mudaram: o histórico recomeça com eles.
+  Future<void> _filtrar() async {
+    setState(() {});
+    try {
+      await _carregarHistorico();
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar o histórico'));
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// A rolagem do histórico chegou perto do fim: vem a próxima página.
+  Future<void> _carregarMaisHistorico() async {
+    try {
+      if (await _historico.carregarMais() && mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar o histórico'));
     }
   }
 
@@ -165,7 +263,47 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final ehMulta = pagamento.natureza == NaturezaPagamento.multa;
 
     // O balcão é o único momento em que se sabe como o cliente pagou.
-    final metodo = await showDialog<MetodoPagamento>(
+    final metodo = await _perguntarComoPagou(
+      ehMulta
+          ? 'Multa de ${formatarReal(pagamento.valor)} de '
+                '${a.cliente?.nome ?? 'este cliente'} '
+                '${_motivoDaMulta(a)}. Multa não gera pontos de '
+                'fidelidade.'
+          : '${formatarReal(pagamento.valor)} de '
+                '${a.cliente?.nome ?? 'este cliente'}. '
+                'Ao confirmar, o cliente recebe '
+                '${pagamento.valor.round()} pontos de fidelidade.',
+    );
+    if (metodo == null) return;
+
+    try {
+      final recebido = await DatabaseService.instance.confirmarPagamento(
+        idPagamento,
+        metodo: metodo.label,
+      );
+      if (!mounted) return;
+      if (!recebido) {
+        mostrarErro(context, 'Este pagamento não está mais pendente');
+      } else {
+        mostrarSucesso(
+          context,
+          ehMulta
+              ? 'Multa recebida de ${a.cliente?.nome ?? 'o cliente'}'
+              : 'Recebimento confirmado · +${pagamento.valor.round()} '
+                    'pontos para ${a.cliente?.nome ?? 'o cliente'}',
+        );
+      }
+      await _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao confirmar o pagamento'));
+    }
+  }
+
+  /// Pergunta como o cliente pagou no balcão (Pix, Cartão ou Dinheiro), com
+  /// o [texto] explicando o valor. `null` se a barbearia desistir.
+  Future<MetodoPagamento?> _perguntarComoPagou(String texto) {
+    return showDialog<MetodoPagamento>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Como o cliente pagou?', style: AppTheme.titulo(size: 18)),
@@ -174,15 +312,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              ehMulta
-                  ? 'Multa de ${formatarReal(pagamento.valor)} de '
-                        '${a.cliente?.nome ?? 'este cliente'} '
-                        '${_motivoDaMulta(a)}. Multa não gera pontos de '
-                        'fidelidade.'
-                  : '${formatarReal(pagamento.valor)} de '
-                        '${a.cliente?.nome ?? 'este cliente'}. '
-                        'Ao confirmar, o cliente recebe '
-                        '${pagamento.valor.round()} pontos de fidelidade.',
+              texto,
               style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,
@@ -236,52 +366,6 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         ],
       ),
     );
-
-    if (metodo == null) return;
-
-    try {
-      final recebido = await DatabaseService.instance.confirmarPagamento(
-        idPagamento,
-        metodo: metodo.label,
-      );
-      if (!mounted) return;
-      if (!recebido) {
-        mostrarErro(context, 'Este pagamento não está mais pendente');
-      } else {
-        mostrarSucesso(
-          context,
-          ehMulta
-              ? 'Multa recebida de ${a.cliente?.nome ?? 'o cliente'}'
-              : 'Recebimento confirmado · +${pagamento.valor.round()} '
-                    'pontos para ${a.cliente?.nome ?? 'o cliente'}',
-        );
-      }
-      await _carregar();
-    } catch (e) {
-      if (!mounted) return;
-      mostrarErro(context, mensagemDeErro(e, 'Erro ao confirmar o pagamento'));
-    }
-  }
-
-  /// Primeira aba.
-  ///
-  /// Para o cliente, o que ainda vai acontecer. Para a barbearia, tudo o que
-  /// ainda não teve desfecho — inclusive o que já passou do horário e precisa
-  /// ser concluído ou marcado como falta. Antes esses atendimentos caíam no
-  /// histórico sem nenhuma ação e ficavam "confirmados" para sempre.
-  bool _naPrimeiraAba(Agendamento a, DateTime agora) =>
-      _pelaBarbearia ? a.emAberto : a.emAberto && !a.jaComecou(agora);
-
-  List<Agendamento> get _proximos {
-    final agora = DateTime.now();
-    return _agendamentos.where((a) => _naPrimeiraAba(a, agora)).toList()
-      ..sort((a, b) => a.data.compareTo(b.data));
-  }
-
-  List<Agendamento> get _historico {
-    final agora = DateTime.now();
-    return _agendamentos.where((a) => !_naPrimeiraAba(a, agora)).toList()
-      ..sort((a, b) => b.data.compareTo(a.data));
   }
 
   /// O serviço foi trocado por pontos (resgate), e não pago em dinheiro. Na
@@ -509,26 +593,19 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             : _modoBarbeiro
             ? 'Minha agenda'
             : 'Meus agendamentos',
-        acoes: _modoBarbeiro
-            ? [
-                BotaoVidro(
-                  icone: Icons.logout_rounded,
-                  dica: 'Sair',
-                  onPressed: _sair,
-                ),
-              ]
-            : null,
+        // Sair fica só no Perfil, como para o cliente e o administrador.
       ),
       body: Column(
         children: [
           if (_modoBarbeiro) _faixaProfissional(),
-          // Abas em pílula, com o estilo do tema.
+          // Abas com os cantos arredondados, como os filtros, e o estilo do
+          // tema.
           Container(
             margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             padding: const EdgeInsets.all(4),
-            decoration: const ShapeDecoration(
+            decoration: BoxDecoration(
               color: AppColors.card,
-              shape: StadiumBorder(),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: TabBar(
               controller: _abas,
@@ -541,7 +618,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ],
             ),
           ),
-          if (_agendaGeral && !_carregando && _erro == null) _filtros(),
+          if (_temFiltros && !_carregando && _erro == null) _filtros(),
           Expanded(
             child: _carregando
                 ? const Center(
@@ -552,8 +629,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 : TabBarView(
                     controller: _abas,
                     children: [
-                      _aba(_proximos, primeiraAba: true),
-                      _aba(_historico, primeiraAba: false),
+                      _aba(_emAberto, primeiraAba: true),
+                      _abaHistorico(),
                     ],
                   ),
           ),
@@ -564,11 +641,12 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
 
   static DateTime _dia(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Filtros da agenda geral: o barbeiro num select e, ao lado, o calendário
-  /// do período. Com um período escolhido, ele aparece embaixo, com o botão
-  /// de limpar.
+  /// Filtros da agenda do barbeiro e da geral: na geral, o barbeiro num
+  /// select; no histórico, o status; e, ao lado, o calendário do período.
+  /// Com um período escolhido, ele aparece embaixo, com o botão de limpar.
   Widget _filtros() {
     final periodo = _periodo;
+    final status = _noHistorico ? _selectStatus() : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       child: Column(
@@ -576,11 +654,21 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
         children: [
           Row(
             children: [
-              Expanded(child: _selectBarbeiro()),
+              if (_agendaGeral)
+                Expanded(child: _selectBarbeiro())
+              else if (status != null)
+                Expanded(child: status)
+              else
+                const Spacer(),
               const SizedBox(width: 10),
               _botaoCalendario(),
             ],
           ),
+          // Na agenda geral, o status vem embaixo do barbeiro.
+          if (_agendaGeral && status != null) ...[
+            const SizedBox(height: 10),
+            status,
+          ],
           if (periodo != null) ...[
             const SizedBox(height: 10),
             _etiquetaPeriodo(periodo),
@@ -595,50 +683,126 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     final valor = _barbeiros.any((b) => b.id == _filtroBarbeiro)
         ? _filtroBarbeiro
         : null;
-    final opcoes = <(int?, String)>[
-      (null, 'Todos os barbeiros'),
-      for (final b in _barbeiros) (b.id, b.nome),
-    ];
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.only(left: 14, right: 8),
-      decoration: BoxDecoration(
-        color: AppColors.card2,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int?>(
-          value: valor,
-          isExpanded: true,
-          dropdownColor: AppColors.card2,
-          borderRadius: BorderRadius.circular(16),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppColors.muted,
+    return _caixaDeSelecao<int?>(
+      valor: valor,
+      opcoes: [
+        (null, 'Todos os barbeiros', Icons.groups_outlined),
+        for (final b in _barbeiros)
+          (b.id, b.nome, Icons.person_outline_rounded),
+      ],
+      aoMudar: (id) {
+        if (id == _filtroBarbeiro) return;
+        _filtroBarbeiro = id;
+        _filtrar();
+      },
+      dica: 'Filtrar por barbeiro',
+    );
+  }
+
+  /// O status do histórico: todos, quem está devendo ou um desfecho.
+  Widget _selectStatus() {
+    return _caixaDeSelecao<FiltroDeStatus>(
+      valor: _filtroStatus,
+      opcoes: [
+        for (final f in FiltroDeStatus.values)
+          (
+            f,
+            f.label,
+            switch (f) {
+              FiltroDeStatus.todos => Icons.filter_list_rounded,
+              FiltroDeStatus.devendo => Icons.payments_outlined,
+              FiltroDeStatus.concluidos => Icons.check_circle_outline,
+              FiltroDeStatus.cancelados => Icons.close_rounded,
+              FiltroDeStatus.faltas => Icons.person_off_outlined,
+            },
           ),
-          style: AppTheme.texto(size: 14, weight: FontWeight.w600),
-          items: [
-            for (final (id, nome) in opcoes)
-              DropdownMenuItem(
-                value: id,
+      ],
+      aoMudar: (f) {
+        if (f == null || f == _filtroStatus) return;
+        _filtroStatus = f;
+        _filtrar();
+      },
+      dica: 'Filtrar por status',
+    );
+  }
+
+  /// Um select dos filtros, com um ícone em cada opção. O menu abre embaixo
+  /// do campo, da mesma largura, com a opção escolhida marcada.
+  Widget _caixaDeSelecao<T>({
+    required T valor,
+    required List<(T, String, IconData)> opcoes,
+    required ValueChanged<T?> aoMudar,
+    required String dica,
+  }) {
+    final (_, nomeAtual, iconeAtual) = opcoes.firstWhere(
+      (o) => o.$1 == valor,
+      orElse: () => opcoes.first,
+    );
+    // O efeito do toque fica no próprio campo, com os mesmos cantos
+    // arredondados (antes vazava pelos cantos, de fora do campo).
+    final cantos = BorderRadius.circular(16);
+    return LayoutBuilder(
+      builder: (_, limites) => Material(
+        color: AppColors.card2,
+        borderRadius: cantos,
+        child: PopupMenuButton<T>(
+          tooltip: dica,
+          borderRadius: cantos,
+          initialValue: valor,
+          position: PopupMenuPosition.under,
+          offset: const Offset(0, 6),
+          color: AppColors.card2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          // A faixa da opção marcada não passa dos cantos arredondados.
+          clipBehavior: Clip.antiAlias,
+          constraints: BoxConstraints.tightFor(width: limites.maxWidth),
+          onSelected: aoMudar,
+          itemBuilder: (_) => [
+            for (final (opcao, nome, icone) in opcoes)
+              PopupMenuItem<T>(
+                value: opcao,
                 child: Row(
                   children: [
-                    Icon(
-                      id == null
-                          ? Icons.groups_outlined
-                          : Icons.person_outline_rounded,
-                      size: 18,
-                      color: AppColors.muted,
-                    ),
+                    Icon(icone, size: 18, color: AppColors.muted),
                     const SizedBox(width: 10),
                     Flexible(
-                      child: Text(nome, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        nome,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTheme.texto(
+                          size: 14,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
           ],
-          onChanged: (id) => setState(() => _filtroBarbeiro = id),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.only(left: 14, right: 8),
+            child: Row(
+              children: [
+                Icon(iconeAtual, size: 18, color: AppColors.muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    nomeAtual,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.texto(size: 14, weight: FontWeight.w600),
+                  ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.muted,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -676,7 +840,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   Future<void> _escolherPeriodo() async {
     final periodo = await widget.escolherPeriodo(context, _periodo);
     if (periodo == null || !mounted) return;
-    setState(() => _periodo = periodo);
+    _periodo = periodo;
+    _filtrar();
   }
 
   /// "24/10/2026 até 27/10/2026" (ou só a data, num dia só) e o botão de
@@ -714,17 +879,20 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               size: 18,
               color: AppColors.amarelo,
             ),
-            onPressed: () => setState(() => _periodo = null),
+            onPressed: () {
+              _periodo = null;
+              _filtrar();
+            },
           ),
         ],
       ),
     );
   }
 
-  /// Uma aba da agenda. Na agenda geral, só com o barbeiro e o período
-  /// escolhidos nos filtros.
+  /// A primeira aba. Na agenda do barbeiro e na geral, só com o barbeiro e
+  /// o período escolhidos nos filtros.
   Widget _aba(List<Agendamento> itens, {required bool primeiraAba}) {
-    if (!_agendaGeral) return _lista(itens, primeiraAba: primeiraAba);
+    if (!_temFiltros) return _lista(itens, primeiraAba: primeiraAba);
 
     final periodo = _periodo;
     final filtrados = itens.where((a) {
@@ -744,10 +912,19 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     );
   }
 
+  /// O histórico, já filtrado pelo banco, de 10 em 10.
+  Widget _abaHistorico() => _lista(
+    _historico.itens,
+    primeiraAba: false,
+    vazioPeloFiltro: _temHistoricoSemFiltro && _historico.itens.isEmpty,
+    paginado: true,
+  );
+
   Widget _lista(
     List<Agendamento> itens, {
     required bool primeiraAba,
     bool vazioPeloFiltro = false,
+    bool paginado = false,
   }) {
     if (vazioPeloFiltro) {
       return const EstadoVazio(
@@ -777,7 +954,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       );
     }
 
-    return RefreshIndicator(
+    final temMais = paginado && _historico.temMais;
+    final lista = RefreshIndicator(
       color: AppColors.amarelo,
       backgroundColor: AppColors.card,
       onRefresh: _carregar,
@@ -791,18 +969,33 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
             20,
             20 + MediaQuery.paddingOf(context).bottom,
           ),
-          itemCount: itens.length,
+          // No histórico, o indicador da próxima página vem por último.
+          itemCount: itens.length + (temMais ? 1 : 0),
           separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, i) =>
-              ItemDaCascata(ordem: i, child: _card(itens[i])),
+          itemBuilder: (_, i) => i == itens.length
+              ? FimDaPaginacao(temMais: temMais)
+              : ItemDaCascata(ordem: i, child: _card(itens[i])),
         ),
       ),
+    );
+    if (!paginado) return lista;
+    return CarregarAoChegarNoFim(
+      aoChegarNoFim: _carregarMaisHistorico,
+      child: lista,
     );
   }
 
   Widget _card(Agendamento a) {
     final agora = DateTime.now();
     final aguardando = a.aguardandoConclusao(agora);
+    // O cliente vê o que falta da parte dele: pagar no balcão. A barbearia
+    // vê o que falta da parte dela: concluir (e o "Receber", logo abaixo).
+    final etiqueta = !_pelaBarbearia && a.aguardandoPagamento(agora)
+        ? 'Aguardando pagamento'
+        : aguardando
+        ? 'Aguardando conclusão'
+        : a.status.label;
+    final faixaPagamento = _statusPagamento(a);
     final corStatus = switch (a.status) {
       StatusAgendamento.confirmado =>
         aguardando ? AppColors.amarelo : AppColors.green,
@@ -876,12 +1069,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                         weight: FontWeight.w600,
                       ),
                     ),
-                    Etiqueta(
-                      texto: aguardando
-                          ? 'Aguardando conclusão'
-                          : a.status.label,
-                      cor: corStatus,
-                    ),
+                    Etiqueta(texto: etiqueta, cor: corStatus),
                   ],
                 ),
               ),
@@ -911,8 +1099,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
           _linha(Icons.event_outlined, formatarDataHora(a.data)),
           const SizedBox(height: 6),
           _linha(Icons.payments_outlined, formatarReal(a.valor)),
-          const SizedBox(height: 10),
-          _statusPagamento(a),
+          if (faixaPagamento != null) ...[
+            const SizedBox(height: 10),
+            faixaPagamento,
+          ],
           if (acoes.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(color: AppColors.border, height: 1),
@@ -947,9 +1137,8 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
       builder: (ctx) => AlertDialog(
         title: Text('Registrar falta?', style: AppTheme.titulo(size: 18)),
         content: Text(
-          '${a.cliente?.nome ?? 'O cliente'} não compareceu ao horário de '
-          '${formatarHora(a.data)}. $penalidade, como num cancelamento '
-          'fora do prazo.',
+          '${a.cliente?.nome ?? 'O cliente'} não compareceu ao horário das '
+          '${formatarHora(a.data)}. $penalidade.',
           style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
@@ -996,18 +1185,48 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   Future<void> _finalizar(Agendamento a) async {
     if (!_pelaBarbearia || a.id == null) return;
 
-    final pendente = a.pagamento?.pendente ?? false;
+    // O cliente não sai sem pagar (regra de negócio 13): o serviço de pagar
+    // no balcão é recebido e concluído de uma vez.
+    final pagamento = a.pagamento;
+    if (pagamento != null &&
+        pagamento.pendente &&
+        pagamento.natureza == NaturezaPagamento.servico) {
+      final metodo = await _perguntarComoPagou(
+        '${formatarReal(pagamento.valor)} de '
+        '${a.cliente?.nome ?? 'este cliente'}. Para concluir, registre o '
+        'pagamento: o cliente recebe ${pagamento.valor.round()} pontos de '
+        'fidelidade.',
+      );
+      if (metodo == null) return;
+      try {
+        await DatabaseService.instance.finalizarAgendamento(
+          a.id!,
+          metodo: metodo.label,
+        );
+        if (!mounted) return;
+        mostrarSucesso(
+          context,
+          'Atendimento concluído · +${pagamento.valor.round()} pontos para '
+          '${a.cliente?.nome ?? 'o cliente'}',
+        );
+        await _carregar();
+      } catch (e) {
+        if (!mounted) return;
+        mostrarErro(
+          context,
+          mensagemDeErro(e, 'Erro ao concluir o atendimento'),
+        );
+      }
+      return;
+    }
 
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Concluir atendimento?', style: AppTheme.titulo(size: 18)),
         content: Text(
-          pendente
-              ? 'O pagamento deste atendimento ainda está pendente. '
-                    'Conclua apenas se já registrou o recebimento.'
-              : 'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
-                    'marcado como concluído e sairá da lista de próximos.',
+          'O atendimento de ${a.cliente?.nome ?? 'este cliente'} será '
+          'marcado como concluído e sairá da lista de próximos.',
           style: AppTheme.texto(size: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
@@ -1049,16 +1268,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
   /// Cabeçalho com o profissional logado e o movimento de hoje.
   Widget _faixaProfissional() {
     final b = AuthService.instance.barbeiroAtual;
-    final hoje = DateTime.now();
-    final doDia = _agendamentos
-        .where(
-          (a) =>
-              a.status != StatusAgendamento.cancelado &&
-              a.data.year == hoje.year &&
-              a.data.month == hoje.month &&
-              a.data.day == hoje.day,
-        )
-        .length;
+    final doDia = _doDia;
 
     return Container(
       width: double.infinity,
@@ -1110,14 +1320,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     );
   }
 
-  Future<void> _sair() async {
-    await AuthService.instance.logout();
-    if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
-  }
-
   /// Faixa com a situação do pagamento e, se pendente, o botão de quitar.
-  Widget _statusPagamento(Agendamento a) {
+  /// Nula no serviço que o cliente vai pagar no balcão: para ele, a etiqueta
+  /// "Aguardando pagamento" já diz isso, depois do horário.
+  Widget? _statusPagamento(Agendamento a) {
     final p = a.pagamento;
 
     if (p == null) {
@@ -1219,6 +1425,10 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
     }
 
     final ehMulta = p.natureza == NaturezaPagamento.multa;
+    if (!_pelaBarbearia && !ehMulta) return null;
+    // O serviço de um atendimento em aberto é recebido no Concluir (regra
+    // de negócio 13); o Receber fica para as multas.
+    final recebeAoConcluir = !ehMulta && a.emAberto;
 
     // Só a barbearia confirma o recebimento: quem está no caixa é quem dá a
     // baixa. O cliente apenas acompanha a situação.
@@ -1238,13 +1448,15 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
                 (true, true) =>
                   'Multa de ${formatarReal(p.valor)} pendente — confirme '
                       'ao receber',
+                // O Concluir só aparece a partir do dia do atendimento.
+                (true, false) when recebeAoConcluir =>
+                  a.podeFinalizar(DateTime.now())
+                      ? 'Pagamento no balcão — registre ao concluir'
+                      : 'Pagamento no balcão, no dia do atendimento',
                 (true, false) => 'Pagamento pendente — confirme ao receber',
-                (false, true) =>
+                (false, _) =>
                   'Multa de ${formatarReal(p.valor)} ${_motivoDaMulta(a)}. '
                       'Pague no balcão.',
-                (false, false) =>
-                  'Pague no balcão no dia do atendimento. Os '
-                      '${p.valor.round()} pontos entram após a confirmação.',
               },
               style: AppTheme.texto(
                 size: 11,
@@ -1253,7 +1465,7 @@ class _AgendamentosScreenState extends State<AgendamentosScreen>
               ),
             ),
           ),
-          if (_pelaBarbearia) ...[
+          if (_pelaBarbearia && !recebeAoConcluir) ...[
             const SizedBox(width: 6),
             BotaoPrincipal(
               texto: 'Receber',

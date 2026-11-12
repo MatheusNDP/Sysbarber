@@ -40,20 +40,8 @@ barbearia**: o dono cria a conta de administrador com o próprio nome, e-mail,
 telefone e senha (regra 15), aceita os termos de uso (regra 18) e já entra
 com ela.
 
-A configuração tem a opção **"Começar com dados de exemplo"**, útil para testar
-ou apresentar o app. Marcada, ela cria 5 serviços e 3 barbeiros, que entram com
-estas contas e veem a própria agenda e o Perfil (regra 17):
-
-| Barbeiro | E-mail de acesso | Senha |
-|---|---|---|
-| Carlos Eduardo | `carlos.eduardo@sysbarber.com` | `barbeiro123` |
-| Rafael Souza | `rafael.souza@sysbarber.com` | `barbeiro123` |
-| Marcos Lima | `marcos.lima@sysbarber.com` | `barbeiro123` |
-
-**Marcos Lima começa indisponível**, para demonstrar a regra 14: ele aparece
-apagado na escolha do profissional, mas entra no app normalmente. Desmarcada a
-opção, a barbearia começa vazia: o administrador cadastra os próprios
-serviços e convida os barbeiros (regra 10).
+A barbearia começa vazia: o administrador cadastra os serviços e convida os
+barbeiros (regra 10), que criam a própria conta com o código do convite.
 
 Contas criadas pelo formulário de cadastro nascem **sempre como cliente
 comum** e não enxergam a área administrativa.
@@ -112,7 +100,11 @@ idêntica com ou sem internet — importante para a apresentação. O SMS da
 recuperação de senha é simulado (regra 16). Os botões do [Suporte](#suporte),
 no Perfil, também não fazem requisição: só abrem o WhatsApp ou o app de e-mail
 do aparelho, e são eles que usam a internet. O lembrete do horário (regra 20) é
-uma notificação local, agendada no próprio aparelho, sem internet.
+uma notificação local, agendada no próprio aparelho, sem internet. Os gráficos
+e o PDF dos Relatórios também são feitos no próprio aparelho, pelas
+bibliotecas `fl_chart` (licença MIT) e `pdf` (licença Apache 2.0); o PDF só
+sai dele pelo compartilhar do Android, quando o administrador escolhe para
+onde mandar.
 
 ### Pensado para ser online
 
@@ -133,8 +125,7 @@ prática:
   mesmo aparelho, cada um entrando com a própria conta.
 - **Cada pessoa sai da conta ao terminar.** A sessão fica salva, e o app
   reabre direto na última conta usada. Como na demonstração todos usam o mesmo
-  aparelho, quem termina toca em **Sair**, no Perfil (o barbeiro também tem o
-  ícone de saída na própria agenda).
+  aparelho, quem termina toca em **Sair**, no Perfil.
 
 O `DatabaseService` é a camada que o servidor substituiria: nenhuma tela
 executa SQL, e as regras de negócio são conferidas por ele (veja
@@ -150,20 +141,21 @@ dados compartilhados entre os aparelhos, fica fora do escopo deste trabalho
 flutter test
 ```
 
-São **413 testes** no total:
+São **454 testes** no total:
 
 | Suíte | Testes | Conteúdo |
 |---|---|---|
-| `test/unit_test.dart` | 28 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele, do convite do barbeiro, com o código digitado, e da foto do barbeiro), enums, regras de estado do agendamento e os lembretes do horário (2 horas antes, só dos agendamentos em aberto) |
+| `test/unit_test.dart` | 30 | Hash de senha (PBKDF2, vetor da RFC 7914, formato legado), serialização (inclusive do código de nova senha, da origem e da validade dele, do convite do barbeiro, com o código digitado, e da foto do barbeiro e do cliente), enums, regras de estado do agendamento (inclusive o "Aguardando pagamento" do cliente) e os lembretes do horário (2 horas antes, só dos agendamentos em aberto) |
 | `test/validators_test.dart` | 24 | Validação de cadastro, telefone, dados, contato e foto do barbeiro (formato e tamanho) e cartão (Luhn) |
-| `test/formatters_test.dart` | 22 | Máscaras de telefone, moeda, cartão (até 19 dígitos, Amex) e código do convite, `formatarReal`, `formatarPercentual` (com vírgula), `formatarDataExtenso` (com maiúscula só no começo da frase), `mascararTelefone` e `mascararEmail` (de `common_widgets.dart`) |
+| `test/formatters_test.dart` | 23 | Máscaras de telefone, moeda, cartão (até 19 dígitos, Amex) e código do convite, `formatarReal`, `formatarPercentual` (com vírgula), `formatarDataExtenso` (com maiúscula só no começo da frase), `mascararTelefone`, `mascararEmail` e a saudação do Início conforme a hora (de `common_widgets.dart`) |
 | `test/erros_test.dart` | 3 | Mensagens de erro sem detalhes técnicos |
 | `test/email_test.dart` | 5 | Envio do código por e-mail: a chamada à API do EmailJS (contra um servidor local), recusa e falta de conexão, e-mail simulado e o simulado como padrão sem a chave no build |
 | `test/suporte_test.dart` | 5 | Suporte do Perfil: formato do contato, mensagem pronta, links do WhatsApp e do e-mail (sem "+" no lugar dos espaços) e o link que não abre |
 | `test/animacoes_test.dart` | 9 | Animações de entrada: a cascata (a ordem dos itens, o item montado depois que ela terminou e o item fora dela), o "Remover animações" do Android, a contagem dos pontos (a partir do 0 e do valor anterior, com o valor final para o leitor de tela), a barra de progresso e o corte da tesoura na abertura (a pausa, a tesoura atravessando a tela, o conteúdo só com as metades se abrindo e, sem animações, a abertura direto) |
+| `test/relatorio_pdf_test.dart` | 3 | O PDF dos Relatórios: o arquivo inteiro (com as fontes e os gráficos), o PDF sem dados, o nome do arquivo e o período descrito |
 | `test/android_test.dart` | 5 | Identidade no Android: as cores iguais às do app, a tela nativa da abertura só em grafite (também a do Android 12 em diante, sem ícone), o nome "SysBarber", o ícone adaptativo e a tesoura como ícone das notificações, mantida no APK release |
-| `test/telas_test.dart` | 102 | Telas: primeira abertura e configuração inicial, o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos (inclusive o nome do serviço inteiro no card do agendamento, com a etiqueta descendo para a linha de baixo, e a régua de dias crescendo com a fonte, medidos com a Montserrat do app), acessibilidade, avisos de desistência num resgate, os textos da multa (para quem ia pagar na barbearia, só a multa a pagar, sem "multa retida"; para quem já pagou, a multa retida e o estorno; e a multa de uma falta descrita como falta, para o cliente e no "Receber"), o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, a escolha do profissional sem nenhum barbeiro (o aviso "Nenhum profissional disponível"), ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android; só a aba atual com o nome, ao lado do ícone, e cada opção com 56 de altura; o pulinho do ícone, também na aba atual; a tesoura fechando e abrindo; tudo direto com "Remover animações"; a margem igual à das telas, menor em celular estreito; e nada estourando em celular pequeno com fonte grande, também no meio da troca), o ícone do serviço escolhido entre os ícones de linha, o aviso ao salvar um serviço com mais de 180 minutos, as abas e o Perfil do administrador e do barbeiro (e o aviso de sair da conta, sem falar de agendamentos), os filtros da agenda geral (select de barbeiro e calendário de período), o convite do barbeiro (sheet, com o erro ao gerar e o "Código copiado" no próprio sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto, com a foto do barbeiro entre os dados guardados, e o item no Perfil de cada perfil) a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) e o último serviço do Início (só o concluído mais recente, sem cancelamentos e faltas, e nada sem um atendimento concluído; o "Repetir" direto no horário com o mesmo serviço e barbeiro ou, com o barbeiro indisponível, na escolha do profissional) e a foto do barbeiro (posta pela galeria, a desistência na câmera, remover, o aviso sem câmera, só no Perfil do barbeiro, e mostrada na escolha do profissional, em Gerenciar Barbeiros, na agenda dele e na confirmação, também pelo "Repetir" e num reagendamento) |
-| `integration_test/database_integration_test.dart` | 210 | Configuração inicial, CRUD (inclusive a duração de um serviço, de 1 a 180 minutos), aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, reserva, pagamentos, cancelamento, fidelidade, relatórios, recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro e o intervalo de 1 minuto entre os envios, também depois de um código cancelado pelas tentativas erradas), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador), a disponibilidade do barbeiro na lista do cliente (para o "Repetir" do último serviço), a foto do barbeiro (gravar e remover, a recusa do que não é foto ou passa de 1 MB, só o barbeiro logado, os de exemplo sem foto e a foto que sai com o barbeiro excluído) e migrações |
+| `test/telas_test.dart` | 118 | Telas: primeira abertura e configuração inicial (só o administrador, sem a opção de dados de exemplo), o corte da tesoura só ao abrir o app (e não ao voltar para a abertura), a sessão salva entrando só depois do corte e com a abertura centralizada, login sem credenciais à mostra, recuperação de senha (por e-mail e por SMS, simulados, entrada com o código da barbearia e liberação pelo administrador), carregamento, erro com "tentar novamente" em todas as telas que carregam dados, layout com fonte grande e nomes longos (inclusive o nome do serviço inteiro no card do agendamento, com a etiqueta descendo para a linha de baixo, e a régua de dias crescendo com a fonte, medidos com a Montserrat do app), acessibilidade, avisos de desistência num resgate, os textos da multa (para quem ia pagar na barbearia, só a multa a pagar, sem "multa retida"; para quem já pagou, a multa retida e o estorno; e a multa de uma falta descrita como falta, para o cliente e no "Receber"), o termo "Concluído", a régua de dias, a agenda geral do administrador, os textos do pagamento na barbearia, o Suporte no fim do Perfil (cliente e administrador, WhatsApp e e-mail com a mensagem pronta, aviso sem app e celular pequeno), a escolha do profissional e Gerenciar Barbeiros sem nota dos barbeiros, a escolha do profissional sem nenhum barbeiro (o aviso "Nenhum profissional disponível"), ajustes visuais em celular pequeno, a barra de navegação fixa (troca de aba e voltar do Android; só a aba atual com o nome, ao lado do ícone, e cada opção com 56 de altura; o pulinho do ícone, também na aba atual; a tesoura fechando e abrindo; tudo direto com "Remover animações"; a margem igual à das telas, menor em celular estreito; e nada estourando em celular pequeno com fonte grande, também no meio da troca), o ícone do serviço escolhido entre os ícones de linha, o aviso ao salvar um serviço com mais de 180 minutos, as abas e o Perfil do administrador e do barbeiro (e o aviso de sair da conta, sem falar de agendamentos), os filtros da agenda (o barbeiro na agenda geral, o período e, no histórico, o status, também na agenda do barbeiro, com o menu abrindo embaixo do campo e o toque dentro dele), o convite do barbeiro (sheet, com o erro ao gerar e o "Código copiado" no próprio sheet, mensagem pronta, convites pendentes, outro código, cancelar, fechar pelo voltar e o barbeiro usando o código no login), a edição do barbeiro só com nome, especialidade e salário e a nova senha liberada para ele, o barbeiro trocando o próprio e-mail e telefone, os termos de uso (aceite no cadastro, o texto, com as fotos do cliente e do barbeiro entre os dados guardados e o PDF dos relatórios entre o que sai do aparelho, e o item no Perfil de cada perfil), a exclusão da conta pelo cliente (o que se perde, senha errada e a volta à abertura) e o reagendamento (o botão só até 1 hora antes e só para o cliente, e o caminho profissional → novo horário → confirmação → lista) e o lembrete do horário (a permissão pedida e o lembrete agendado ao reservar, e o lembrete apagado ao cancelar) e as animações de entrada (a abertura em cascata, o Início com os pontos contando e os serviços um depois do outro) e o último serviço do Início (só o concluído mais recente, sem cancelamentos e faltas, e nada sem um atendimento concluído; o "Repetir" direto no horário com o mesmo serviço e barbeiro ou, com o barbeiro indisponível, na escolha do profissional) e a foto do barbeiro (posta pela galeria, a desistência na câmera, remover, o aviso sem câmera, só no Perfil do barbeiro, e mostrada na escolha do profissional, em Gerenciar Barbeiros, na agenda dele e na confirmação, também pelo "Repetir" e num reagendamento); e os ajustes do teste final: a saudação do Início conforme a hora, o "Aguardando pagamento" do cliente sem o aviso de pagar no balcão, os cards do Perfil com um texto só, sem o Telefone, e só os Pontos, a foto do cliente (posta pela galeria, mostrada no Início e removida, e o administrador sem foto), a Fidelidade sem a linha da meta, a Minha agenda sem o botão de sair, o Concluir que pergunta como o cliente pagou (e a faixa do pagamento no balcão antes e a partir do dia), o aviso de falta só com a penalidade, a barra do barbeiro do tamanho das duas opções, a paginação (o histórico da agenda, o de pontos e Gerenciar Clientes, com a busca e a contagem no banco) e os Relatórios com os gráficos no lugar das listas e o PDF chegando ao compartilhar |
+| `integration_test/database_integration_test.dart` | 229 | Configuração inicial (só o administrador; a barbearia começa vazia), CRUD (inclusive a duração de um serviço, de 1 a 180 minutos), aceite dos termos de uso (cadastro, convite e configuração inicial) e exclusão da conta pelo cliente (dados apagados, pontos perdidos, atendimentos mantidos, e-mail livre e a recusa com senha errada, agendamento em aberto ou valor pendente), convite do barbeiro (código, validade de 7 dias, uso único, outro código, cancelamento, e-mail único e os dados conferidos no banco), agenda (dias, turnos e janela de 14 dias), agenda geral, as abas da agenda (a primeira inteira e o histórico de 10 em 10, sem repetir nem pular, com o barbeiro, o período e o status, inclusive "Devendo") e o número de hoje do barbeiro, reserva, pagamentos, concluir com o pagamento (a recusa sem dizer como o cliente pagou e o recebimento e a conclusão na mesma transação), cancelamento, fidelidade (o histórico de pontos de 10 em 10), relatórios (o faturamento por dia e por mês e o de cada serviço e barbeiro), recuperação de senha por SMS e por e-mail (inclusive a nova senha liberada para o barbeiro e o intervalo de 1 minuto entre os envios, também depois de um código cancelado pelas tentativas erradas), sessão, permissões de cada perfil (o administrador não agenda nem conta como cliente, edita só nome, especialidade e salário do barbeiro, e o barbeiro troca a própria senha, o e-mail e o telefone), reagendamento (prazo de 1 hora, só o próprio cliente e o que está em aberto, as regras de uma reserva no novo horário, o próprio horário fora das ocupações, o pagamento e o resgate mantidos), lembretes do horário (ao entrar, ao abrir o app, ao reservar, reagendar e cancelar, ao sair e para barbeiro e administrador), a disponibilidade do barbeiro na lista do cliente (para o "Repetir" do último serviço), a foto do barbeiro (gravar e remover, a recusa do que não é foto ou passa de 1 MB, só o barbeiro logado, os barbeiros de teste sem foto e a foto que sai com o barbeiro excluído), a foto do cliente (gravar e remover, a recusa do que não é foto ou passa de 1 MB, do administrador e de quem não existe, só o cliente logado e a foto apagada com a conta excluída), Gerenciar Clientes de 10 em 10, com a busca e a contagem no banco, e migrações (até a v10) |
 
 Os testes de integração usam **SQLite em memória** (`sqflite_common_ffi`), então
 cada caso roda isolado, sem tocar no banco real do aparelho. Rodam com as
@@ -172,8 +164,9 @@ iterações de PBKDF2, só para a suíte ser rápida — o formato do hash é o 
 
 O Flutter não executa `test/` e `integration_test/` na mesma invocação, então
 `test/database_integration_test.dart` apenas reexporta a suíte de integração —
-assim um único `flutter test` roda os 413 testes. Para rodar a suíte de
-integração em um dispositivo:
+assim um único `flutter test` roda os 454 testes. Para rodar a suíte de
+integração em um dispositivo (ela instala o app de teste no aparelho e o
+desinstala no fim, **apagando os dados do app que estiver nele**):
 
 ```bash
 flutter test integration_test -d emulator-5554
@@ -204,14 +197,17 @@ lib/
 │   ├── email.dart               # Envio do código por e-mail: EmailJS ou simulado
 │   ├── suporte.dart             # Contato do suporte, mensagem pronta e links do WhatsApp e do e-mail
 │   ├── lembretes.dart           # Lembrete do horário: cálculo e notificações locais
-│   ├── fotos.dart               # Foto do barbeiro: câmera ou galeria, já reduzida (image_picker)
+│   ├── fotos.dart               # Foto de perfil (cliente e barbeiro): câmera ou galeria, já reduzida (image_picker)
+│   ├── relatorio_pdf.dart       # PDF dos Relatórios (biblioteca pdf) e o compartilhar do Android (share_plus)
 │   ├── validators.dart          # Regras de validação (puras, testáveis)
 │   ├── formatters.dart          # Máscaras de entrada (telefone, moeda, cartão, validade e CVV)
 │   ├── erros.dart               # Tradução de exceções em mensagens ao usuário
 │   └── booking_flow.dart        # Rascunho do agendamento (novo, repetido ou reagendamento) em andamento
 ├── widgets/
 │   ├── common_widgets.dart      # Componentes reutilizáveis e formatação de valores e datas (formatarReal etc.)
-│   └── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso, o corte da abertura e a tesoura que abre e fecha
+│   ├── animacoes.dart           # Animações de entrada: cascata, contagem dos pontos, barra de progresso, o corte da abertura e a tesoura que abre e fecha
+│   ├── graficos_relatorio.dart  # Gráficos dos Relatórios (biblioteca fl_chart): faturamento no tempo, rosca e barras horizontais
+│   └── paginacao.dart           # Listas de 10 em 10: a próxima página ao chegar perto do fim
 └── screens/                     # 22 telas (uma por arquivo)
 ```
 
@@ -224,8 +220,9 @@ lib/
   falta) ficam no modelo `Agendamento` e valem igualmente para a tela e para o
   banco.
 - **Transações** — toda operação com mais de uma escrita (configuração
-  inicial, reserva, cancelamento, confirmação de pagamento, resgate, cadastro,
-  pedido e uso do código de nova senha) acontece numa
+  inicial, reserva, cancelamento, confirmação de pagamento, conclusão com o
+  recebimento, resgate, cadastro, pedido e uso do código de nova senha)
+  acontece numa
   única transação: ou tudo é gravado, ou nada é. O saldo de pontos é movido com
   `UPDATE ... SET pontos = pontos + ?`, sem ler-somar-gravar.
 - **Serialização toMap/fromMap** — converte entidades ↔ linhas do SQLite.
@@ -240,12 +237,14 @@ lib/
   banco real por um em memória, e `criarSchema()`/`configurar()` são
   reaproveitados pelos testes. O Perfil recebe quem abre os links do Suporte
   (`abrirLink`, que por padrão usa o pacote `url_launcher`) e quem abre a
-  câmera e a galeria para a foto do barbeiro (`escolherFoto`, que por padrão
-  usa o pacote `image_picker`), a agenda geral recebe quem abre o calendário
-  do período (`escolherPeriodo`, que por padrão usa o calendário do
-  Material), e Gerenciar Barbeiros, quem abre o menu de compartilhar do
-  convite (`compartilhar`, que por padrão usa o pacote `share_plus`); os
-  testes trocam os quatro por falsos. O `AuthService` recebe os lembretes
+  câmera e a galeria para a foto do cliente e do barbeiro (`escolherFoto`,
+  que por padrão usa o pacote `image_picker`), a agenda recebe quem abre o
+  calendário do período (`escolherPeriodo`, que por padrão usa o calendário
+  do Material), Gerenciar Barbeiros, quem abre o menu de compartilhar do
+  convite (`compartilhar`, que por padrão usa o pacote `share_plus`), e os
+  Relatórios, quem entrega o PDF (`compartilharPdf`, que por padrão grava o
+  arquivo e abre o compartilhar do `share_plus`); os testes trocam os cinco
+  por falsos. O `AuthService` recebe os lembretes
   (`lembretes`), que nos testes ficam numa lista (`LembretesEmMemoria`).
 
 ---
@@ -253,9 +252,8 @@ lib/
 ## Banco de dados
 
 9 tabelas relacionais criadas automaticamente, vazias, na primeira execução
-(`sysbarber.db`, no diretório de documentos do app). O administrador e, se o
-dono quiser, os dados de exemplo nascem na configuração inicial (veja
-[Primeiro acesso](#primeiro-acesso)).
+(`sysbarber.db`, no diretório de documentos do app). O administrador nasce na
+configuração inicial (veja [Primeiro acesso](#primeiro-acesso)).
 
 ```
 cliente ──┬──< agendamento >──── barbeiro ──┐
@@ -276,11 +274,11 @@ nome, especialidade, salário, o hash do código e a validade. Ele não se liga
 a outra tabela: quando o barbeiro usa o código, o convite é apagado e o
 barbeiro entra na tabela `barbeiro`, na mesma transação. `cliente` e
 `barbeiro` guardam quando a pessoa aceitou os termos de uso, e `cliente`,
-quando a conta foi excluída (regra 18). `barbeiro` guarda também a foto de
-perfil (regra 22), já reduzida, como `BLOB`; as listagens de agendamentos não
-a trazem.
+quando a conta foi excluída (regra 18). `barbeiro` e `cliente` guardam também
+a foto de perfil (regras 22 e 23), já reduzida, como `BLOB`; as listagens de
+agendamentos não a trazem.
 
-Versão atual do schema: **v9**. Um banco de qualquer versão anterior é
+Versão atual do schema: **v10**. Um banco de qualquer versão anterior é
 migrado sem perder dados (há testes que partem de um banco montado no formato
 v2):
 
@@ -294,6 +292,7 @@ v2):
 | v7 | Tabela `convite_barbeiro`, com os convites do barbeiro |
 | v8 | Aceite dos termos de uso no cliente e no barbeiro e a exclusão da conta no cliente. Quem já tinha conta fica sem aceite registrado |
 | v9 | Foto de perfil do barbeiro. Quem já existia fica sem foto |
+| v10 | Foto de perfil do cliente. Quem já tinha conta fica sem foto |
 
 ---
 
@@ -315,8 +314,9 @@ v2):
    cobrança em dobro.
 5. Pontos acompanham dinheiro que entrou: cada R$ 1,00 pago vale 1 ponto
    (arredondado). O pagamento antecipado pontua na hora; o "pagar na
-   barbearia", só quando a barbearia (barbeiro ou administrador) confirma o
-   recebimento. Multa é receita, mas **não gera pontos**.
+   barbearia", só quando a barbearia (barbeiro ou administrador) registra o
+   recebimento, ao concluir o atendimento (regra 13). Multa é receita, mas
+   **não gera pontos**.
 6. Meta de fidelidade: 500 pontos = 1 serviço gratuito, qualquer que seja o
    preço do serviço. O resgate é feito na etapa de pagamento e exige saldo de
    pelo menos 500 pontos; saldo negativo (depois de um estorno) não libera
@@ -378,6 +378,14 @@ v2):
     na própria agenda, e o administrador, na agenda geral, para qualquer
     barbeiro. O cancelamento feito por um dos dois é sempre sem multa; o
     cliente cancela os próprios agendamentos, seguindo a regra 7.
+
+    **O cliente não sai sem pagar:** um atendimento de pagar no balcão só é
+    concluído com o pagamento. O "Concluir" dele pergunta como o cliente
+    pagou (Pix, Cartão ou Dinheiro) e registra o recebimento e a conclusão
+    na mesma transação; sem a forma de pagamento, o banco recusa concluir.
+    O "Receber" fica para as multas (e para um serviço concluído sem
+    pagamento num banco de antes desta regra). O que foi pago no app (Pix,
+    cartão ou pontos) conclui direto.
 14. Barbeiro indisponível (o administrador liga e desliga) aparece apagado na
     escolha do profissional, sem poder ser escolhido, não oferece horários e o
     banco recusa reservas com ele. Os atendimentos já marcados continuam
@@ -386,10 +394,10 @@ v2):
     inicial, na primeira abertura do app: o dono escolhe nome, e-mail,
     telefone e senha, e não existe conta nem senha padrão. Enquanto ele não
     existe, só a abertura e a configuração ficam acessíveis; depois, a
-    configuração não abre mais, e o banco recusa uma segunda. A opção
-    "Começar com dados de exemplo" cria também 3 barbeiros (senha
-    `barbeiro123`) e 5 serviços, o que o banco só aceita numa barbearia vazia.
-    Não há como promover outro cliente a administrador.
+    configuração não abre mais, e o banco recusa uma segunda. A configuração
+    cria só o administrador: a barbearia começa vazia, e ele cadastra os
+    serviços e convida os barbeiros (regra 10). Não há como promover outro
+    cliente a administrador.
 16. Quem esqueceu a senha cria uma nova sem saber a atual, de dois jeitos:
     - **por e-mail ou SMS:** em "Esqueci minha senha", no login, a pessoa
       digita o e-mail da conta (de cliente, do administrador ou de barbeiro)
@@ -419,16 +427,17 @@ v2):
     para pedir outro na hora. O banco confere tudo isso.
 17. Cada perfil vê só as próprias telas (veja [Navegação](#navegação)):
     - **cliente:** agenda, paga, acompanha os próprios agendamentos e os
-      pontos (Fidelidade) e mantém os dados no Perfil, onde também pode
-      excluir a conta (regra 18);
+      pontos (Fidelidade) e mantém os dados e a foto de perfil (regra 23) no
+      Perfil, onde também pode excluir a conta (regra 18);
     - **administrador:** só gerencia a barbearia (painel, agenda geral,
       gerenciar e relatórios) e tem o Perfil. Não agenda serviços nem tem
       pontos ou Fidelidade: o banco recusa a reserva feita pela conta dele.
       Ele também não conta como cliente: fica fora de Gerenciar Clientes e
       das contagens de clientes e de pontos do painel e dos relatórios;
-    - **barbeiro:** vê a própria agenda e o Perfil, com os dados dele, a
-      foto de perfil (regra 22), a troca do próprio e-mail e telefone (regra
-      10) e da própria senha (o banco confere a atual), sem Suporte.
+    - **barbeiro:** vê a própria agenda, com os filtros de período e de
+      status, e o Perfil, com os dados dele, a foto de perfil (regra 22), a
+      troca do próprio e-mail e telefone (regra 10) e da própria senha (o
+      banco confere a atual), sem Suporte.
 18. **Termos de uso e exclusão da conta** (LGPD):
     - quem cria conta aceita os termos de uso e a política de privacidade:
       o cliente no cadastro, o barbeiro no convite e o administrador na
@@ -438,9 +447,10 @@ v2):
       três perfis. As contas criadas antes dos termos não precisam aceitar;
     - o cliente exclui a própria conta no Perfil, com a senha atual. O banco
       recusa enquanto houver agendamento em aberto ou valor pendente com a
-      barbearia (multa de cancelamento tardio ou de falta, ou serviço
-      concluído ainda não pago no balcão): quem deve paga antes, como nos
-      apps reais. Excluída, a conta perde nome, e-mail, telefone e senha, os
+      barbearia (multa de cancelamento tardio ou de falta ou, num banco de
+      antes da regra 13 atual, serviço concluído ainda não pago no balcão):
+      quem deve paga antes, como nos apps reais. Excluída, a conta perde
+      nome, e-mail, telefone, foto de perfil e senha, os
       pontos, o extrato de pontos e os códigos de senha, tudo na mesma
       transação; os atendimentos passados continuam nos relatórios, como
       "Cliente excluído". A conta sai de Gerenciar Clientes e das contagens
@@ -484,9 +494,17 @@ v2):
     no círculo, sem recorte. Aparece na escolha do profissional, no Perfil e
     no topo da agenda do barbeiro, em Gerenciar Barbeiros e na confirmação do
     agendamento. Sem foto, ficam as iniciais (na confirmação, o ícone de
-    pessoa). Os barbeiros de exemplo começam sem foto, e a foto sai junto com
-    o barbeiro excluído. O banco só aceita uma imagem JPG, PNG ou WebP de até
+    pessoa). O barbeiro começa sem foto, e a foto sai junto com o barbeiro
+    excluído. O banco só aceita uma imagem JPG, PNG ou WebP de até
     1 MB. Os termos de uso (regra 18) contam a foto entre os dados guardados.
+23. O cliente também põe uma **foto de perfil** no Perfil, do mesmo jeito que
+    o barbeiro (regra 22): tocando no avatar, tira uma foto com a câmera ou
+    escolhe uma da galeria, e troca ou remove quando quiser. A foto aparece
+    só para ele, no Perfil e no Início (no lugar das iniciais, ao lado da
+    saudação); Gerenciar Clientes e as agendas continuam com as iniciais. O
+    administrador não tem foto: o banco recusa a dele. A conta excluída perde
+    a foto (regra 18), e o banco aceita só uma imagem JPG, PNG ou WebP de até
+    1 MB. Os termos de uso contam a foto do cliente entre os dados guardados.
 
 ---
 
@@ -521,10 +539,11 @@ v2):
   um endereço que não é de ninguém (`excluido-<id>@sysbarber.invalid`) e a
   senha fica vazia, então ninguém entra com ela, e o login recusa a conta
   marcada como excluída.
-- **Foto do barbeiro:** só a conta de barbeiro logada troca a foto, e só a
-  própria (o `AuthService` usa o id da sessão). O banco confere o formato
-  pelos primeiros bytes do arquivo e o tamanho: o que não é JPG, PNG ou WebP,
-  ou passa de 1 MB, não é gravado.
+- **Fotos de perfil:** só a conta logada troca a própria foto (o
+  `AuthService` usa o id da sessão): o barbeiro e o cliente, cada um a sua;
+  o administrador não tem foto, e o banco recusa a dele. O banco confere o
+  formato pelos primeiros bytes do arquivo e o tamanho: o que não é JPG, PNG
+  ou WebP, ou passa de 1 MB, não é gravado.
 - **Permissões:** toda rota nomeada passa por `AuthService.podeAcessar` antes
   de ser construída. Antes da configuração inicial, só a abertura, a
   configuração e os termos de uso abrem; depois dela, a configuração não abre mais. A área
@@ -547,21 +566,21 @@ v2):
 | Rota | Tela | Quem acessa |
 |---|---|---|
 | `/` | Splash — o nome do app e o slogan, "A barbearia na palma da sua mão"; ao abrir o app, aparece depois do corte da tesoura; entra direto se houver sessão salva; na primeira abertura, leva à configuração da barbearia | todos |
-| `/configuracao` | Configuração inicial: cria o administrador, com o aceite dos termos, e, se marcado, os dados de exemplo | só antes de existir o administrador |
+| `/configuracao` | Configuração inicial: cria o administrador, com o aceite dos termos; a barbearia começa vazia | só antes de existir o administrador |
 | `/login` | Login, com "Esqueci minha senha" e "Tenho um convite de barbeiro" | todos |
 | `/convite-barbeiro` | Convite de barbeiro: o código que o administrador enviou e, conferido, a conta (e-mail, telefone, senha e o aceite dos termos); já entra na agenda | todos |
 | `/recuperar-senha` | Esqueci minha senha: e-mail da conta e a escolha entre receber o código por e-mail ou por SMS (com o celular), o e-mail ou SMS simulado quando for o caso, e a senha nova. Também abre direto na senha nova para quem entra com o código da barbearia | todos |
 | `/cadastro` | Criar conta, com o aceite dos termos (já entra logado) | todos |
 | `/termos` | Termos de uso e política de privacidade: o que o app guarda, para quê, onde ficam os dados, com quem são compartilhados e os direitos de quem usa (LGPD) | todos, até antes da configuração inicial |
-| `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente mostra o próximo horário, os pontos e o último serviço, com o "Repetir" (regra 21) | todos os perfis |
+| `/home` | Área principal, com a barra de navegação fixa e as abas do perfil (veja [Navegação](#navegação)). O Início do cliente cumprimenta conforme a hora do aparelho ("Olá, bom dia" das 05:00 às 11:59, "Olá, boa tarde" das 12:00 às 17:59 e "Olá, boa noite" das 18:00 às 04:59), com a foto dele ao lado, se tiver (regra 23), e mostra o próximo horário, os pontos e o último serviço, com o "Repetir" (regra 21) | todos os perfis |
 | `/servicos` | Catálogo de serviços (também é a aba Serviços) | cliente |
 | `/barbeiro` | Escolha do profissional, com a foto de quem pôs uma (regra 22); indisponível aparece apagado, sem seleção. Sem nenhum barbeiro cadastrado (numa barbearia que começou vazia), avisa "Nenhum profissional disponível". Num reagendamento, o atual vem escolhido, com o aviso "Reagendando o horário de…" | cliente |
 | `/horario` | Escolha de data (próximos 14 dias, sem domingos) e horário disponível. O "Repetir" do Início abre direto aqui, com o serviço e o barbeiro do último atendimento. Num reagendamento, vira "Novo horário": não oferece o horário atual com o mesmo barbeiro e, confirmado, troca o horário e volta à lista | cliente |
 | `/confirmacao` | Revisão do agendamento, com a foto do barbeiro, se ele tiver (confere o horário, não grava) | cliente |
 | `/pagamento` | Pagamento (Pix / Cartão / na barbearia / pontos) — grava a reserva e agenda o lembrete; no primeiro agendamento do aparelho, o Android pede a permissão de notificação | cliente |
-| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro, com a foto e o nome dele no topo); nos dois, também é a aba Agenda. O cliente tem "Reagendar" até 1 hora antes e "Cancelar agendamento" até o horário | cliente e barbeiro |
-| `/fidelidade` | Pontos e histórico | cliente |
-| `/perfil` | Dados de quem está logado, alterar senha e sair (também é a aba Perfil). O cliente vê ainda os agendamentos e os pontos; o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro põe, troca ou remove a foto de perfil, tocando no avatar (regra 22), vê a especialidade e edita o e-mail e o telefone. Todos têm "Termos e privacidade"; o cliente também tem "Excluir minha conta", embaixo do Sair | todos os perfis |
+| `/agendamentos` | Meus agendamentos (cliente) ou Minha agenda (barbeiro, com a foto e o nome dele no topo e o número de atendimentos de hoje); nos dois, também é a aba Agenda (veja [A agenda](#a-agenda)). O cliente tem "Reagendar" até 1 hora antes e "Cancelar agendamento" até o horário. O barbeiro sai pelo Perfil, como todos | cliente e barbeiro |
+| `/fidelidade` | Os pontos, com a barra até o próximo prêmio, "Como funciona" (onde fica a meta de 500 pontos) e o histórico de pontos, de 10 em 10 | cliente |
+| `/perfil` | Dados de quem está logado (também é a aba Perfil): o nome e o e-mail, e os cards "Editar dados", "Alterar senha" e "Termos de uso e política de privacidade", nessa ordem, com um texto só cada um; o telefone fica no Editar dados. Depois, o Sair. O cliente vê ainda os pontos, que abrem a Fidelidade, e põe, troca ou remove a foto de perfil, tocando no avatar (regra 23); o cliente e o administrador editam nome e telefone e têm, no fim, o [Suporte](#suporte) (WhatsApp e e-mail); o barbeiro põe, troca ou remove a foto de perfil (regra 22), vê a especialidade e edita o e-mail e o telefone. O cliente também tem "Excluir minha conta", embaixo do Sair | todos os perfis |
 | `/admin` | Painel administrativo (também é a aba Painel): movimento de hoje (agendamentos, barbeiros, clientes e serviços, com o total geral como referência) e acesso às telas abaixo | administrador |
 
 Nas rotas marcadas "cliente", o administrador não entra: ele só gerencia
@@ -573,11 +592,11 @@ elas; a agenda geral e os relatórios também são abas dele):
 
 | Tela | O que faz |
 |---|---|
-| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: receber, concluir, registrar falta e cancelar (sem multa). Dois filtros, que valem para as duas abas (em aberto e histórico): o barbeiro, num select, e o período, de um dia até outro, escolhido no calendário (que vai até o último dia que aceita reserva). O período escolhido aparece embaixo, com o botão de limpar |
+| Agenda geral | Todos os atendimentos, de todos os barbeiros, com as ações da barbearia: concluir (com o recebimento, regra 13), registrar falta, receber a multa e cancelar (sem multa). Os filtros da [agenda](#a-agenda): o barbeiro, num select, e o período, que valem para as duas abas, e o status, no histórico |
 | Gerenciar Serviços | Cadastrar, editar e excluir serviços, com duração de 1 a 180 minutos (regra 10). O ícone do serviço é escolhido entre cinco ícones de linha (corte, barba, combo, hidratação e coloração) |
 | Gerenciar Barbeiros | Os barbeiros, com a foto de quem pôs uma (regra 22). Convidar barbeiros (o + abre um sheet: nome, especialidade e salário, depois o código, com Compartilhar e Copiar código; o erro ao gerar, como um nome curto, aparece em vermelho no próprio sheet, e o botão de copiar confirma "Código copiado" por alguns segundos), convites pendentes (gerar outro código e cancelar), editar nome, especialidade e salário, liberar uma nova senha para o barbeiro, excluir e ligar ou desligar a disponibilidade |
-| Gerenciar Clientes | Consulta: busca por nome, e-mail ou telefone e detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
-| Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e rankings: formas de pagamento, 5 serviços mais procurados e 5 barbeiros mais requisitados. Recortes: este mês, mês passado ou tudo |
+| Gerenciar Clientes | Consulta: os clientes de 10 em 10 (veja [Paginação](#paginação)), a busca por nome, e-mail ou telefone, feita no banco (maiúsculas e minúsculas não importam, nas letras sem acento), com o número de clientes encontrados, e o detalhe com agendamentos e pontos. No detalhe, "Liberar nova senha" mostra o código provisório para entregar ao cliente (regra 16) |
+| Relatórios | Faturamento líquido, a receber, ticket médio, folha salarial, resultado do mês (só nos recortes mensais), total de agendamentos e por status (confirmados, cancelados, concluídos e faltas), clientes, pontos em circulação e três gráficos (veja [Relatórios: gráficos e PDF](#relatórios-gráficos-e-pdf)). Recortes: este mês, mês passado ou tudo. O botão do topo, com a caixa e a seta para cima, exporta o PDF |
 
 Outras telas: **Acesso restrito**, mostrada no lugar de qualquer tela que o
 perfil logado não pode abrir; e a tela de **falha ao abrir o banco** na
@@ -587,6 +606,71 @@ Toda tela que carrega dados mostra um estado de erro com
 **"Tentar novamente"** quando o banco falha, em vez de um carregamento eterno.
 No pagamento, se só o saldo de pontos não carregar, o aviso aparece no lugar
 da oferta de resgate e o pagamento em dinheiro continua disponível.
+
+### A agenda
+
+Meus agendamentos (cliente), Minha agenda (barbeiro) e a agenda geral
+(administrador) são a mesma tela, com duas abas: a primeira ("Próximos", para
+o cliente, ou "Em aberto", para a barbearia) e o "Histórico". A primeira vem
+inteira; o histórico vem de 10 em 10 (veja [Paginação](#paginação)).
+
+- **Para o cliente**, o card de um serviço de pagar no balcão ainda não pago
+  mostra a etiqueta **"Aguardando pagamento"** depois do horário (e também
+  depois de concluído, num banco de antes da regra 13 atual); o que já foi
+  pago (Pix, cartão ou pontos) mostra "Aguardando conclusão". O card não tem
+  aviso de pagar no balcão; o aviso da multa pendente continua.
+- **Para a barbearia** (o barbeiro e a agenda geral), o card de pagar no
+  balcão mostra "Pagamento no balcão, no dia do atendimento" antes do dia e
+  "Pagamento no balcão — registre ao concluir" a partir dele, quando aparece
+  o "Concluir", que pergunta como o cliente pagou (regra 13). O "Receber"
+  aparece só nas multas. O aviso de falta diz o horário e a penalidade (a
+  multa de 50% ou, num resgate, os 500 pontos perdidos).
+- **Filtros** (o barbeiro e a agenda geral): o período, de um dia até outro,
+  escolhido no calendário (que vai até o último dia que aceita reserva), vale
+  nas duas abas e aparece embaixo, com o botão de limpar. No histórico, o
+  **status**: Todos os status, Devendo (atendimento encerrado com valor
+  pendente, como a multa de um cancelamento em cima da hora ou de uma
+  falta), Concluídos, Cancelados e Não compareceu. Na agenda geral, o
+  barbeiro, num select, vale nas duas abas, e o status fica embaixo dele.
+  Os selects abrem o menu embaixo do campo, da mesma largura, com a opção
+  escolhida marcada. Com o histórico vazio só por causa dos filtros, aparece
+  "Nada com esses filtros". O banco faz o filtro do histórico.
+
+### Paginação
+
+O histórico da agenda, o histórico de pontos (Fidelidade) e Gerenciar
+Clientes vêm do banco de 10 em 10 (`DatabaseService.tamanhoDaPagina`): ao
+chegar perto do fim da lista (ou se ela ainda não enche a tela), o app busca
+a próxima página, com um indicador de carregamento no fim (`Paginacao` e
+`CarregarAoChegarNoFim`, em `lib/widgets/paginacao.dart`). Um item que entra
+no começo da lista entre uma página e outra não aparece repetido. A primeira
+aba da agenda continua inteira: são só os horários em aberto.
+
+### Relatórios: gráficos e PDF
+
+Os Relatórios têm três gráficos (biblioteca `fl_chart`, em
+`lib/widgets/graficos_relatorio.dart`):
+
+- **Faturamento no tempo:** barras do faturamento líquido de cada dia do
+  período, até hoje (em "Tudo", de cada mês, desde o mês do primeiro
+  pagamento); tocar numa barra mostra a data e o valor. As barras somam o
+  faturamento líquido.
+- **Por forma de pagamento:** uma rosca, com a legenda embaixo: cada forma,
+  a quantidade e o valor líquido.
+- **Serviços mais procurados e barbeiros mais requisitados:** barras
+  horizontais dos 5 com mais atendimentos no período (fora os cancelados),
+  com a legenda: a quantidade e o faturamento de cada um no período, pela
+  mesma conta do faturamento líquido.
+
+Sem dados, cada gráfico diz "Ainda sem dados suficientes" (ou "Sem
+faturamento no período"). O botão do topo gera o **PDF** do relatório que
+está na tela (biblioteca `pdf`, em `lib/services/relatorio_pdf.dart`): o
+"SysBarber", o período e a data e a hora em que foi gerado, o faturamento em
+destaque, todos os números e os mesmos três gráficos, em A4, com cada seção
+inteira numa página. O arquivo (`relatorio-sysbarber-AAAA-MM.pdf`, ou
+`relatorio-sysbarber-completo-AAAA-MM-DD.pdf` em "Tudo") é gravado numa pasta
+temporária do app e vai para o compartilhar do Android (WhatsApp, e-mail,
+Drive, imprimir ou salvar no aparelho).
 
 ### Navegação
 
@@ -606,9 +690,9 @@ todas). Tocar na barra troca a aba sem abrir uma tela nova: a barra continua
 no lugar, a pílula da aba tocada cresce enquanto a da anterior volta a ser
 círculo, e o conteúdo da aba nova entra deslizando pelo mesmo lado. Cada aba
 relê o banco ao ser aberta.
-O cartão do próximo horário, no Início do cliente, e o "Agendamentos" do
-Perfil também trocam de aba, assim como a Agenda geral e os Relatórios no
-Painel. Fora da primeira aba, o voltar do Android volta para ela. O Início não
+O cartão do próximo horário e o avatar, no Início do cliente, também trocam
+de aba (para a Agenda e o Perfil), assim como a Agenda geral e os Relatórios
+no Painel. Fora da primeira aba, o voltar do Android volta para ela. O Início não
 tem atalhos para as abas, que já estão na barra; a Fidelidade abre pelo cartão
 de pontos.
 
@@ -631,12 +715,17 @@ só, a Montserrat (embarcada, licença SIL Open Font License em
   lugar de emojis;
 - botões em pílula: o principal amarelo e o secundário translúcido;
 - botão redondo translúcido para voltar e para as ações da barra do topo
-  (como o "+" de Gerenciar Serviços e o sair do barbeiro);
-- abas e opções em pílula, com a escolhida em amarelo;
+  (como o "+" de Gerenciar Serviços e o exportar dos Relatórios);
+- opções em pílula, com a escolhida em amarelo (como o período dos
+  Relatórios); as abas da agenda ("Em aberto" ou "Próximos" e "Histórico") e
+  os filtros são retângulos de cantos arredondados, e o efeito do toque fica
+  dentro deles;
 - barra de navegação flutuante e translúcida, na área principal, com a
   mesma margem das telas (20; num celular com menos de 380 de largura, 12,
   para o nome mais longo, "Relatórios", caber inteiro): cada aba num círculo
-  de 56, e a atual numa pílula amarela com o nome ao lado.
+  de 56, e a atual numa pílula amarela com o nome ao lado. Com até duas abas
+  (o barbeiro), a barra fica do tamanho delas, centralizada, e não muda de
+  tamanho ao trocar de aba.
 
 O **ícone do app** é a tesoura preta num círculo amarelo sobre o grafite, como
 o da abertura: um ícone adaptativo (`android/app/src/main/res/`), com uma
@@ -649,9 +738,9 @@ tela nativa do Android é só o grafite (sem o branco e o logo do Flutter); do
 Android 12 em diante, a tela de abertura do sistema também fica em grafite,
 sem o ícone.
 
-O ícone de cada serviço continua gravado no banco como um emoji (os dados de
-exemplo usam ✂️, 🪒, 💈, 💆 e 🎨); a tela mostra o ícone de linha
-correspondente, e um valor fora dessa lista aparece como a tesoura.
+O ícone de cada serviço continua gravado no banco como um emoji (✂️, 🪒, 💈,
+💆 ou 🎨); a tela mostra o ícone de linha correspondente, e um valor fora
+dessa lista aparece como a tesoura.
 
 As telas entram com **animações** sutis e rápidas, de cerca de 0,4 s por
 elemento, com um intervalo curto entre eles. Os componentes ficam em
@@ -670,7 +759,9 @@ elemento, com um intervalo curto entre eles. Os componentes ficam em
   barra de progresso também enche; o leitor de tela lê sempre o valor final;
 - listas: Serviços, a escolha do profissional, os agendamentos (do cliente,
   do barbeiro e a agenda geral) e os horários de cada dia entram um depois do
-  outro.
+  outro;
+- gráficos dos Relatórios: as barras e a rosca mudam de tamanho em 0,4 s ao
+  trocar o período.
 
 Na **barra de navegação** (`BarraNavegacao`, em
 `lib/widgets/common_widgets.dart`), além da pílula que cresce na aba tocada,
@@ -719,8 +810,7 @@ Primeiro acesso (uma vez só, em cada instalação):
 ```
 Abertura → Configurar barbearia → Painel, já como administrador
                │
-               cria o administrador e, se marcado,
-               os dados de exemplo (na mesma transação)
+               cria o administrador; a barbearia começa vazia
 ```
 
 Agendamento:
@@ -783,6 +873,19 @@ Perfil do barbeiro → toque no avatar → Tirar foto (câmera) ou Escolher da g
                                                    │
                      reduzida a 512 × 512 pixels → o banco confere e grava
                      → aparece para o cliente na escolha do profissional
+```
+
+Concluir um atendimento de pagar no balcão (regra 13):
+
+```
+Minha agenda (ou agenda geral) → Concluir → Como o cliente pagou? → Pix, Cartão
+ou Dinheiro → recebimento, pontos e conclusão na mesma transação
+```
+
+Exportar o relatório:
+
+```
+Relatórios → período → botão do topo → PDF → compartilhar do Android
 ```
 
 Reagendamento (regra 19):

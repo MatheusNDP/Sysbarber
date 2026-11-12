@@ -140,9 +140,10 @@ class AppTheme {
       ),
       // Abas em pílula: a selecionada fica amarela, como as categorias.
       tabBarTheme: TabBarThemeData(
-        indicator: const ShapeDecoration(
+        // Os cantos acompanham o fundo das abas (16, menos o recuo de 4).
+        indicator: BoxDecoration(
           color: AppColors.amarelo,
-          shape: StadiumBorder(),
+          borderRadius: BorderRadius.circular(12),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
