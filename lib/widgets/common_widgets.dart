@@ -447,6 +447,37 @@ class BarraNavegacao extends StatelessWidget {
   /// Quanto dura o pulinho do ícone tocado.
   static const duracaoPulo = Duration(milliseconds: 450);
 
+  /// Com até tantas opções (o barbeiro tem duas), a barra fica do tamanho
+  /// delas e no centro, em vez de esticar até as margens da tela.
+  static const maximoDeOpcoesCompactas = 2;
+
+  /// Respiro entre as opções, e delas até a borda, na barra compacta.
+  static const _respiroCompacto = 16.0;
+
+  /// Largura da barra compacta: os círculos, o nome mais longo (só a opção
+  /// atual mostra o nome) e o respiro, mais o recheio e a borda da barra. O
+  /// nome é medido com a fonte do aparelho, para caber também com ela grande.
+  double _larguraCompacta(BuildContext context) {
+    final escala = MediaQuery.textScalerOf(context);
+    var nome = 0.0;
+    for (final (_, rotulo) in itens) {
+      final pintor = TextPainter(
+        text: TextSpan(text: rotulo, style: _ItemDaBarra.estiloDoNome),
+        textDirection: Directionality.of(context),
+        textScaler: escala,
+        maxLines: 1,
+      )..layout();
+      nome = max(nome, pintor.width);
+      pintor.dispose();
+    }
+    return itens.length * _ItemDaBarra.larguraSemNome +
+        nome.ceilToDouble() +
+        _ItemDaBarra._margemDoNome.horizontal +
+        (itens.length + 1) * _respiroCompacto +
+        2 * 8 + // recheio da barra
+        2; // borda
+  }
+
   const BarraNavegacao({
     super.key,
     required this.atual,
@@ -460,49 +491,61 @@ class BarraNavegacao extends StatelessWidget {
     // cards e os botões; num celular estreito, menos, para o nome mais
     // longo ("Relatórios") caber inteiro.
     final margem = MediaQuery.sizeOf(context).width >= 380 ? 20.0 : 12.0;
+    final compacta = itens.length <= maximoDeOpcoesCompactas;
     return SafeArea(
       top: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(margem, 0, margem, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.card2.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(40),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: LayoutBuilder(
-                builder: (_, limites) {
-                  // O nome usa só o espaço que sobra depois dos ícones: a
-                  // pílula que cresce e a que encolhe nunca passam da barra,
-                  // mesmo com fonte grande (o nome ganha reticências).
-                  final espacoDoNome = max(
-                    0.0,
-                    limites.maxWidth -
-                        itens.length * _ItemDaBarra.larguraSemNome,
-                  );
-                  return Row(
-                    // As pontas encostam na margem da barra; com só duas
-                    // opções (o barbeiro), elas ficam distribuídas.
-                    mainAxisAlignment: itens.length > 2
-                        ? MainAxisAlignment.spaceBetween
-                        : MainAxisAlignment.spaceEvenly,
-                    children: [
-                      for (var i = 0; i < itens.length; i++)
-                        _ItemDaBarra(
-                          icone: itens[i].$1,
-                          rotulo: itens[i].$2,
-                          selecionado: i == atual,
-                          larguraMaximaDoNome: espacoDoNome,
-                          onTap: () => onTap(i),
-                        ),
-                    ],
-                  );
-                },
+        child: Align(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: compacta ? _larguraCompacta(context) : double.infinity,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.card2.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (_, limites) {
+                      // O nome usa só o espaço que sobra depois dos ícones: a
+                      // pílula que cresce e a que encolhe nunca passam da barra,
+                      // mesmo com fonte grande (o nome ganha reticências).
+                      final espacoDoNome = max(
+                        0.0,
+                        limites.maxWidth -
+                            itens.length * _ItemDaBarra.larguraSemNome,
+                      );
+                      return Row(
+                        // As pontas encostam na margem da barra; na barra
+                        // compacta (o barbeiro), as opções ficam distribuídas.
+                        mainAxisAlignment: compacta
+                            ? MainAxisAlignment.spaceEvenly
+                            : MainAxisAlignment.spaceBetween,
+                        children: [
+                          for (var i = 0; i < itens.length; i++)
+                            _ItemDaBarra(
+                              icone: itens[i].$1,
+                              rotulo: itens[i].$2,
+                              selecionado: i == atual,
+                              larguraMaximaDoNome: espacoDoNome,
+                              onTap: () => onTap(i),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ),
@@ -534,6 +577,10 @@ class _ItemDaBarra extends StatefulWidget {
 
   /// Largura da opção sem o nome: o círculo.
   static const larguraSemNome = _diametro;
+
+  /// Fonte do nome ao lado do ícone (a barra compacta mede o nome com ela).
+  static TextStyle get estiloDoNome =>
+      AppTheme.texto(size: 13, weight: FontWeight.w600);
 
   const _ItemDaBarra({
     required this.icone,
@@ -644,11 +691,7 @@ class _ItemDaBarraState extends State<_ItemDaBarra>
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.texto(
-                size: 13,
-                weight: FontWeight.w600,
-                color: cor,
-              ),
+              style: _ItemDaBarra.estiloDoNome.copyWith(color: cor),
             ),
           ),
         ),
@@ -803,8 +846,8 @@ class EstadoVazio extends StatelessWidget {
 }
 
 /// Ícones que o administrador escolhe para um serviço: o valor gravado na
-/// coluna `icone` do banco (um emoji, como nos dados de exemplo), o ícone de
-/// linha que a tela mostra e o nome da opção.
+/// coluna `icone` do banco (um emoji, o formato que o banco sempre usou), o
+/// ícone de linha que a tela mostra e o nome da opção.
 const List<(String, IconData, String)> iconesDeServico = [
   ('✂️', Icons.content_cut_rounded, 'Corte'),
   ('🪒', Icons.face_6_outlined, 'Barba'),
@@ -1212,6 +1255,15 @@ String mascararEmail(String email) {
   final dominio = email.substring(arroba);
   final fim = usuario.length > 2 ? usuario[usuario.length - 1] : '';
   return '${usuario[0]}•••$fim$dominio';
+}
+
+/// Saudação do Início conforme a hora: "bom dia" das 05:00 às 11:59, "boa
+/// tarde" das 12:00 às 17:59 e "boa noite" das 18:00 às 04:59.
+String saudacaoDoHorario(DateTime agora) {
+  final hora = agora.hour;
+  if (hora >= 5 && hora < 12) return 'bom dia';
+  if (hora >= 12 && hora < 18) return 'boa tarde';
+  return 'boa noite';
 }
 
 String _doisDigitos(int n) => n.toString().padLeft(2, '0');

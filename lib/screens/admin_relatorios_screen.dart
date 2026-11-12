@@ -3,15 +3,24 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
+import '../services/relatorio_pdf.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/graficos_relatorio.dart';
 
-/// Relatórios gerenciais (`/admin` → Relatórios).
+/// Relatórios gerenciais (`/admin` → Relatórios), com os gráficos e o
+/// "Exportar PDF".
 ///
 /// Todos os números são calculados por SQL sobre as tabelas reais — nada é
 /// fixo no código.
 class AdminRelatoriosScreen extends StatefulWidget {
-  const AdminRelatoriosScreen({super.key});
+  const AdminRelatoriosScreen({
+    super.key,
+    this.compartilharPdf = compartilharPdfPeloAndroid,
+  });
+
+  /// Entrega o PDF gerado (os testes trocam por um falso).
+  final CompartilharPdf compartilharPdf;
 
   @override
   State<AdminRelatoriosScreen> createState() => _AdminRelatoriosScreenState();
@@ -23,6 +32,7 @@ enum _Periodo { esteMes, mesPassado, tudo }
 class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   RelatorioGeral? _relatorio;
   bool _carregando = true;
+  bool _exportando = false;
   String? _erro;
 
   /// O padrão é o mês corrente: é o único recorte em que comparar
@@ -46,6 +56,38 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   }
 
   bool get _mensal => _periodo != _Periodo.tudo;
+
+  static const _rotulos = {
+    _Periodo.esteMes: 'Este mês',
+    _Periodo.mesPassado: 'Mês passado',
+    _Periodo.tudo: 'Tudo',
+  };
+
+  /// Gera o PDF do relatório na tela e abre o compartilhar.
+  Future<void> _exportarPdf() async {
+    final r = _relatorio;
+    if (r == null || _exportando) return;
+    setState(() => _exportando = true);
+    try {
+      final agora = DateTime.now();
+      final bytes = await gerarPdfDoRelatorio(
+        r,
+        nomeDoPeriodo: _rotulos[_periodo]!,
+        mensal: _mensal,
+        geradoEm: agora,
+      );
+      await widget.compartilharPdf(bytes, nomeDoArquivoDoRelatorio(r, agora));
+    } catch (e) {
+      if (mounted) {
+        mostrarErro(
+          context,
+          mensagemDeErro(e, 'Não foi possível exportar o PDF'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportando = false);
+    }
+  }
 
   void _mudarPeriodo(_Periodo p) {
     if (p == _periodo) return;
@@ -94,7 +136,19 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
     final r = _relatorio;
 
     return Scaffold(
-      appBar: const BarberAppBar(titulo: 'Relatórios'),
+      appBar: BarberAppBar(
+        titulo: 'Relatórios',
+        acoes: [
+          // A caixa com a seta para cima, o ícone de exportar e compartilhar.
+          BotaoVidro(
+            icone: Icons.ios_share_rounded,
+            dica: 'Exportar PDF',
+            onPressed: r == null || _carregando || _exportando
+                ? null
+                : _exportarPdf,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -126,6 +180,10 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                         const SizedBox(height: 18),
                         _destaqueFaturamento(r),
                         const SizedBox(height: 22),
+                        GraficoDoFaturamento(
+                          pontos: r.faturamentoNoTempo,
+                          porMes: r.faturamentoPorMes,
+                        ),
                         const TituloSecao('Financeiro'),
                         const SizedBox(height: 12),
                         _grade([
@@ -206,13 +264,15 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
                           ),
                         ]),
                         const SizedBox(height: 26),
-                        _ranking(
-                          'Por forma de pagamento',
-                          r.porMetodo,
-                          mostrarValor: true,
+                        GraficoDasFormasDePagamento(itens: r.porMetodo),
+                        GraficoDeBarrasHorizontais(
+                          titulo: 'Serviços mais procurados',
+                          itens: r.porServico,
                         ),
-                        _ranking('Serviços mais procurados', r.porServico),
-                        _ranking('Barbeiros mais requisitados', r.porBarbeiro),
+                        GraficoDeBarrasHorizontais(
+                          titulo: 'Barbeiros mais requisitados',
+                          itens: r.porBarbeiro,
+                        ),
                         const SizedBox(height: 10),
                         Text(
                           'Gerado em ${formatarDataHora(DateTime.now())}',
@@ -273,11 +333,7 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
   }
 
   Widget _seletorPeriodo() {
-    const rotulos = {
-      _Periodo.esteMes: 'Este mês',
-      _Periodo.mesPassado: 'Mês passado',
-      _Periodo.tudo: 'Tudo',
-    };
+    const rotulos = _rotulos;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -336,89 +392,6 @@ class _AdminRelatoriosScreenState extends State<AdminRelatoriosScreen> {
             overflow: TextOverflow.ellipsis,
             style: AppTheme.texto(size: 10, color: AppColors.muted),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ranking(
-    String titulo,
-    List<ItemRelatorio> itens, {
-    bool mostrarValor = false,
-  }) {
-    final maior = itens.isEmpty
-        ? 1
-        : itens.map((i) => i.quantidade).reduce((a, b) => a > b ? a : b);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TituloSecao(titulo),
-          const SizedBox(height: 12),
-          if (itens.isEmpty)
-            Cartao(
-              child: Text(
-                'Ainda sem dados suficientes',
-                style: AppTheme.texto(size: 12, color: AppColors.muted),
-              ),
-            )
-          else
-            ...itens.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Cartao(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.rotulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTheme.texto(
-                                size: 13,
-                                weight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            mostrarValor
-                                ? '${item.quantidade}× · '
-                                      '${formatarReal(item.valor)}'
-                                : '${item.quantidade}×',
-                            style: AppTheme.texto(
-                              size: 12,
-                              weight: FontWeight.w600,
-                              color: AppColors.amarelo,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: maior == 0 ? 0 : item.quantidade / maior,
-                          minHeight: 6,
-                          backgroundColor: AppColors.card2,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.amarelo,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

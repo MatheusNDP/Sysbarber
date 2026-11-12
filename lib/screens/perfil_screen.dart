@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/erros.dart';
@@ -11,9 +10,9 @@ import '../services/suporte.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
-/// Perfil de quem está logado (`/perfil`). O cliente vê os agendamentos e
-/// os pontos; o administrador, os dados e o Suporte; o barbeiro, a foto, os
-/// dados, a troca de senha e sair (sem Suporte).
+/// Perfil de quem está logado (`/perfil`). O cliente vê a foto e os pontos;
+/// o administrador, os dados e o Suporte; o barbeiro, a foto, os dados, a
+/// troca de senha e sair (sem Suporte).
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({
     super.key,
@@ -24,8 +23,8 @@ class PerfilScreen extends StatefulWidget {
   /// Abre o WhatsApp e o e-mail do suporte (os testes trocam por um falso).
   final AbrirLink abrirLink;
 
-  /// Abre a câmera ou a galeria para a foto do barbeiro (os testes trocam
-  /// por uma falsa).
+  /// Abre a câmera ou a galeria para a foto do cliente ou do barbeiro (os
+  /// testes trocam por uma falsa).
   final EscolherFoto escolherFoto;
 
   @override
@@ -33,7 +32,6 @@ class PerfilScreen extends StatefulWidget {
 }
 
 class _PerfilScreenState extends State<PerfilScreen> {
-  int _totalAgendamentos = 0;
   int _pontos = 0;
   bool _carregando = true;
   String? _erro;
@@ -46,7 +44,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _carregar() async {
     final usuario = AuthService.instance.usuarioAtual;
-    // Só o cliente tem agendamentos e pontos para mostrar.
+    // Só o cliente tem pontos para mostrar.
     if (!AuthService.instance.ehCliente || usuario?.id == null) {
       if (mounted) setState(() => _carregando = false);
       return;
@@ -58,12 +56,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
       });
     }
     try {
-      final db = DatabaseService.instance;
-      final agendamentos = await db.listarAgendamentosCliente(usuario!.id!);
-      final pontos = await db.obterPontos(usuario.id!);
+      final pontos = await DatabaseService.instance.obterPontos(usuario!.id!);
       if (!mounted) return;
       setState(() {
-        _totalAgendamentos = agendamentos.length;
         _pontos = pontos;
         _carregando = false;
       });
@@ -109,14 +104,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
     mostrarSucesso(context, 'Senha alterada');
   }
 
-  /// O barbeiro põe, troca ou remove a própria foto (regra de negócio 22):
-  /// o sheet pergunta se a foto vem da câmera ou da galeria.
+  /// O cliente e o barbeiro põem, trocam ou removem a própria foto (regras
+  /// de negócio 22 e 23): o sheet pergunta se a foto vem da câmera ou da
+  /// galeria.
   Future<void> _alterarFoto() async {
+    final auth = AuthService.instance;
+    final barbeiro = auth.barbeiroAtual;
     final opcao = await showModalBottomSheet<_OpcaoDaFoto>(
       context: context,
       showDragHandle: true,
-      builder: (_) =>
-          _FotoSheet(temFoto: AuthService.instance.barbeiroAtual?.foto != null),
+      builder: (_) => _FotoSheet(
+        temFoto: (barbeiro?.foto ?? auth.usuarioAtual?.foto) != null,
+        explicacao: barbeiro != null
+            ? 'Os clientes veem a sua foto na hora de escolher o '
+                  'profissional.'
+            : 'A sua foto aparece aqui no Perfil e no Início.',
+      ),
     );
     if (opcao == null || !mounted) return;
 
@@ -144,7 +147,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
       if (foto == null || !mounted) return;
     }
 
-    final r = await AuthService.instance.atualizarFotoBarbeiro(foto);
+    final r = barbeiro != null
+        ? await auth.atualizarFotoBarbeiro(foto)
+        : await auth.atualizarFotoCliente(foto);
     if (!mounted) return;
     if (!r.sucesso) {
       mostrarErro(context, r.erro!);
@@ -224,7 +229,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final auth = AuthService.instance;
     final usuario = auth.usuarioAtual;
     final barbeiro = auth.barbeiroAtual;
-    final telefone = usuario?.telefone ?? barbeiro?.telefone ?? '';
 
     return Scaffold(
       appBar: const BarberAppBar(titulo: 'Perfil'),
@@ -246,9 +250,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       28 + MediaQuery.paddingOf(context).bottom,
                     ),
                     children: [
+                      // O cliente e o barbeiro põem a própria foto (regras
+                      // de negócio 22 e 23); o administrador tem as
+                      // iniciais.
                       Center(
                         child: barbeiro != null
-                            ? _fotoDoBarbeiro(barbeiro)
+                            ? _fotoEditavel(barbeiro.iniciais, barbeiro.foto)
+                            : auth.ehCliente && usuario != null
+                            ? _fotoEditavel(usuario.iniciais, usuario.foto)
                             : AvatarIniciais(
                                 texto: usuario?.iniciais ?? '?',
                                 tamanho: 92,
@@ -269,43 +278,29 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       ),
                       const SizedBox(height: 24),
                       if (auth.ehCliente) ...[
-                        _numeros(),
+                        _cartaoDosPontos(),
                         const SizedBox(height: 24),
                       ],
-                      _item(
-                        Icons.phone_outlined,
-                        'Telefone',
-                        telefone.isEmpty ? '-' : telefone,
-                      ),
                       // Nome e especialidade do barbeiro são do administrador,
-                      // em Gerenciar Barbeiros; o e-mail e o telefone, dele.
+                      // em Gerenciar Barbeiros; o e-mail e o telefone, dele,
+                      // no Editar dados.
                       if (barbeiro != null)
                         _item(
                           Icons.content_cut_rounded,
                           'Especialidade',
                           barbeiro.especialidade,
                         ),
-                      _item(
-                        Icons.edit_outlined,
-                        'Editar dados',
-                        barbeiro != null
-                            ? 'E-mail e telefone'
-                            : 'Nome e telefone',
-                        onTap: _editarDados,
-                      ),
-                      _item(
+                      _acao(Icons.edit_outlined, 'Editar dados', _editarDados),
+                      _acao(
                         Icons.lock_outline_rounded,
                         'Alterar senha',
-                        'Exige a senha atual',
-                        onTap: _alterarSenha,
+                        _alterarSenha,
                       ),
-                      _item(
+                      _acao(
                         Icons.description_outlined,
-                        'Termos e privacidade',
                         'Termos de uso e política de privacidade',
-                        onTap: () =>
-                            Navigator.of(context)
-                                .pushNamed(AuthService.rotaTermos),
+                        () => Navigator.of(context)
+                            .pushNamed(AuthService.rotaTermos),
                       ),
                       const SizedBox(height: 28),
                       BotaoSecundario(
@@ -389,75 +384,45 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 
-  /// Agendamentos e pontos lado a lado, como os números de um perfil.
-  Widget _numeros() {
+  /// Os pontos do cliente; tocar abre a Fidelidade.
+  Widget _cartaoDosPontos() {
     return Cartao(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Expanded(
-              child: _numero(
-                Icons.calendar_month_outlined,
-                'Agendamentos',
-                '$_totalAgendamentos',
-                () => NavegacaoPrincipal.abrir(
-                  context,
-                  Aba.agenda,
-                  '/agendamentos',
+      child: Semantics(
+        button: true,
+        label: 'Pontos: $_pontos',
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: () => Navigator.of(context).pushNamed('/fidelidade'),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.star_outline_rounded,
+                  color: AppColors.amarelo,
+                  size: 22,
                 ),
-              ),
+                const SizedBox(height: 6),
+                Text(
+                  'Pontos',
+                  style: AppTheme.texto(size: 12, color: AppColors.muted),
+                ),
+                const SizedBox(height: 2),
+                Text('$_pontos', style: AppTheme.titulo(size: 18)),
+              ],
             ),
-            const VerticalDivider(width: 1, color: AppColors.border),
-            Expanded(
-              child: _numero(
-                Icons.star_outline_rounded,
-                'Pontos',
-                '$_pontos',
-                () => Navigator.of(context).pushNamed('/fidelidade'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _numero(
-    IconData icone,
-    String rotulo,
-    String valor,
-    VoidCallback onTap,
-  ) {
-    return Semantics(
-      button: true,
-      label: '$rotulo: $valor',
-      excludeSemantics: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            children: [
-              Icon(icone, color: AppColors.amarelo, size: 22),
-              const SizedBox(height: 6),
-              Text(
-                rotulo,
-                style: AppTheme.texto(size: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 2),
-              Text(valor, style: AppTheme.titulo(size: 18)),
-            ],
           ),
         ),
       ),
     );
   }
 
-  /// A foto do barbeiro (ou as iniciais, sem ela), com o selo da câmera:
-  /// tocar abre as opções da foto. O cliente e o administrador não têm foto.
-  Widget _fotoDoBarbeiro(Barbeiro b) {
+  /// A foto do cliente ou do barbeiro (ou as iniciais, sem ela), com o selo
+  /// da câmera: tocar abre as opções da foto. O administrador não tem foto.
+  Widget _fotoEditavel(String iniciais, Uint8List? foto) {
     return Tooltip(
       message: 'Alterar foto',
       child: Material(
@@ -469,8 +434,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
             clipBehavior: Clip.none,
             children: [
               AvatarIniciais(
-                texto: b.iniciais,
-                foto: b.foto,
+                texto: iniciais,
+                foto: foto,
                 tamanho: 92,
                 large: true,
               ),
@@ -500,16 +465,34 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 
-  Widget _item(
-    IconData icone,
-    String rotulo,
-    String valor, {
-    VoidCallback? onTap,
-  }) {
+  /// Card de uma ação do Perfil, com um texto só.
+  Widget _acao(IconData icone, String texto, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Cartao(
         onTap: onTap,
+        child: Row(
+          children: [
+            IconeCirculo(icone: icone, tamanho: 42),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                texto,
+                style: AppTheme.texto(size: 14, weight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Card de um dado, com o nome dele e o valor.
+  Widget _item(IconData icone, String rotulo, String valor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Cartao(
         child: Row(
           children: [
             IconeCirculo(icone: icone, tamanho: 42),
@@ -530,8 +513,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 ],
               ),
             ),
-            if (onTap != null)
-              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),
@@ -540,17 +521,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// FOTO DO BARBEIRO
+// FOTO DE PERFIL (CLIENTE E BARBEIRO)
 // ---------------------------------------------------------------------------
 
 enum _OpcaoDaFoto { camera, galeria, remover }
 
-/// Opções da foto do barbeiro: tirar com a câmera, escolher da galeria e,
-/// se ele já tem uma, remover.
+/// Opções da foto do cliente ou do barbeiro: tirar com a câmera, escolher
+/// da galeria e, se já tem uma, remover.
 class _FotoSheet extends StatelessWidget {
   final bool temFoto;
 
-  const _FotoSheet({required this.temFoto});
+  /// Quem vê a foto, embaixo do título.
+  final String explicacao;
+
+  const _FotoSheet({required this.temFoto, required this.explicacao});
 
   @override
   Widget build(BuildContext context) {
@@ -594,8 +578,7 @@ class _FotoSheet extends StatelessWidget {
             Text('Foto de perfil', style: AppTheme.titulo(size: 20)),
             const SizedBox(height: 6),
             Text(
-              'Os clientes veem a sua foto na hora de escolher o '
-              'profissional.',
+              explicacao,
               style: AppTheme.texto(
                 size: 13,
                 color: AppColors.muted,

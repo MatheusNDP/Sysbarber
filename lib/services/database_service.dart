@@ -35,12 +35,12 @@ class DatabaseService {
   /// v8: cliente e barbeiro guardam quando aceitaram os termos de uso, e o
   /// cliente, quando excluiu a própria conta.
   /// v9: barbeiro ganhou a foto de perfil.
-  static const int versaoBanco = 9;
+  /// v10: cliente ganhou a foto de perfil.
+  static const int versaoBanco = 10;
 
-  /// Senha de acesso dos barbeiros dos dados de exemplo (regra de negócio
-  /// 15). Não existe senha padrão de administrador: ela é escolhida por quem
-  /// configura a barbearia.
-  static const String senhaBarbeirosDeExemplo = 'barbeiro123';
+  /// Senha que a migração para a v2 dá aos barbeiros que já existiam num
+  /// banco v1, quando eles ainda não tinham acesso ao app.
+  static const String _senhaBarbeirosDaV2 = 'barbeiro123';
 
   /// Pontos necessários para trocar por um serviço gratuito
   /// (regra de negócio 6).
@@ -198,8 +198,8 @@ class DatabaseService {
 
   /// Cria todas as tabelas, vazias.
   ///
-  /// O administrador e os dados de exemplo nascem depois, na configuração
-  /// inicial ([configurarBarbearia]). Público de propósito: os testes de
+  /// O administrador nasce depois, na configuração inicial
+  /// ([configurarBarbearia]). Público de propósito: os testes de
   /// integração reaproveitam este mesmo método como `onCreate` do banco em
   /// memória.
   Future<void> criarSchema(Database db, int version) async {
@@ -213,7 +213,8 @@ class DatabaseService {
         criado_em TEXT NOT NULL,
         admin INTEGER NOT NULL DEFAULT 0,
         termos_aceitos_em TEXT,
-        excluido_em TEXT
+        excluido_em TEXT,
+        foto BLOB
       )
     ''');
 
@@ -410,7 +411,7 @@ class DatabaseService {
           'barbeiro',
           {
             'email': email,
-            'senha_hash': hashSenha(senhaBarbeirosDeExemplo),
+            'senha_hash': hashSenha(_senhaBarbeirosDaV2),
             'telefone': '(67) 99000-0000',
             'salario': 2500.0,
           },
@@ -526,9 +527,14 @@ class DatabaseService {
       );
     }
 
-    // Quem já existia começa sem foto, como os barbeiros de exemplo.
+    // Quem já existia começa sem foto.
     if (versaoAntiga < 9) {
       await db.execute('ALTER TABLE barbeiro ADD COLUMN foto BLOB');
+    }
+
+    // Quem já tinha conta começa sem foto.
+    if (versaoAntiga < 10) {
+      await db.execute('ALTER TABLE cliente ADD COLUMN foto BLOB');
     }
   }
 
@@ -552,81 +558,6 @@ class DatabaseService {
   // CONFIGURAÇÃO INICIAL
   // -------------------------------------------------------------------------
 
-  /// Barbeiros de demonstração, criados quando o dono marca "Começar com
-  /// dados de exemplo". A senha de todos é [senhaBarbeirosDeExemplo].
-  static const List<Barbeiro> _barbeirosDeExemplo = [
-    Barbeiro(
-      nome: 'Carlos Eduardo',
-      especialidade: 'Especialista em barba',
-      iniciais: 'CE',
-      telefone: '(67) 99101-1001',
-      email: 'carlos.eduardo@sysbarber.com',
-      salario: 2800.00,
-    ),
-    Barbeiro(
-      nome: 'Rafael Souza',
-      especialidade: 'Cortes modernos',
-      iniciais: 'RS',
-      telefone: '(67) 99202-2002',
-      email: 'rafael.souza@sysbarber.com',
-      salario: 2500.00,
-    ),
-    Barbeiro(
-      nome: 'Marcos Lima',
-      especialidade: 'Coloração e Corte',
-      iniciais: 'ML',
-      telefone: '(67) 99303-3003',
-      email: 'marcos.lima@sysbarber.com',
-      salario: 2650.00,
-      // Indisponível para demonstrar a regra 14.
-      ativo: false,
-    ),
-  ];
-
-  /// Serviços de demonstração, criados junto com os barbeiros de exemplo.
-  static const List<Servico> _servicosDeExemplo = [
-    Servico(
-      nome: 'Corte de Cabelo',
-      descricao: 'Tesoura ou máquina',
-      preco: 35.00,
-      duracaoMinutos: 30,
-      icone: '✂️',
-    ),
-    Servico(
-      nome: 'Barba',
-      descricao: 'Navalha + toalha quente',
-      preco: 25.00,
-      duracaoMinutos: 25,
-      icone: '🪒',
-    ),
-    Servico(
-      nome: 'Corte + Barba',
-      descricao: 'Combo completo',
-      preco: 55.00,
-      duracaoMinutos: 50,
-      icone: '💈',
-    ),
-    Servico(
-      nome: 'Hidratação',
-      descricao: 'Tratamento capilar',
-      preco: 40.00,
-      duracaoMinutos: 40,
-      icone: '💆',
-    ),
-    Servico(
-      nome: 'Coloração',
-      descricao: 'Tintura profissional',
-      preco: 80.00,
-      duracaoMinutos: 60,
-      icone: '🎨',
-    ),
-  ];
-
-  /// E-mails de acesso dos barbeiros de exemplo, para quem configura a
-  /// barbearia saber como eles entram.
-  static List<String> get emailsBarbeirosDeExemplo =>
-      _barbeirosDeExemplo.map((b) => b.email).toList();
-
   /// A barbearia já foi configurada, isto é, já existe o administrador?
   ///
   /// Enquanto não existe, o app abre na configuração inicial (regra de
@@ -647,11 +578,10 @@ class DatabaseService {
   /// Configuração inicial da barbearia (regra de negócio 15).
   ///
   /// Cria a conta do administrador — a única, e só enquanto não existe
-  /// nenhuma — com os dados escolhidos pelo dono. Com [dadosDeExemplo], cria
-  /// também os barbeiros e os serviços de demonstração, o que só é aceito
-  /// numa barbearia ainda vazia.
+  /// nenhuma — com os dados escolhidos pelo dono. A barbearia começa vazia:
+  /// os serviços e os barbeiros são cadastrados depois, por ele.
   ///
-  /// Os hashes das senhas são calculados antes, em outro isolate. A gravação
+  /// O hash da senha é calculado antes, em outro isolate. A gravação
   /// acontece numa única transação, que confere tudo de novo: ou a barbearia
   /// fica configurada por inteiro, ou nada muda. Devolve o administrador.
   Future<Cliente> configurarBarbearia({
@@ -660,7 +590,6 @@ class DatabaseService {
     required String telefone,
     required String senha,
     required bool aceitouTermos,
-    bool dadosDeExemplo = false,
   }) async {
     final erro = Validators.validarCadastro(
       nome: nome,
@@ -674,28 +603,17 @@ class DatabaseService {
     final emailNormalizado = email.trim().toLowerCase();
     final db = await database;
 
-    // Conferido antes de calcular os hashes, que são caros, e de novo dentro
-    // da transação, que é quem garante a regra.
-    final antes = await _impedimentoConfiguracao(
-      db,
-      emailNormalizado,
-      dadosDeExemplo,
-    );
+    // Conferido antes de calcular o hash, que é caro, e de novo dentro da
+    // transação, que é quem garante a regra.
+    final antes = await _impedimentoConfiguracao(db, emailNormalizado);
     if (antes != null) throw RegraNegocioException(antes);
 
     final senhaHash = await Senhas.gerarHashEmSegundoPlano(senha);
-    final hashesBarbeiros = dadosDeExemplo
-        ? await Future.wait([
-            for (final _ in _barbeirosDeExemplo)
-              Senhas.gerarHashEmSegundoPlano(senhaBarbeirosDeExemplo),
-          ])
-        : const <String>[];
 
     return db.transaction((txn) async {
       final impedimento = await _impedimentoConfiguracao(
         txn,
         emailNormalizado,
-        dadosDeExemplo,
       );
       if (impedimento != null) throw RegraNegocioException(impedimento);
 
@@ -712,20 +630,6 @@ class DatabaseService {
       final id = await txn.insert('cliente', admin.toMap()..remove('id'));
       await txn.insert('fidelidade', {'id_cliente': id, 'pontos': 0});
 
-      if (dadosDeExemplo) {
-        for (var i = 0; i < _barbeirosDeExemplo.length; i++) {
-          await txn.insert(
-            'barbeiro',
-            _barbeirosDeExemplo[i]
-                .copyWith(senhaHash: hashesBarbeiros[i])
-                .toMap()
-              ..remove('id'),
-          );
-        }
-        for (final servico in _servicosDeExemplo) {
-          await txn.insert('servico', servico.toMap()..remove('id'));
-        }
-      }
       return admin.copyWith(id: id);
     });
   }
@@ -734,40 +638,23 @@ class DatabaseService {
   Future<String?> _impedimentoConfiguracao(
     DatabaseExecutor db,
     String email,
-    bool dadosDeExemplo,
   ) async {
     if (await _existeAdministrador(db)) {
       return 'A barbearia já foi configurada';
     }
 
     // E-mail é único no sistema (regra de negócio 12), inclusive entre o
-    // administrador e os barbeiros que os dados de exemplo vão criar.
+    // administrador e os barbeiros.
     Future<bool> emUso(String tabela) async => (await db.query(
-      tabela,
-      columns: ['id'],
-      where: 'email = ?',
-      whereArgs: [email],
-      limit: 1,
-    )).isNotEmpty;
+          tabela,
+          columns: ['id'],
+          where: 'email = ?',
+          whereArgs: [email],
+          limit: 1,
+        ))
+            .isNotEmpty;
     if (await emUso('cliente') || await emUso('barbeiro')) {
       return 'Este e-mail já está cadastrado';
-    }
-    if (dadosDeExemplo && emailsBarbeirosDeExemplo.contains(email)) {
-      return 'Este e-mail é de um barbeiro dos dados de exemplo';
-    }
-
-    if (dadosDeExemplo) {
-      final cadastros =
-          Sqflite.firstIntValue(
-            await db.rawQuery(
-              'SELECT (SELECT COUNT(*) FROM barbeiro) + '
-              '(SELECT COUNT(*) FROM servico)',
-            ),
-          ) ??
-          0;
-      if (cadastros > 0) {
-        return 'Os dados de exemplo só podem ser criados numa barbearia vazia';
-      }
     }
     return null;
   }
@@ -873,6 +760,7 @@ class DatabaseService {
           'telefone': '',
           'senha_hash': '',
           'termos_aceitos_em': null,
+          'foto': null,
           'excluido_em': (agora ?? DateTime.now()).toIso8601String(),
         },
         where: 'id = ?',
@@ -902,8 +790,7 @@ class DatabaseService {
     DatabaseExecutor db,
     int idCliente,
   ) async {
-    final abertos =
-        Sqflite.firstIntValue(
+    final abertos = Sqflite.firstIntValue(
           await db.rawQuery(
             'SELECT COUNT(*) FROM agendamento '
             'WHERE id_cliente = ? AND status = ?',
@@ -914,9 +801,9 @@ class DatabaseService {
     if (abertos > 0) {
       return abertos == 1
           ? 'Você tem 1 agendamento em aberto. Cancele-o ou espere a '
-                'barbearia concluí-lo antes de excluir a conta'
+              'barbearia concluí-lo antes de excluir a conta'
           : 'Você tem $abertos agendamentos em aberto. Cancele-os ou espere '
-                'a barbearia concluí-los antes de excluir a conta';
+              'a barbearia concluí-los antes de excluir a conta';
     }
     // Quem deve à barbearia (multa ou serviço ainda não pago) paga antes,
     // como nos apps reais.
@@ -1417,18 +1304,20 @@ class DatabaseService {
     String hash,
     DateTime agora,
     Duration validade,
-  ) => db.insert(
-    'codigo_senha',
-    CodigoSenha(
-      idCliente: conta.tabela == 'cliente' ? conta.id : null,
-      idBarbeiro: conta.tabela == 'barbeiro' ? conta.id : null,
-      origem: origem,
-      codigoHash: hash,
-      criadoEm: agora.toIso8601String(),
-      expiraEm: agora.add(validade).toIso8601String(),
-    ).toMap()..remove('id'),
-    conflictAlgorithm: ConflictAlgorithm.replace,
-  );
+  ) =>
+      db.insert(
+        'codigo_senha',
+        CodigoSenha(
+          idCliente: conta.tabela == 'cliente' ? conta.id : null,
+          idBarbeiro: conta.tabela == 'barbeiro' ? conta.id : null,
+          origem: origem,
+          codigoHash: hash,
+          criadoEm: agora.toIso8601String(),
+          expiraEm: agora.add(validade).toIso8601String(),
+        ).toMap()
+          ..remove('id'),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
 
   /// Código de 6 dígitos, de um gerador próprio para segredos.
   static String _novoCodigo() =>
@@ -1533,8 +1422,7 @@ class DatabaseService {
   }
 
   /// Grava um barbeiro pronto, já com o acesso. Só os testes usam: no app,
-  /// o barbeiro entra pelo convite ([aceitarConviteBarbeiro]) ou pelos dados
-  /// de exemplo.
+  /// o barbeiro entra pelo convite ([aceitarConviteBarbeiro]).
   @visibleForTesting
   Future<int> cadastrarBarbeiro(Barbeiro b) async {
     final db = await database;
@@ -1627,6 +1515,32 @@ class DatabaseService {
     if (alterados == 0) {
       throw const RegraNegocioException('Barbeiro não encontrado');
     }
+  }
+
+  /// O próprio cliente põe ou troca a foto de perfil, no Perfil, e com
+  /// `null` a remove (regra de negócio 23). O administrador não tem foto, e
+  /// a conta excluída não ganha uma.
+  Future<void> definirFotoDoCliente(int id, Uint8List? foto) async {
+    final cliente = await buscarClientePorId(id);
+    if (cliente == null || cliente.excluido) {
+      throw const RegraNegocioException('Cliente não encontrado');
+    }
+    if (cliente.admin) {
+      throw const RegraNegocioException(
+        'O administrador não tem foto de perfil',
+      );
+    }
+    if (foto != null) {
+      final erro = Validators.validarFoto(foto);
+      if (erro != null) throw RegraNegocioException(erro);
+    }
+    final db = await database;
+    await db.update(
+      'cliente',
+      {'foto': foto},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -1851,14 +1765,53 @@ class DatabaseService {
 
   /// Clientes da barbearia. O administrador não entra: ele só gerencia
   /// (regra de negócio 17). Nem quem excluiu a conta (regra 18).
-  Future<List<Cliente>> listarClientes() async {
+  Future<List<Cliente>> listarClientes({
+    String busca = '',
+    int? limite,
+    int deslocamento = 0,
+  }) async {
     final db = await database;
+    final (onde, argumentos) = _ondeClientes(busca);
     final linhas = await db.query(
       'cliente',
-      where: 'admin = 0 AND excluido_em IS NULL',
-      orderBy: 'nome COLLATE NOCASE',
+      where: onde,
+      whereArgs: argumentos,
+      orderBy: 'nome COLLATE NOCASE, id',
+      limit: limite,
+      offset: limite == null ? null : deslocamento,
     );
     return linhas.map(Cliente.fromMap).toList();
+  }
+
+  /// Quantos clientes a busca encontra (o "N cliente(s)" de Gerenciar
+  /// Clientes, que mostra só uma página por vez).
+  Future<int> contarClientes({String busca = ''}) async {
+    final db = await database;
+    final (onde, argumentos) = _ondeClientes(busca);
+    return Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM cliente WHERE $onde',
+            argumentos,
+          ),
+        ) ??
+        0;
+  }
+
+  /// Os clientes de Gerenciar Clientes (sem o administrador e sem as contas
+  /// excluídas), com a [busca] no nome, no e-mail ou no telefone. Maiúsculas
+  /// e minúsculas não importam (nas letras sem acento, como no SQLite).
+  static (String, List<Object?>) _ondeClientes(String busca) {
+    const base = 'admin = 0 AND excluido_em IS NULL';
+    final termo = busca.trim();
+    if (termo.isEmpty) return (base, const []);
+    // % e _ digitados valem como eles mesmos, e não como curingas.
+    final padrao =
+        '%${termo.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
+    return (
+      "$base AND (nome LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' "
+          "OR telefone LIKE ? ESCAPE '\\')",
+      [padrao, padrao, padrao],
+    );
   }
 
   Future<List<Servico>> listarServicos() async {
@@ -2047,61 +2000,29 @@ class DatabaseService {
         'criado_em': linha['c_criado_em'],
       });
 
-  /// Agenda de um profissional, com o cliente, o serviço e o pagamento já
-  /// carregados.
-  ///
-  /// É o espelho de [listarAgendamentosCliente]: lá o cliente vê quem vai
-  /// atendê-lo; aqui o barbeiro vê quem vai atender. Do cliente vêm só os
-  /// dados de contato — o hash da senha não sai do banco.
-  Future<List<Agendamento>> listarAgendamentosBarbeiro(int idBarbeiro) async {
+  // -------------------------------------------------------------------------
+  // AGENDA EM ABAS: "PRÓXIMOS" OU "EM ABERTO" E O HISTÓRICO, EM PÁGINAS
+  // -------------------------------------------------------------------------
+
+  /// Quantos itens cada página traz nas listas paginadas: o histórico da
+  /// agenda, o histórico de pontos e Gerenciar Clientes. Ao chegar ao fim da
+  /// lista, a tela pede a próxima.
+  static const int tamanhoDaPagina = 10;
+
+  /// Agendamentos de um cliente ([idCliente]), de um barbeiro ([idBarbeiro])
+  /// ou da barbearia toda (os dois `null`, a agenda geral), com barbeiro,
+  /// cliente, serviço e pagamento numa consulta só. Do cliente vêm só os
+  /// dados de contato.
+  Future<List<Agendamento>> _consultarAgenda(
+    String onde,
+    List<Object?> argumentos, {
+    required String ordem,
+    int? limite,
+    int deslocamento = 0,
+  }) async {
     final db = await database;
     final linhas = await db.rawQuery(
       '''
-      SELECT
-        a.id            AS id,
-        a.id_cliente    AS id_cliente,
-        a.id_barbeiro   AS id_barbeiro,
-        a.id_servico    AS id_servico,
-        a.data_hora     AS data_hora,
-        a.status        AS status,
-        a.duracao_minutos AS duracao_minutos,
-        a.preco         AS preco,
-        c.id            AS c_id,
-        c.nome          AS c_nome,
-        c.email         AS c_email,
-        c.telefone      AS c_telefone,
-        c.criado_em     AS c_criado_em,
-        s.id            AS s_id,
-        s.nome          AS s_nome,
-        s.descricao     AS s_descricao,
-        s.preco         AS s_preco,
-        s.duracao_minutos AS s_duracao_minutos,
-        s.icone         AS s_icone,
-        $_colunasPagamento
-      FROM agendamento a
-      INNER JOIN cliente c ON c.id = a.id_cliente
-      INNER JOIN servico s ON s.id = a.id_servico
-      $_juncaoPagamento
-      WHERE a.id_barbeiro = ?
-      ORDER BY a.data_hora DESC
-      ''',
-      [idBarbeiro],
-    );
-
-    return linhas
-        .map(
-          (linha) =>
-              _agendamentoDaLinha(linha, cliente: _clienteDaLinha(linha)),
-        )
-        .toList();
-  }
-
-  /// Agenda geral do administrador: todos os agendamentos, de todos os
-  /// barbeiros, com barbeiro, cliente, serviço e pagamento numa consulta só.
-  /// Como na agenda do barbeiro, do cliente vêm só os dados de contato.
-  Future<List<Agendamento>> listarTodosAgendamentos() async {
-    final db = await database;
-    final linhas = await db.rawQuery('''
       SELECT
         a.id            AS id,
         a.id_cliente    AS id_cliente,
@@ -2115,6 +2036,7 @@ class DatabaseService {
         b.nome          AS b_nome,
         b.especialidade AS b_especialidade,
         b.iniciais      AS b_iniciais,
+        b.ativo         AS b_ativo,
         c.id            AS c_id,
         c.nome          AS c_nome,
         c.email         AS c_email,
@@ -2132,9 +2054,15 @@ class DatabaseService {
       INNER JOIN cliente  c ON c.id = a.id_cliente
       INNER JOIN servico  s ON s.id = a.id_servico
       $_juncaoPagamento
-      ORDER BY a.data_hora DESC
-    ''');
-
+      WHERE $onde
+      ORDER BY $ordem
+      ${limite == null ? '' : 'LIMIT ? OFFSET ?'}
+      ''',
+      [
+        ...argumentos,
+        if (limite != null) ...[limite, deslocamento]
+      ],
+    );
     return linhas
         .map(
           (linha) => _agendamentoDaLinha(
@@ -2146,10 +2074,142 @@ class DatabaseService {
         .toList();
   }
 
+  /// De quem é a agenda, em SQL: do cliente, do barbeiro ou de todos.
+  static (String, List<Object?>) _deQuem(int? idCliente, int? idBarbeiro) =>
+      idCliente != null
+          ? ('a.id_cliente = ?', [idCliente])
+          : idBarbeiro != null
+              ? ('a.id_barbeiro = ?', [idBarbeiro])
+              : ('1 = 1', const []);
+
+  /// A primeira aba da agenda, inteira e do mais cedo para o mais tarde.
+  ///
+  /// Para o cliente ([idCliente]), o que ainda vai acontecer ("Próximos").
+  /// Para a barbearia (o barbeiro, com [idBarbeiro], ou a agenda geral, sem
+  /// os dois), tudo o que ainda não teve desfecho ("Em aberto") — inclusive
+  /// o que já passou do horário e precisa ser concluído ou marcado como
+  /// falta. Não é paginada: são só os horários em aberto, que cabem na
+  /// janela de agendamento.
+  Future<List<Agendamento>> listarAgendaEmAberto({
+    int? idCliente,
+    int? idBarbeiro,
+    DateTime? agora,
+  }) {
+    final (quem, argumentos) = _deQuem(idCliente, idBarbeiro);
+    final emAberto = StatusAgendamento.confirmado.dbValue;
+    return idCliente != null
+        ? _consultarAgenda(
+            "$quem AND a.status = ? AND a.data_hora > ?",
+            [
+              ...argumentos,
+              emAberto,
+              (agora ?? DateTime.now()).toIso8601String(),
+            ],
+            ordem: 'a.data_hora ASC, a.id ASC',
+          )
+        : _consultarAgenda(
+            '$quem AND a.status = ?',
+            [...argumentos, emAberto],
+            ordem: 'a.data_hora ASC, a.id ASC',
+          );
+  }
+
+  /// Quantos atendimentos o barbeiro tem no [dia], fora os cancelados (o
+  /// número "hoje" no topo da agenda dele).
+  Future<int> contarAtendimentosDoDia(int idBarbeiro, DateTime dia) async {
+    final db = await database;
+    final inicio = DateTime(dia.year, dia.month, dia.day);
+    final fim = DateTime(dia.year, dia.month, dia.day + 1);
+    return Sqflite.firstIntValue(
+          await db.rawQuery(
+            '''
+            SELECT COUNT(*) FROM agendamento
+            WHERE id_barbeiro = ? AND status != ?
+              AND data_hora >= ? AND data_hora < ?
+            ''',
+            [
+              idBarbeiro,
+              StatusAgendamento.cancelado.dbValue,
+              inicio.toIso8601String(),
+              fim.toIso8601String(),
+            ],
+          ),
+        ) ??
+        0;
+  }
+
+  /// Uma página do histórico da agenda (a segunda aba), do mais recente
+  /// para o mais antigo: [limite] itens a partir do [deslocamento].
+  ///
+  /// É tudo o que não está na primeira aba ([listarAgendaEmAberto]). Na
+  /// agenda geral, [idBarbeiro] filtra um barbeiro. Na agenda do barbeiro e
+  /// na geral, [de] e [ate] filtram o período (os dois dias entram), e
+  /// [status], o desfecho ou quem está devendo. Um agendamento que entra no histórico
+  /// entre uma página e outra empurra os seguintes: a tela descarta o que
+  /// vier repetido.
+  Future<List<Agendamento>> listarHistoricoAgenda({
+    int? idCliente,
+    int? idBarbeiro,
+    DateTime? de,
+    DateTime? ate,
+    FiltroDeStatus status = FiltroDeStatus.todos,
+    int deslocamento = 0,
+    int limite = tamanhoDaPagina,
+    DateTime? agora,
+  }) {
+    final (quem, argumentos) = _deQuem(idCliente, idBarbeiro);
+    final emAberto = StatusAgendamento.confirmado.dbValue;
+    // Cada condição com os argumentos dela, na mesma ordem.
+    final condicoes = <(String, List<Object?>)>[
+      (quem, argumentos),
+      idCliente != null
+          ? (
+              '(a.status != ? OR a.data_hora <= ?)',
+              [emAberto, (agora ?? DateTime.now()).toIso8601String()],
+            )
+          : ('a.status != ?', [emAberto]),
+      if (de != null)
+        (
+          'a.data_hora >= ?',
+          [DateTime(de.year, de.month, de.day).toIso8601String()],
+        ),
+      if (ate != null)
+        (
+          'a.data_hora < ?',
+          [DateTime(ate.year, ate.month, ate.day + 1).toIso8601String()],
+        ),
+      ...switch (status) {
+        FiltroDeStatus.todos => const <(String, List<Object?>)>[],
+        // O pagamento "do" agendamento (p) ainda pendente: a multa, ou um
+        // serviço concluído sem pagar, de antes da regra 13.
+        FiltroDeStatus.devendo => [
+            ('p.status = ?', [Pagamento.statusPendente]),
+          ],
+        FiltroDeStatus.concluidos => [
+            ('a.status = ?', [StatusAgendamento.finalizado.dbValue]),
+          ],
+        FiltroDeStatus.cancelados => [
+            ('a.status = ?', [StatusAgendamento.cancelado.dbValue]),
+          ],
+        FiltroDeStatus.faltas => [
+            ('a.status = ?', [StatusAgendamento.faltou.dbValue]),
+          ],
+      },
+    ];
+    return _consultarAgenda(
+      condicoes.map((c) => c.$1).join(' AND '),
+      [for (final c in condicoes) ...c.$2],
+      ordem: 'a.data_hora DESC, a.id DESC',
+      limite: limite,
+      deslocamento: deslocamento,
+    );
+  }
+
   Future<int> atualizarStatusAgendamento(
     int id,
     StatusAgendamento status,
-  ) async => _atualizarStatusAgendamento(await database, id, status);
+  ) async =>
+      _atualizarStatusAgendamento(await database, id, status);
 
   Future<int> _atualizarStatusAgendamento(
     DatabaseExecutor db,
@@ -2188,15 +2248,16 @@ class DatabaseService {
     int? idCliente,
     int? ignorarAgendamento,
     DateTime? agora,
-  }) async => _horariosLivres(
-    await database,
-    idBarbeiro,
-    data,
-    duracaoMinutos: duracaoMinutos,
-    idCliente: idCliente,
-    ignorarAgendamento: ignorarAgendamento,
-    agora: agora,
-  );
+  }) async =>
+      _horariosLivres(
+        await database,
+        idBarbeiro,
+        data,
+        duracaoMinutos: duracaoMinutos,
+        idCliente: idCliente,
+        ignorarAgendamento: ignorarAgendamento,
+        agora: agora,
+      );
 
   Future<List<String>> _horariosLivres(
     DatabaseExecutor db,
@@ -2283,7 +2344,8 @@ class DatabaseService {
     DateTime inicio,
     DateTime fim,
     List<_Intervalo> ocupados,
-  ) => ocupados.any((o) => inicio.isBefore(o.fim) && o.inicio.isBefore(fim));
+  ) =>
+      ocupados.any((o) => inicio.isBefore(o.fim) && o.inicio.isBefore(fim));
 
   static DateTime _naGrade(DateTime dia, String hora) {
     final partes = hora.split(':');
@@ -2314,10 +2376,10 @@ class DatabaseService {
 
   /// [dia] fica depois do último dia da janela de agendamento?
   static bool _depoisDaJanela(DateTime dia, DateTime referencia) => DateTime(
-    dia.year,
-    dia.month,
-    dia.day,
-  ).isAfter(ultimoDiaDaAgenda(referencia));
+        dia.year,
+        dia.month,
+        dia.day,
+      ).isAfter(ultimoDiaDaAgenda(referencia));
 
   /// Confere, sem gravar nada, se o horário ainda pode ser reservado.
   ///
@@ -2480,7 +2542,8 @@ class DatabaseService {
           dataHora: dataHora.toIso8601String(),
           duracaoMinutos: servico.duracaoMinutos,
           preco: servico.preco,
-        ).toMap()..remove('id'),
+        ).toMap()
+          ..remove('id'),
       );
 
       final criadoEm = DateTime.now().toIso8601String();
@@ -2559,8 +2622,7 @@ class DatabaseService {
       final existente = await db.query(
         'pagamento',
         columns: ['id'],
-        where:
-            "id_agendamento = ? AND natureza IN ('servico', 'resgate') "
+        where: "id_agendamento = ? AND natureza IN ('servico', 'resgate') "
             'AND status != ?',
         whereArgs: [p.idAgendamento, Pagamento.statusCancelado],
         limit: 1,
@@ -2776,9 +2838,8 @@ class DatabaseService {
         'Este agendamento já foi encerrado e não pode ser cancelado',
       );
     }
-    final motivo = novoStatus == StatusAgendamento.faltou
-        ? 'falta'
-        : 'cancelamento';
+    final motivo =
+        novoStatus == StatusAgendamento.faltou ? 'falta' : 'cancelamento';
 
     final idCliente = (linhas.first['id_cliente'] as num).toInt();
     final dataHora = DateTime.parse(linhas.first['data_hora'] as String);
@@ -2917,7 +2978,16 @@ class DatabaseService {
   /// atendimentos concluídos dos relatórios ficaria sempre em zero. Só vale
   /// para atendimento em aberto e a partir do dia marcado
   /// ([Agendamento.podeFinalizar]).
-  Future<int> finalizarAgendamento(int id, {DateTime? agora}) async {
+  ///
+  /// O cliente não sai sem pagar (regra de negócio 13): se o serviço era
+  /// para pagar no balcão e ainda está pendente, o [metodo] (como o cliente
+  /// pagou) é obrigatório, e o recebimento e a conclusão acontecem na mesma
+  /// transação. Sem ele, o banco recusa.
+  Future<int> finalizarAgendamento(
+    int id, {
+    DateTime? agora,
+    String? metodo,
+  }) async {
     final db = await database;
     return db.transaction((txn) async {
       final a = await _buscarAgendamento(txn, id);
@@ -2930,6 +3000,27 @@ class DatabaseService {
       if (!a.podeFinalizar(agora ?? DateTime.now())) {
         throw const RegraNegocioException(
           'O atendimento só pode ser concluído a partir do dia marcado',
+        );
+      }
+      final pendentes = await txn.query(
+        'pagamento',
+        where: 'id_agendamento = ? AND natureza = ? AND status = ?',
+        whereArgs: [
+          id,
+          NaturezaPagamento.servico.dbValue,
+          Pagamento.statusPendente,
+        ],
+      );
+      for (final linha in pendentes) {
+        if (metodo == null) {
+          throw const RegraNegocioException(
+            'Registre como o cliente pagou para concluir o atendimento',
+          );
+        }
+        await _confirmarPagamentoNaTransacao(
+          txn,
+          Pagamento.fromMap(linha),
+          metodo,
         );
       }
       return _atualizarStatusAgendamento(txn, id, StatusAgendamento.finalizado);
@@ -2959,52 +3050,61 @@ class DatabaseService {
 
       final pagamento = Pagamento.fromMap(linhas.first);
       if (!pagamento.pendente) return false;
-
-      final agendamentos = await txn.query(
-        'agendamento',
-        columns: ['id_cliente'],
-        where: 'id = ?',
-        whereArgs: [pagamento.idAgendamento],
-        limit: 1,
-      );
-      if (agendamentos.isEmpty) return false;
-      final idCliente = (agendamentos.first['id_cliente'] as num).toInt();
-
-      // O método só é conhecido no balcão: até aqui o registro fica como
-      // 'A combinar', o que sujaria o relatório por forma de pagamento.
-      await txn.update(
-        'pagamento',
-        {
-          'status': Pagamento.statusConfirmado,
-          if (metodo != null) 'metodo': metodo,
-        },
-        where: 'id = ?',
-        whereArgs: [idPagamento],
-      );
-
-      if (pagamento.natureza != NaturezaPagamento.servico) return true;
-
-      final servico = await txn.rawQuery(
-        '''
-        SELECT s.nome AS nome
-        FROM agendamento a
-        INNER JOIN servico s ON s.id = a.id_servico
-        WHERE a.id = ?
-        ''',
-        [pagamento.idAgendamento],
-      );
-      final nomeServico = servico.isEmpty
-          ? 'Serviço'
-          : servico.first['nome'] as String;
-
-      await _movimentarPontos(
-        txn,
-        idCliente,
-        pagamento.valor.round(),
-        'Pagamento — $nomeServico',
-      );
-      return true;
+      return _confirmarPagamentoNaTransacao(txn, pagamento, metodo);
     });
+  }
+
+  /// Dá baixa num pagamento pendente dentro de [txn] e, se for de serviço,
+  /// credita os pontos ao cliente. Usado ao receber e ao concluir.
+  Future<bool> _confirmarPagamentoNaTransacao(
+    Transaction txn,
+    Pagamento pagamento,
+    String? metodo,
+  ) async {
+    final idPagamento = pagamento.id;
+    final agendamentos = await txn.query(
+      'agendamento',
+      columns: ['id_cliente'],
+      where: 'id = ?',
+      whereArgs: [pagamento.idAgendamento],
+      limit: 1,
+    );
+    if (agendamentos.isEmpty) return false;
+    final idCliente = (agendamentos.first['id_cliente'] as num).toInt();
+
+    // O método só é conhecido no balcão: até aqui o registro fica como
+    // 'A combinar', o que sujaria o relatório por forma de pagamento.
+    await txn.update(
+      'pagamento',
+      {
+        'status': Pagamento.statusConfirmado,
+        if (metodo != null) 'metodo': metodo,
+      },
+      where: 'id = ?',
+      whereArgs: [idPagamento],
+    );
+
+    if (pagamento.natureza != NaturezaPagamento.servico) return true;
+
+    final servico = await txn.rawQuery(
+      '''
+      SELECT s.nome AS nome
+      FROM agendamento a
+      INNER JOIN servico s ON s.id = a.id_servico
+      WHERE a.id = ?
+      ''',
+      [pagamento.idAgendamento],
+    );
+    final nomeServico =
+        servico.isEmpty ? 'Serviço' : servico.first['nome'] as String;
+
+    await _movimentarPontos(
+      txn,
+      idCliente,
+      pagamento.valor.round(),
+      'Pagamento — $nomeServico',
+    );
+    return true;
   }
 
   // -------------------------------------------------------------------------
@@ -3073,18 +3173,24 @@ class DatabaseService {
   /// - **ticket médio** considera só pagamentos de serviços que de fato
   ///   aconteceram (sem estornos, resgates de valor zero ou multas);
   /// - **por forma de pagamento** mostra o líquido de cada forma — o estorno
-  ///   sai da mesma forma em que o cliente pagou — e deixa resgates de fora.
+  ///   sai da mesma forma em que o cliente pagou — e deixa resgates de fora;
+  /// - **por serviço e por barbeiro**, a quantidade é a de atendimentos do
+  ///   período (fora os cancelados), e o valor, o faturamento de cada um no
+  ///   período, pela mesma conta do faturamento;
+  /// - **o faturamento no tempo** soma, dia a dia (até [agora]) ou, sem
+  ///   período, mês a mês, o mesmo faturamento.
   Future<RelatorioGeral> gerarRelatorio({
     DateTime? inicio,
     DateTime? fim,
+    DateTime? agora,
   }) async {
     final db = await database;
 
     // Datas ISO-8601 locais comparam corretamente como texto.
     String periodo(String coluna) => [
-      if (inicio != null) "$coluna >= '${inicio.toIso8601String()}'",
-      if (fim != null) "$coluna < '${fim.toIso8601String()}'",
-    ].map((c) => ' AND $c').join();
+          if (inicio != null) "$coluna >= '${inicio.toIso8601String()}'",
+          if (fim != null) "$coluna < '${fim.toIso8601String()}'",
+        ].map((c) => ' AND $c').join();
     final noCaixa = periodo('p.criado_em');
     final naAgenda = periodo('a.data_hora');
 
@@ -3100,9 +3206,9 @@ class DatabaseService {
     }
 
     Future<int> agendamentos([String? status]) => conta(
-      'SELECT COUNT(*) FROM agendamento a WHERE 1 = 1'
-      '${status == null ? '' : " AND a.status = '$status'"}$naAgenda',
-    );
+          'SELECT COUNT(*) FROM agendamento a WHERE 1 = 1'
+          '${status == null ? '' : " AND a.status = '$status'"}$naAgenda',
+        );
 
     final faturamento = await soma(
       "SELECT SUM(p.valor) FROM pagamento p "
@@ -3134,30 +3240,76 @@ class DatabaseService {
       GROUP BY p.metodo ORDER BY total DESC
     ''');
 
+    // O faturamento de cada serviço ou barbeiro: os pagamentos confirmados
+    // dos atendimentos dele, pela data do lançamento.
+    String faturamentoDe(String coluna, String id) => '''
+        (SELECT SUM(p.valor) FROM pagamento p
+         INNER JOIN agendamento a2 ON a2.id = p.id_agendamento
+         WHERE a2.$coluna = $id AND p.status = 'Confirmado'$noCaixa)''';
+
     final porServico = await db.rawQuery('''
-      SELECT s.nome AS nome, COUNT(*) AS qtd
+      SELECT s.nome AS nome, COUNT(*) AS qtd,
+             ${faturamentoDe('id_servico', 's.id')} AS total
       FROM agendamento a
       INNER JOIN servico s ON s.id = a.id_servico
       WHERE a.status != 'cancelado'$naAgenda
-      GROUP BY s.id ORDER BY qtd DESC LIMIT 5
+      GROUP BY s.id ORDER BY qtd DESC, s.nome LIMIT 5
     ''');
 
     final porBarbeiro = await db.rawQuery('''
-      SELECT b.nome AS nome, COUNT(*) AS qtd
+      SELECT b.nome AS nome, COUNT(*) AS qtd,
+             ${faturamentoDe('id_barbeiro', 'b.id')} AS total
       FROM agendamento a
       INNER JOIN barbeiro b ON b.id = a.id_barbeiro
       WHERE a.status != 'cancelado'$naAgenda
-      GROUP BY b.id ORDER BY qtd DESC LIMIT 5
+      GROUP BY b.id ORDER BY qtd DESC, b.nome LIMIT 5
     ''');
+
+    // Com período, uma barra por dia, do início até hoje (ou até o fim do
+    // período, se ele já passou); sem período, uma por mês, desde o mês do
+    // primeiro pagamento até o mês atual.
+    final porMes = inicio == null;
+    final porData = {
+      for (final l in await db.rawQuery('''
+        SELECT substr(p.criado_em, 1, ${porMes ? 7 : 10}) AS chave,
+               SUM(p.valor) AS total
+        FROM pagamento p
+        WHERE p.status = 'Confirmado'$noCaixa
+        GROUP BY chave
+      ''')) l['chave'] as String: (l['total'] as num?)?.toDouble() ?? 0,
+    };
+    String doisDigitos(int n) => n.toString().padLeft(2, '0');
+    final hoje = agora ?? DateTime.now();
+    final faturamentoNoTempo = <FaturamentoNoTempo>[];
+    if (!porMes) {
+      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
+      final limite = fim == null || amanha.isBefore(fim) ? amanha : fim;
+      for (var d = DateTime(inicio.year, inicio.month, inicio.day);
+          d.isBefore(limite);
+          d = DateTime(d.year, d.month, d.day + 1)) {
+        final chave = '${d.year}-${doisDigitos(d.month)}-${doisDigitos(d.day)}';
+        faturamentoNoTempo.add(FaturamentoNoTempo(d, porData[chave] ?? 0));
+      }
+    } else if (porData.isNotEmpty) {
+      final primeiro = (porData.keys.toList()..sort()).first;
+      for (var m = DateTime(
+        int.parse(primeiro.substring(0, 4)),
+        int.parse(primeiro.substring(5, 7)),
+      );
+          !m.isAfter(DateTime(hoje.year, hoje.month));
+          m = DateTime(m.year, m.month + 1)) {
+        final chave = '${m.year}-${doisDigitos(m.month)}';
+        faturamentoNoTempo.add(FaturamentoNoTempo(m, porData[chave] ?? 0));
+      }
+    }
 
     return RelatorioGeral(
       inicio: inicio,
       fim: fim,
       faturamento: faturamento,
       aReceber: aReceber,
-      ticketMedio: qtdAtendimentos == 0
-          ? 0
-          : totalAtendimentos / qtdAtendimentos,
+      ticketMedio:
+          qtdAtendimentos == 0 ? 0 : totalAtendimentos / qtdAtendimentos,
       folhaSalarial: folha,
       totalAgendamentos: await agendamentos(),
       confirmados: await agendamentos('confirmado'),
@@ -3186,6 +3338,7 @@ class DatabaseService {
             (l) => ItemRelatorio(
               rotulo: l['nome'] as String,
               quantidade: (l['qtd'] as num).toInt(),
+              valor: (l['total'] as num?)?.toDouble() ?? 0,
             ),
           )
           .toList(),
@@ -3194,9 +3347,12 @@ class DatabaseService {
             (l) => ItemRelatorio(
               rotulo: l['nome'] as String,
               quantidade: (l['qtd'] as num).toInt(),
+              valor: (l['total'] as num?)?.toDouble() ?? 0,
             ),
           )
           .toList(),
+      faturamentoNoTempo: faturamentoNoTempo,
+      faturamentoPorMes: porMes,
     );
   }
 
@@ -3317,13 +3473,23 @@ class DatabaseService {
     return idPagamento;
   }
 
-  Future<List<HistoricoPonto>> listarHistoricoPontos(int idCliente) async {
+  ///
+  /// Sem [limite], o extrato inteiro; com ele, uma página da Fidelidade:
+  /// [limite] lançamentos a partir do [deslocamento], do mais novo para o
+  /// mais antigo.
+  Future<List<HistoricoPonto>> listarHistoricoPontos(
+    int idCliente, {
+    int? limite,
+    int deslocamento = 0,
+  }) async {
     final db = await database;
     final linhas = await db.query(
       'historico_ponto',
       where: 'id_cliente = ?',
       whereArgs: [idCliente],
       orderBy: 'id DESC',
+      limit: limite,
+      offset: limite == null ? null : deslocamento,
     );
     return linhas.map(HistoricoPonto.fromMap).toList();
   }

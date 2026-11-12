@@ -7,6 +7,7 @@ import '../services/erros.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animacoes.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/paginacao.dart';
 
 /// Programa de fidelidade (`/fidelidade`). Meta: 500 pontos = 1 serviço grátis.
 class FidelidadeScreen extends StatefulWidget {
@@ -20,7 +21,18 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
   static const int metaPontos = DatabaseService.pontosParaPremio;
 
   int _pontos = 0;
-  List<HistoricoPonto> _historico = [];
+
+  /// O extrato, de 10 em 10: ao chegar ao fim da lista, vem a próxima
+  /// página.
+  late final _historico = Paginacao<HistoricoPonto>(
+    buscar: (deslocamento, limite) =>
+        DatabaseService.instance.listarHistoricoPontos(
+          AuthService.instance.usuarioAtual!.id!,
+          limite: limite,
+          deslocamento: deslocamento,
+        ),
+    chave: (h) => h.id,
+  );
   bool _carregando = true;
   String? _erro;
 
@@ -45,11 +57,10 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
     try {
       final db = DatabaseService.instance;
       final pontos = await db.obterPontos(usuario!.id!);
-      final historico = await db.listarHistoricoPontos(usuario.id!);
+      await _historico.reiniciar();
       if (!mounted) return;
       setState(() {
         _pontos = pontos;
-        _historico = historico;
         _carregando = false;
       });
     } catch (e) {
@@ -58,6 +69,16 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
         _carregando = false;
         _erro = mensagemDeErro(e, 'Não foi possível carregar seus pontos');
       });
+    }
+  }
+
+  /// A rolagem chegou perto do fim do extrato: vem a próxima página.
+  Future<void> _carregarMaisHistorico() async {
+    try {
+      if (await _historico.carregarMais() && mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      mostrarErro(context, mensagemDeErro(e, 'Erro ao carregar o histórico'));
     }
   }
 
@@ -74,36 +95,40 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
                   )
                 : _erro != null
                 ? EstadoErro(mensagem: _erro!, onTentarNovamente: _carregar)
-                : RefreshIndicator(
-                    color: AppColors.amarelo,
-                    backgroundColor: AppColors.card,
-                    onRefresh: _carregar,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 24,
+                : CarregarAoChegarNoFim(
+                    aoChegarNoFim: _carregarMaisHistorico,
+                    child: RefreshIndicator(
+                      color: AppColors.amarelo,
+                      backgroundColor: AppColors.card,
+                      onRefresh: _carregar,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 24,
+                        ),
+                        children: [
+                          _cartaoPontos(),
+                          const SizedBox(height: 28),
+                          const TituloSecao('Como funciona'),
+                          const SizedBox(height: 12),
+                          _comoFunciona(),
+                          const SizedBox(height: 28),
+                          const TituloSecao('Histórico de pontos'),
+                          const SizedBox(height: 12),
+                          if (_historico.itens.isEmpty)
+                            const EstadoVazio(
+                              icone: Icons.star_outline_rounded,
+                              titulo: 'Nenhum ponto ainda',
+                              descricao:
+                                  'Finalize um pagamento para começar a '
+                                  'acumular pontos.',
+                            )
+                          else
+                            ..._historico.itens.map(_itemHistorico),
+                          FimDaPaginacao(temMais: _historico.temMais),
+                        ],
                       ),
-                      children: [
-                        _cartaoPontos(),
-                        const SizedBox(height: 28),
-                        const TituloSecao('Como funciona'),
-                        const SizedBox(height: 12),
-                        _comoFunciona(),
-                        const SizedBox(height: 28),
-                        const TituloSecao('Histórico de pontos'),
-                        const SizedBox(height: 12),
-                        if (_historico.isEmpty)
-                          const EstadoVazio(
-                            icone: Icons.star_outline_rounded,
-                            titulo: 'Nenhum ponto ainda',
-                            descricao:
-                                'Finalize um pagamento para começar a '
-                                'acumular pontos.',
-                          )
-                        else
-                          ..._historico.map(_itemHistorico),
-                      ],
                     ),
                   ),
           ),
@@ -174,11 +199,8 @@ class _FidelidadeScreenState extends State<FidelidadeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Meta: $metaPontos pontos = 1 serviço grátis',
-            style: AppTheme.texto(size: 11, color: AppColors.muted),
-          ),
+          // A meta (500 pontos = 1 serviço grátis) está em "Como funciona",
+          // logo abaixo.
           if (_pontos < 0) ...[
             const SizedBox(height: 12),
             Text(

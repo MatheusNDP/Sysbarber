@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/auth_service.dart';
-import '../services/database_service.dart';
 import '../services/formatters.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
@@ -10,8 +9,8 @@ import '../widgets/common_widgets.dart';
 /// Configuração inicial da barbearia (`/configuracao`, regra de negócio 15).
 ///
 /// Aparece na primeira abertura, quando ainda não existe administrador: o
-/// dono cria a própria conta de administrador e escolhe se começa com os
-/// dados de exemplo. Depois disso a rota não abre mais.
+/// dono cria a própria conta de administrador, e a barbearia começa vazia.
+/// Depois disso a rota não abre mais.
 class ConfiguracaoScreen extends StatefulWidget {
   const ConfiguracaoScreen({super.key});
 
@@ -26,7 +25,6 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
   final _senhaCtrl = TextEditingController();
   final _confirmacaoCtrl = TextEditingController();
   bool _ocultarSenha = true;
-  bool _dadosDeExemplo = false;
   bool _aceitouTermos = false;
   bool _salvando = false;
 
@@ -54,7 +52,6 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       telefone: _telefoneCtrl.text,
       senha: _senhaCtrl.text,
       aceitouTermos: _aceitouTermos,
-      dadosDeExemplo: _dadosDeExemplo,
     );
 
     if (!mounted) return;
@@ -67,79 +64,12 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
       return;
     }
 
-    if (_dadosDeExemplo) {
-      await _mostrarDadosDeExemplo();
-      if (!mounted) return;
-    } else {
-      mostrarSucesso(
-        context,
-        'Barbearia configurada! Cadastre seus serviços e barbeiros na '
-        'Administração.',
-      );
-    }
-    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
-  }
-
-  /// Sem isto o dono não saberia como os barbeiros de exemplo entram.
-  Future<void> _mostrarDadosDeExemplo() {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'Dados de exemplo criados',
-          style: AppTheme.titulo(size: 18),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Foram criados 5 serviços e 3 barbeiros. Os barbeiros entram '
-              'com estes e-mails e a senha '
-              '${DatabaseService.senhaBarbeirosDeExemplo}:',
-              style: AppTheme.texto(
-                size: 13,
-                color: AppColors.muted,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 10),
-            for (final email in DatabaseService.emailsBarbeirosDeExemplo)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '•  $email',
-                  style: AppTheme.texto(size: 13, weight: FontWeight.w600),
-                ),
-              ),
-            const SizedBox(height: 10),
-            Text(
-              'Marcos Lima começa indisponível. Eles são só de exemplo: ao '
-              'montar a sua equipe, exclua-os em Gerenciar Barbeiros.',
-              style: AppTheme.texto(
-                size: 12,
-                color: AppColors.muted,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Entendi',
-              style: AppTheme.texto(
-                size: 13,
-                weight: FontWeight.w600,
-                color: AppColors.amarelo,
-              ),
-            ),
-          ),
-        ],
-      ),
+    mostrarSucesso(
+      context,
+      'Barbearia configurada! Cadastre seus serviços e barbeiros na '
+      'Administração.',
     );
+    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
 
   @override
@@ -222,8 +152,6 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                     icone: Icons.lock_outline,
                     obscuro: _ocultarSenha,
                   ),
-                  _opcaoDadosDeExemplo(),
-                  const SizedBox(height: 12),
                   AceiteTermos(
                     aceito: _aceitouTermos,
                     onChanged: (v) => setState(() => _aceitouTermos = v),
@@ -236,55 +164,6 @@ class _ConfiguracaoScreenState extends State<ConfiguracaoScreen> {
                         ? 'Configurando...'
                         : 'Configurar e entrar',
                     onPressed: _salvando ? null : _configurar,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _opcaoDadosDeExemplo() {
-    return Cartao(
-      selected: _dadosDeExemplo,
-      onTap: () => setState(() => _dadosDeExemplo = !_dadosDeExemplo),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Checkbox(
-            value: _dadosDeExemplo,
-            activeColor: AppColors.amarelo,
-            checkColor: Colors.black,
-            onChanged: (v) => setState(() => _dadosDeExemplo = v ?? false),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Começar com dados de exemplo',
-                    style: AppTheme.texto(
-                      size: 14,
-                      weight: FontWeight.w600,
-                      color: AppColors.amarelo,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Cria 3 barbeiros (senha '
-                    '${DatabaseService.senhaBarbeirosDeExemplo}) e 5 serviços, '
-                    'para testar ou apresentar o app. Desmarcado, a barbearia '
-                    'começa vazia e você cadastra os seus.',
-                    style: AppTheme.texto(
-                      size: 12,
-                      color: AppColors.muted,
-                      height: 1.4,
-                    ),
                   ),
                 ],
               ),

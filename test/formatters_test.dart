@@ -167,4 +167,18 @@ void main() {
       expect(formatarCodigoConvite('K7MPQ2XR'), 'K7MP-Q2XR');
     });
   });
+
+  test('a saudação do Início muda às 05:00, às 12:00 e às 18:00', () {
+    String as(int hora, int minuto) =>
+        saudacaoDoHorario(DateTime(2026, 11, 11, hora, minuto));
+
+    expect(as(0, 0), 'boa noite');
+    expect(as(4, 59), 'boa noite');
+    expect(as(5, 0), 'bom dia');
+    expect(as(11, 59), 'bom dia');
+    expect(as(12, 0), 'boa tarde');
+    expect(as(17, 59), 'boa tarde');
+    expect(as(18, 0), 'boa noite');
+    expect(as(23, 59), 'boa noite');
+  });
 }

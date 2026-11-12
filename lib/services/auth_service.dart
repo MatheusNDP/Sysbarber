@@ -184,15 +184,14 @@ class AuthService {
     _barbeariaConfigurada = await _db.barbeariaConfigurada();
   }
 
-  /// Configuração inicial: cria o administrador (e, se pedido, os dados de
-  /// exemplo) e já entra com ele (regra de negócio 15).
+  /// Configuração inicial: cria o administrador, com a barbearia vazia, e já
+  /// entra com ele (regra de negócio 15).
   Future<({bool sucesso, String? erro})> configurarBarbearia({
     required String nome,
     required String email,
     required String telefone,
     required String senha,
     required bool aceitouTermos,
-    required bool dadosDeExemplo,
   }) async {
     try {
       final admin = await _db.configurarBarbearia(
@@ -201,7 +200,6 @@ class AuthService {
         telefone: telefone,
         senha: senha,
         aceitouTermos: aceitouTermos,
-        dadosDeExemplo: dadosDeExemplo,
       );
       _barbeariaConfigurada = true;
       BookingFlow.limpar();
@@ -659,6 +657,28 @@ class AuthService {
     try {
       await _db.definirFotoDoBarbeiro(id, foto);
       _barbeiroAtual = await _db.buscarBarbeiroPorId(id);
+      return (sucesso: true, erro: null);
+    } catch (e) {
+      return (
+        sucesso: false,
+        erro: mensagemDeErro(e, 'Não foi possível salvar a foto'),
+      );
+    }
+  }
+
+  /// Põe, troca ou, com `null`, remove a foto do cliente logado (regra de
+  /// negócio 23): só ele mexe na própria foto, e o administrador não tem.
+  Future<({bool sucesso, String? erro})> atualizarFotoCliente(
+    Uint8List? foto,
+  ) async {
+    final id = _usuarioAtual?.id;
+    if (id == null) {
+      return (sucesso: false, erro: 'Entre na sua conta para editar o perfil');
+    }
+    try {
+      await _db.definirFotoDoCliente(id, foto);
+      final atualizado = await _db.buscarClientePorId(id);
+      if (atualizado != null) _usuarioAtual = atualizado;
       return (sucesso: true, erro: null);
     } catch (e) {
       return (
